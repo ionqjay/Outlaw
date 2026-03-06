@@ -9,7 +9,8 @@ async function getActiveSession() {
     const city = s.user.user_metadata?.city || '';
     const state = s.user.user_metadata?.state || '';
     const zip = s.user.user_metadata?.zip || '';
-    return { id: s.user.id, email: s.user.email || '', role, name, phone, city, state, zip };
+    const contactEmail = s.user.user_metadata?.email || '';
+    return { id: s.user.id, email: s.user.email || '', contactEmail, role, name, phone, city, state, zip };
   }
   const local = JSON.parse(localStorage.getItem('smr_session') || 'null');
   return local;
@@ -52,12 +53,12 @@ async function getOwnerProfile() {
 
   const local = JSON.parse(localStorage.getItem(`smr_owner_profile_${session.id}`) || '{}');
   const merged = {
-    name: session.name || local.name || '',
-    email: session.email || local.email || '',
-    phone: session.phone || local.phone || '',
-    city: session.city || local.city || '',
-    state: session.state || local.state || 'NY',
-    zip: session.zip || local.zip || ''
+    name: local.name || session.name || '',
+    email: local.email || session.contactEmail || session.email || '',
+    phone: local.phone || session.phone || '',
+    city: local.city || session.city || '',
+    state: local.state || session.state || 'NY',
+    zip: local.zip || session.zip || ''
   };
 
   return merged;
