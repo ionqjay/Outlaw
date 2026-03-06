@@ -22,8 +22,8 @@ const API_BASE = configuredApiBase.trim().replace(/\/$/, '');
 const api = (path) => `${API_BASE}${path}`;
 
 const variants = [
-  { h: 'Mechanics Compete. You Save.', s: 'Post your repair. Get 3 guaranteed quotes in 24 hours from local mechanics. Always free for car owners.' },
-  { h: 'Stop Overpaying for Repairs in NYC.', s: 'Get your deal with 3 competing quotes from local mechanics in 24 hours.' }
+  { h: 'Mechanics & Shops Compete. You Save.', s: 'Post your repair once and compare 3 guaranteed quotes in 24 hours. Always free for car owners.' },
+  { h: 'Get Better Price, Quality, and Experience.', s: 'We connect car owners with trusted mechanics and shop owners competing for your job.' }
 ];
 const variant = variants[Math.random() > 0.5 ? 1 : 0];
 document.getElementById('heroHeadline').textContent = variant.h;
