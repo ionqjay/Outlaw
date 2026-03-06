@@ -3,7 +3,17 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>ShopMyRepair — Mechanics Compete. You Save.</title>
+  <title>ShopMyRepair — Compare Auto Repair Quotes Fast</title>
+  <meta name="description" content="ShopMyRepair helps car owners compare repair quotes from trusted mechanics and shops. Get 3 quotes in 24 hours. Free for owners." />
+  <meta name="robots" content="index,follow" />
+  <link rel="canonical" href="https://shopmyrepair.com/" />
+  <meta property="og:title" content="ShopMyRepair — Compare Auto Repair Quotes Fast" />
+  <meta property="og:description" content="Get 3 repair quotes in 24 hours from trusted mechanics and shops. Free for car owners." />
+  <meta property="og:type" content="website" />
+  <meta property="og:url" content="https://shopmyrepair.com/" />
+  <meta name="twitter:card" content="summary_large_image" />
+  <meta name="twitter:title" content="ShopMyRepair — Compare Auto Repair Quotes Fast" />
+  <meta name="twitter:description" content="Get 3 repair quotes in 24 hours from trusted mechanics and shops. Free for car owners." />
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=DM+Sans:wght@400;500;700&display=swap" rel="stylesheet">
@@ -82,6 +92,25 @@
       </div>
     </section>
 
+    <section class="trust reveal">
+      <h2>Built on Trust</h2>
+      <div class="grid-3">
+        <article class="card">🛠️ <h3>Mechanics + Shops</h3><p>Both independent mechanics and shop owners can compete on your request.</p></article>
+        <article class="card">📋 <h3>Clear Quote Details</h3><p>Owners review price, ETA, and notes before choosing who to hire.</p></article>
+        <article class="card">⭐ <h3>Quality First</h3><p>We optimize for best overall value: price, quality, and service experience.</p></article>
+      </div>
+    </section>
+
+    <section class="how reveal">
+      <h2>Request Lifecycle</h2>
+      <div class="grid-4">
+        <article class="card"><span class="num">01</span><h3>Submitted</h3></article>
+        <article class="card"><span class="num">02</span><h3>Bids Arrive</h3></article>
+        <article class="card"><span class="num">03</span><h3>Owner Accepts</h3></article>
+        <article class="card"><span class="num">04</span><h3>Job Complete</h3></article>
+      </div>
+    </section>
+
     <section class="testimonials reveal">
       <h2>What NYC Drivers Are Saying</h2>
       <div class="grid-3">
@@ -90,7 +119,20 @@
         <article class="card"><div class="stars">★★★★★</div><p><i>“Best deal I’ve gotten in NYC, hands down.”</i></p><div class="avatar">AL</div><small>A. Lewis — Brooklyn</small></article>
       </div>
     </section>
+
+    <section class="reveal">
+      <h2>FAQ</h2>
+      <div class="grid-3">
+        <article class="card"><h3>Is ShopMyRepair free for car owners?</h3><p>Yes. Owners can post requests and compare quotes for free.</p></article>
+        <article class="card"><h3>How fast do I get quotes?</h3><p>Most requests receive up to 3 quotes within 24 hours.</p></article>
+        <article class="card"><h3>Who can join as a pro?</h3><p>Independent mechanics and shop owners can both join and bid on jobs.</p></article>
+      </div>
+    </section>
   </main>
+
+  <div class="mobile-cta">
+    <button class="btn btn-orange open-modal" data-tab="owner">Get Early Access</button>
+  </div>
 
   <div id="modal" class="modal hidden">
     <div class="overlay"></div>
@@ -147,6 +189,17 @@
     </div>
   </div>
 
+  <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@type": "FAQPage",
+      "mainEntity": [
+        {"@type":"Question","name":"Is ShopMyRepair free for car owners?","acceptedAnswer":{"@type":"Answer","text":"Yes. Owners can post requests and compare quotes for free."}},
+        {"@type":"Question","name":"How fast do I get quotes?","acceptedAnswer":{"@type":"Answer","text":"Most requests receive up to 3 quotes within 24 hours."}},
+        {"@type":"Question","name":"Who can join as a pro?","acceptedAnswer":{"@type":"Answer","text":"Independent mechanics and shop owners can both join and bid on jobs."}}
+      ]
+    }
+  </script>
   <script src="/config.js"></script>
   <script src="/script.js"></script>
 </body>

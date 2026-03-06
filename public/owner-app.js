@@ -3,6 +3,7 @@ const configuredApiBase = (window.APP_CONFIG?.API_BASE || '').trim().replace(/\/
 const API_BASES = [
   configuredApiBase,
   location.origin,
+  'https://outlaw-ba9s.onrender.com',
   'https://shopmyrepair-prelaunch.onrender.com',
   'https://shopmyrepair.onrender.com'
 ].filter(Boolean).filter((v, i, a) => a.indexOf(v) === i);
@@ -61,6 +62,16 @@ function setStatus(text, type = 'info') {
   if (type === 'err') status.classList.add('err');
 }
 
+function labelForStatus(status) {
+  const s = String(status || 'submitted').toLowerCase();
+  if (s === 'open') return 'submitted';
+  if (s === 'accepted') return 'accepted';
+  if (s === 'in_progress') return 'in progress';
+  if (s === 'completed') return 'completed';
+  if (s === 'cancelled') return 'cancelled';
+  return s;
+}
+
 function validateQuote() {
   const required = [
     ['title', 'Title'],
@@ -99,12 +110,14 @@ async function boot() {
       reqWrap.innerHTML = repairs.length
         ? repairs.map(x => {
             const status = String(x.status || 'open').toLowerCase();
+            const statusLabel = labelForStatus(status);
             return `<div class='list-card'>
               <div class='request-head'>
                 <strong>#${x.id} · ${x.title}</strong>
-                <span class='pill ${status}'>${status}</span>
+                <span class='pill ${status}'>${statusLabel}</span>
               </div>
               <div class='muted-xs'>${x.vehicle_year || ''} ${x.vehicle_make || ''} ${x.vehicle_model || ''} · ${x.city || ''}, ${x.state || ''}</div>
+              <div class='muted-xs'>Next step: ${status === 'open' ? 'wait for bids' : status === 'accepted' ? 'coordinate service' : status === 'in_progress' ? 'service in progress' : status === 'completed' ? 'job completed' : 'review status'}.</div>
             </div>`;
           }).join('')
         : '<p>No open requests yet.</p>';
@@ -121,12 +134,13 @@ async function boot() {
             return `<div class='list-card'>
               <div class='bid-head'>
                 <strong>${b.mechanic_name}</strong>
-                <span class='pill ${status}'>${status}</span>
+                <span class='pill ${status}'>${labelForStatus(status)}</span>
               </div>
               <div class='quote-grid'>
                 <div class='muted-xs'>Offer: <b>$${b.amount}</b></div>
                 <div class='muted-xs'>ETA: <b>${b.eta_hours}h</b></div>
               </div>
+              <div class='muted-xs'>Trust signal: active profile on ShopMyRepair marketplace.</div>
               ${status === 'open' ? `<button class='btn btn-green' data-accept='${b.id}' style='margin-top:8px'>Accept Bid</button>` : ''}
             </div>`;
           }).join('')
