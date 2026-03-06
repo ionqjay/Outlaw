@@ -33,10 +33,14 @@ Open: `http://localhost:3000`
 - `SUPABASE_SERVICE_ROLE_KEY`
 - `CORS_ORIGINS`
 
-## Frontend API target
+## Frontend config
 Set `public/config.js`:
 ```js
 window.APP_CONFIG = {
-  API_BASE: 'https://shopmyrepair.onrender.com'
+  API_BASE: 'https://shopmyrepair.onrender.com',
+  SUPABASE_URL: 'https://YOUR_PROJECT.supabase.co',
+  SUPABASE_ANON_KEY: 'YOUR_SUPABASE_ANON_KEY'
 };
 ```
+
+If Supabase keys are left blank, app falls back to local dev auth mode.
