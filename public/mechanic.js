@@ -95,6 +95,7 @@ async function boot() {
             </div>
             <div class='small'>${rep.issue_category || ''} · ${rep.city || ''}, ${rep.state || ''} · ${rep.urgency || 'Standard'}</div>
             <div class='small'>${rep.vehicle_year || ''} ${rep.vehicle_make || ''} ${rep.vehicle_model || ''}</div>
+            <div class='small'><b>Repair needed:</b> ${rep.issue_details || 'No description provided.'}</div>
             <div class='row2' style='margin-top:8px'>
               <input placeholder='Bid amount (USD)' id='amount-${rep.id}' />
               <input placeholder='ETA (hours)' id='eta-${rep.id}' />
@@ -182,26 +183,49 @@ async function boot() {
   });
 
   async function loadDashboard() {
-    const wrap = document.getElementById('mechBids');
+    const wonWrap = document.getElementById('mechBidsWon');
+    const activeWrap = document.getElementById('mechBidsActive');
+    const otherWrap = document.getElementById('mechBidsOther');
 
     try {
-      const data = await fetchJson(`/api/bids?mechanicId=${encodeURIComponent(session.id)}`);
-      const bids = data.bids || [];
+      const [bidsData, repairsData] = await Promise.all([
+        fetchJson(`/api/bids?mechanicId=${encodeURIComponent(session.id)}`),
+        fetchJson('/api/repairs')
+      ]);
 
-      wrap.innerHTML = bids.length
-        ? bids.map(b => {
-            const status = String(b.status || 'open').toLowerCase();
-            return `<div class='list-card'>
-              <div class='head'>
-                <strong>Request #${b.request_id}</strong>
-                <span class='pill ${status}'>${status}</span>
-              </div>
-              <div class='small'>Offer: <b>$${b.amount}</b> · ETA: <b>${b.eta_hours}h</b></div>
-            </div>`;
-          }).join('')
-        : '<p>No bids yet.</p>';
+      const bids = bidsData.bids || [];
+      const repairs = repairsData.repairs || [];
+      const repairsById = new Map(repairs.map(r => [Number(r.id), r]));
+
+      const renderBidCard = (b) => {
+        const status = String(b.status || 'open').toLowerCase();
+        const rep = repairsById.get(Number(b.request_id));
+        const repStatus = String(rep?.status || 'open').toLowerCase();
+
+        return `<div class='list-card'>
+          <div class='head'>
+            <strong>${rep?.title ? rep.title : `Request #${b.request_id}`}</strong>
+            <span class='pill ${status}'>${status}</span>
+          </div>
+          <div class='small'>Offer: <b>$${b.amount}</b> · ETA: <b>${b.eta_hours}h</b></div>
+          <div class='small'>Repair status: <b>${repStatus}</b></div>
+          <div class='small'>${rep?.city || ''}${rep?.city ? ', ' : ''}${rep?.state || ''} · ${rep?.urgency || 'Standard'}</div>
+          <div class='small'><b>Repair needed:</b> ${rep?.issue_details || 'Request details unavailable.'}</div>
+        </div>`;
+      };
+
+      const won = bids.filter(b => String(b.status || '').toLowerCase() === 'accepted');
+      const active = bids.filter(b => String(b.status || '').toLowerCase() === 'open');
+      const other = bids.filter(b => !['accepted', 'open'].includes(String(b.status || '').toLowerCase()));
+
+      wonWrap.innerHTML = won.length ? won.map(renderBidCard).join('') : '<p>No won bids yet.</p>';
+      activeWrap.innerHTML = active.length ? active.map(renderBidCard).join('') : '<p>No active bids right now.</p>';
+      otherWrap.innerHTML = other.length ? other.map(renderBidCard).join('') : '<p>No other bids yet.</p>';
     } catch (err) {
-      wrap.innerHTML = `<p style='color:#ff9a9a'>${err.message || 'Could not load bids.'}</p>`;
+      const msg = `<p style='color:#ff9a9a'>${err.message || 'Could not load bids.'}</p>`;
+      wonWrap.innerHTML = msg;
+      activeWrap.innerHTML = msg;
+      otherWrap.innerHTML = msg;
     }
   }
 
