@@ -1,16 +1,169 @@
-<!doctype html><html><head><meta charset="UTF-8"/><meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-<title>Mechanic App</title><link rel="stylesheet" href="/styles.css"/>
-<style>.dash{max-width:980px;margin:22px auto;padding:0 16px}.panel{background:#15151a;border:1px solid #2a2a31;border-radius:14px;padding:14px;margin:12px 0}input,textarea{width:100%;padding:10px;border-radius:10px;border:1px solid #333;background:#0f0f13;color:#fff}</style>
-</head><body>
-<nav class="nav"><div class="logo"><span>SHOPMY</span><span class="orange">REPAIR</span></div><div><button class="btn btn-dark" data-view="home">Home</button> <button class="btn btn-dark" data-view="dashboard">Dashboard</button> <button class="btn btn-orange" data-view="repairs">Repairs</button> <button class="btn btn-dark" id="logoutBtn">Logout</button></div></nav>
-<main class="dash">
-<section id="view-home" class="panel"><h2>Mechanic Home</h2><p>See nearby requests and submit competitive estimates.</p></section>
-<section id="view-dashboard" class="panel" style="display:none"><h2>Your Open Bids / Accepted Jobs</h2><div id="mechBids"></div></section>
-<section id="view-repairs" class="panel" style="display:none"><h2>Available Repairs</h2><div id="repairFeed"></div></section>
-</main>
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-<script src="/config.js"></script>
-<script src="/supabase-client.js"></script>
-<script src="/app-auth.js"></script>
-<script src="/mechanic.js"></script>
-</body></html>
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Mechanic App — ShopMyRepair</title>
+  <link rel="stylesheet" href="/styles.css" />
+  <style>
+    :root {
+      --bg: #0d0d11;
+      --card: #15151a;
+      --card-soft: #101117;
+      --stroke: #2a2a31;
+      --text: #f7f7f9;
+      --muted: #b7b9c2;
+      --orange: #e8441a;
+      --orange-soft: rgba(232, 68, 26, 0.16);
+      --green: #2bb673;
+      --blue: #5f8fff;
+    }
+
+    .dash { max-width: 1120px; margin: 22px auto 44px; padding: 0 16px; }
+
+    .hero {
+      background:
+        radial-gradient(1000px 300px at -10% -40%, var(--orange-soft), transparent 58%),
+        radial-gradient(900px 260px at 120% -80%, rgba(255,255,255,0.06), transparent 55%),
+        linear-gradient(180deg, #17171f, #111117);
+      border: 1px solid var(--stroke);
+      border-radius: 18px;
+      padding: 22px;
+      margin: 12px 0;
+    }
+    .hero h1 { margin: 0; font-size: clamp(28px, 3.8vw, 42px); line-height: 1.02; }
+    .hero p { margin: 10px 0 0; color: var(--muted); max-width: 820px; }
+
+    .quick-metrics { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; margin-top: 12px; }
+    .quick-metrics .chip {
+      border: 1px solid #343540;
+      border-radius: 10px;
+      background: #111218;
+      padding: 9px 10px;
+      font-size: 12px;
+      color: #d2d3db;
+    }
+
+    .tabs { display: flex; gap: 8px; flex-wrap: wrap; margin: 12px 0 16px; }
+    .tab-btn {
+      background: #14141a;
+      border: 1px solid #2f3037;
+      color: #e9e9ee;
+      border-radius: 999px;
+      padding: 9px 14px;
+      cursor: pointer;
+    }
+    .tab-btn.active { border-color: var(--orange); box-shadow: 0 0 0 2px rgba(232, 68, 26, 0.14); }
+
+    .panel {
+      background: var(--card);
+      border: 1px solid var(--stroke);
+      border-radius: 14px;
+      padding: 16px;
+      margin: 12px 0;
+      box-shadow: 0 8px 28px rgba(0,0,0,0.2);
+    }
+
+    .panel h2, .panel h3 { margin: 0; }
+    .subtle { color: var(--muted); font-size: 13px; margin-top: 6px; }
+
+    .list-card {
+      border: 1px solid #31323b;
+      background: #101118;
+      border-radius: 12px;
+      padding: 12px;
+      margin-top: 10px;
+    }
+
+    .head { display: flex; justify-content: space-between; align-items: center; gap: 8px; flex-wrap: wrap; }
+    .pill {
+      display: inline-block;
+      border-radius: 999px;
+      border: 1px solid #3a3b44;
+      padding: 4px 9px;
+      font-size: 11px;
+      color: #d9dbe4;
+      background: #13141b;
+      text-transform: capitalize;
+    }
+    .pill.open { border-color: var(--blue); color: #c5d6ff; }
+    .pill.accepted { border-color: var(--green); color: #b6efcf; }
+    .pill.declined { border-color: #7b3b3b; color: #f0b4b4; }
+
+    .row2 { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+
+    input, textarea {
+      width: 100%;
+      padding: 10px 11px;
+      border-radius: 10px;
+      border: 1px solid #353641;
+      background: #0f1015;
+      color: #fff;
+      font-family: inherit;
+      transition: border-color .2s ease, box-shadow .2s ease;
+    }
+    input:focus, textarea:focus {
+      outline: none;
+      border-color: rgba(232, 68, 26, 0.75);
+      box-shadow: 0 0 0 3px rgba(232, 68, 26, 0.14);
+    }
+    textarea { min-height: 70px; resize: vertical; }
+
+    .small { color: #a9acb8; font-size: 12px; margin-top: 6px; }
+
+    .status { margin-top: 10px; color: var(--muted); }
+    .status.ok { color: #79e2a2; }
+    .status.err { color: #ff9a9a; }
+
+    @media (max-width: 920px) {
+      .quick-metrics, .row2 { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+  <nav class="nav">
+    <div class="logo"><span>SHOPMY</span><span class="orange">REPAIR</span></div>
+    <button class="btn btn-dark" id="logoutBtn">Logout</button>
+  </nav>
+
+  <main class="dash">
+    <section class="hero">
+      <h1>Mechanic / Shop Dashboard</h1>
+      <p>Find qualified repair requests, send competitive bids, and win more local jobs.</p>
+      <div class="quick-metrics">
+        <div class="chip">📥 New demand from car owners</div>
+        <div class="chip">💼 More jobs for mechanics & shops</div>
+        <div class="chip">⚡ Fast bid workflow</div>
+      </div>
+    </section>
+
+    <div class="tabs">
+      <button class="tab-btn active" data-view="home">Home</button>
+      <button class="tab-btn" data-view="dashboard">My Bids</button>
+      <button class="tab-btn" data-view="repairs">Open Repairs</button>
+    </div>
+
+    <section id="view-home" class="panel">
+      <h2>Welcome back</h2>
+      <p class="subtle">Check <b>Open Repairs</b> to submit bids, then track outcomes in <b>My Bids</b>.</p>
+    </section>
+
+    <section id="view-dashboard" class="panel" style="display:none">
+      <h2>Your Bids</h2>
+      <div id="mechBids" class="subtle">Loading...</div>
+    </section>
+
+    <section id="view-repairs" class="panel" style="display:none">
+      <h2>Available Repairs</h2>
+      <div id="repairFeed" class="subtle">Loading...</div>
+      <p id="mechStatus" class="status">Ready when you are.</p>
+    </section>
+  </main>
+
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="/config.js"></script>
+  <script src="/supabase-client.js"></script>
+  <script src="/app-auth.js"></script>
+  <script src="/mechanic.js"></script>
+</body>
+</html>

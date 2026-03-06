@@ -1,13 +1,63 @@
-const API_BASE = (window.APP_CONFIG?.API_BASE || '').trim().replace(/\/$/, '');
-const api = (p) => `${API_BASE}${p}`;
+const configuredApiBase = (window.APP_CONFIG?.API_BASE || '').trim().replace(/\/$/, '');
 
-function view(name) {
+const API_BASES = [
+  configuredApiBase,
+  location.origin,
+  'https://outlaw-ba9s.onrender.com'
+].filter(Boolean).filter((v, i, a) => a.indexOf(v) === i);
+
+let workingApiBase = configuredApiBase || location.origin;
+
+function api(base, path) {
+  return `${base}${path}`;
+}
+
+async function fetchJson(path, options = {}) {
+  let lastErr = null;
+
+  for (const base of API_BASES) {
+    try {
+      const res = await fetch(api(base, path), options);
+      const text = await res.text();
+      let data = {};
+      try { data = text ? JSON.parse(text) : {}; } catch { data = { error: text || 'Unexpected response' }; }
+
+      if (!res.ok && res.status === 404 && /route not found|not found/i.test(String(data?.error || data?.message || text))) {
+        lastErr = new Error(`API route missing on ${base}`);
+        continue;
+      }
+
+      workingApiBase = base;
+      if (!res.ok) throw new Error(data.error || data.message || `Request failed (${res.status})`);
+      return data;
+    } catch (err) {
+      lastErr = err;
+    }
+  }
+
+  throw lastErr || new Error('Unable to reach backend API.');
+}
+
+function setView(name) {
   ['home', 'dashboard', 'repairs'].forEach(v => {
-    document.getElementById(`view-${v}`).style.display = v === name ? 'block' : 'none';
+    const el = document.getElementById(`view-${v}`);
+    el.style.display = v === name ? 'block' : 'none';
+  });
+
+  document.querySelectorAll('[data-view]').forEach(btn => {
+    btn.classList.toggle('active', btn.dataset.view === name);
   });
 }
 
-document.querySelectorAll('[data-view]').forEach(b => b.addEventListener('click', () => view(b.dataset.view)));
+document.querySelectorAll('[data-view]').forEach(b => b.addEventListener('click', () => setView(b.dataset.view)));
+
+function setStatus(text, type = 'info') {
+  const status = document.getElementById('mechStatus');
+  status.textContent = text;
+  status.classList.remove('ok', 'err');
+  if (type === 'ok') status.classList.add('ok');
+  if (type === 'err') status.classList.add('err');
+}
 
 async function boot() {
   const session = await window.smrAuth.requireRole('mechanic');
@@ -18,44 +68,102 @@ async function boot() {
   async function loadRepairs() {
     const wrap = document.getElementById('repairFeed');
     wrap.textContent = 'Loading...';
-    const r = await fetch(api('/api/repairs?status=open'));
-    const data = await r.json();
-    const repairs = data.repairs || [];
 
-    wrap.innerHTML = repairs.length
-      ? repairs.map(rep => `<div class='panel'><b>#${rep.id}</b> ${rep.title}<br/>${rep.city}, ${rep.state} • ${rep.urgency}<br/><input placeholder='Bid amount' id='amount-${rep.id}'/><input placeholder='ETA hours' id='eta-${rep.id}'/><textarea id='notes-${rep.id}' placeholder='Notes'></textarea><button class='btn btn-orange' data-bid='${rep.id}'>Submit Bid</button></div>`).join('')
-      : '<p>No open repairs yet.</p>';
+    try {
+      const data = await fetchJson('/api/repairs?status=open');
+      const repairs = data.repairs || [];
 
-    document.querySelectorAll('[data-bid]').forEach(btn => btn.addEventListener('click', async () => {
-      const id = btn.dataset.bid;
-      const payload = {
-        requestId: Number(id),
-        mechanicId: session.id,
-        mechanicName: session.name || session.email,
-        amount: Number(document.getElementById(`amount-${id}`).value),
-        etaHours: Number(document.getElementById(`eta-${id}`).value),
-        notes: document.getElementById(`notes-${id}`).value
-      };
-      const rr = await fetch(api('/api/bids'), {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload)
-      });
-      if (rr.ok) {
-        loadRepairs();
-        loadDashboard();
-      }
-    }));
+      wrap.innerHTML = repairs.length
+        ? repairs.map(rep => `
+          <div class='list-card'>
+            <div class='head'>
+              <strong>#${rep.id} · ${rep.title}</strong>
+              <span class='pill open'>open</span>
+            </div>
+            <div class='small'>${rep.issue_category || ''} · ${rep.city || ''}, ${rep.state || ''} · ${rep.urgency || 'Standard'}</div>
+            <div class='small'>${rep.vehicle_year || ''} ${rep.vehicle_make || ''} ${rep.vehicle_model || ''}</div>
+            <div class='row2' style='margin-top:8px'>
+              <input placeholder='Bid amount (USD)' id='amount-${rep.id}' />
+              <input placeholder='ETA (hours)' id='eta-${rep.id}' />
+            </div>
+            <textarea id='notes-${rep.id}' placeholder='Notes for owner (optional)' style='margin-top:8px'></textarea>
+            <button class='btn btn-orange' data-bid='${rep.id}' style='margin-top:8px'>Submit Bid</button>
+          </div>
+        `).join('')
+        : '<p>No open repairs yet.</p>';
+
+      document.querySelectorAll('[data-bid]').forEach(btn => btn.addEventListener('click', async () => {
+        const id = btn.dataset.bid;
+        const amount = Number(document.getElementById(`amount-${id}`).value);
+        const etaHours = Number(document.getElementById(`eta-${id}`).value);
+
+        if (!Number.isFinite(amount) || amount <= 0) {
+          setStatus('Please enter a valid bid amount.', 'err');
+          return;
+        }
+        if (!Number.isFinite(etaHours) || etaHours <= 0) {
+          setStatus('Please enter a valid ETA in hours.', 'err');
+          return;
+        }
+
+        const payload = {
+          requestId: Number(id),
+          mechanicId: session.id,
+          mechanicName: session.name || session.email,
+          amount,
+          etaHours,
+          notes: document.getElementById(`notes-${id}`).value
+        };
+
+        btn.disabled = true;
+        btn.textContent = 'Submitting...';
+        setStatus('Submitting bid...');
+
+        try {
+          await fetchJson('/api/bids', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
+          });
+
+          setStatus(`Bid submitted. (Connected to: ${workingApiBase})`, 'ok');
+          await loadRepairs();
+          await loadDashboard();
+        } catch (err) {
+          setStatus(err.message || 'Failed to submit bid.', 'err');
+        } finally {
+          btn.disabled = false;
+          btn.textContent = 'Submit Bid';
+        }
+      }));
+    } catch (err) {
+      wrap.innerHTML = `<p style='color:#ff9a9a'>${err.message || 'Could not load repairs.'}</p>`;
+      setStatus('Could not load open repairs.', 'err');
+    }
   }
 
   async function loadDashboard() {
     const wrap = document.getElementById('mechBids');
-    const r = await fetch(api(`/api/bids?mechanicId=${encodeURIComponent(session.id)}`));
-    const data = await r.json();
-    const bids = data.bids || [];
-    wrap.innerHTML = bids.length
-      ? bids.map(b => `<div class='panel'>Request #${b.request_id} • $${b.amount} • ${b.status}</div>`).join('')
-      : '<p>No bids yet.</p>';
+
+    try {
+      const data = await fetchJson(`/api/bids?mechanicId=${encodeURIComponent(session.id)}`);
+      const bids = data.bids || [];
+
+      wrap.innerHTML = bids.length
+        ? bids.map(b => {
+            const status = String(b.status || 'open').toLowerCase();
+            return `<div class='list-card'>
+              <div class='head'>
+                <strong>Request #${b.request_id}</strong>
+                <span class='pill ${status}'>${status}</span>
+              </div>
+              <div class='small'>Offer: <b>$${b.amount}</b> · ETA: <b>${b.eta_hours}h</b></div>
+            </div>`;
+          }).join('')
+        : '<p>No bids yet.</p>';
+    } catch (err) {
+      wrap.innerHTML = `<p style='color:#ff9a9a'>${err.message || 'Could not load bids.'}</p>`;
+    }
   }
 
   loadRepairs();
