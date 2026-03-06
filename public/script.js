@@ -13,6 +13,23 @@ const prefillEmail = document.getElementById('prefillEmail');
 const notifyBtn = document.getElementById('notifyBtn');
 const sendOtpBtn = document.getElementById('sendOtpBtn');
 
+function showToast(message, type = 'ok') {
+  const existing = document.getElementById('smrToast');
+  if (existing) existing.remove();
+
+  const el = document.createElement('div');
+  el.id = 'smrToast';
+  el.className = `smr-toast ${type === 'error' ? 'error' : 'ok'}`;
+  el.textContent = message;
+  document.body.appendChild(el);
+
+  requestAnimationFrame(() => el.classList.add('show'));
+  setTimeout(() => {
+    el.classList.remove('show');
+    setTimeout(() => el.remove(), 260);
+  }, 2600);
+}
+
 let currentTab = 'owner';
 let liveCounter = 847;
 let otpSent = false;
@@ -54,16 +71,28 @@ tabs.forEach(t => t.addEventListener('click', ()=>setTab(t.dataset.tab)));
 
 sendOtpBtn.addEventListener('click', async () => {
   const phone = (form.phone.value || '').trim();
-  if (!/^\d{10}$/.test(phone.replace(/\D/g,''))) return alert('Enter valid 10-digit US phone first.');
+  if (!/^\d{10}$/.test(phone.replace(/\D/g,''))) {
+    showToast('Enter a valid 10-digit US phone number first.', 'error');
+    return;
+  }
+
   const r = await fetch(api('/api/send-otp'), {
     method: 'POST', headers: {'Content-Type': 'application/json'},
     body: JSON.stringify({ phone })
   });
   const data = await r.json();
-  if (!r.ok) return alert(data.error || 'Could not send code');
+
+  if (!r.ok) {
+    showToast(data.error || 'Could not send code.', 'error');
+    return;
+  }
+
   otpSent = true;
-  const devHint = data.devCode ? `\n\nDev mode code: ${data.devCode}` : '';
-  alert(`Code sent. Check your phone.${devHint}`);
+  if (data.devCode) {
+    showToast(`Code sent. Dev code: ${data.devCode}`, 'ok');
+    return;
+  }
+  showToast('Code sent. Check your phone.', 'ok');
 });
 
 form.addEventListener('submit', async (e) => {

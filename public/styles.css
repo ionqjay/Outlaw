@@ -13,6 +13,10 @@ input,select{width:100%;background:#0f0f14;border:1px solid #2d2d36;color:var(--
 .modal{position:fixed;inset:0;display:grid;place-items:center;z-index:99}.hidden{display:none}.overlay{position:absolute;inset:0;background:#0009}.modal-card{position:relative;background:var(--card);border:1px solid #2d2d36;border-radius:20px;max-width:560px;width:92%;padding:20px;z-index:1}.close{position:absolute;right:12px;top:12px;background:none;color:white;border:0;font-size:20px;cursor:pointer}.badge{background:#2f1a13;color:#ff9e80;padding:6px 10px;border-radius:999px;font-size:12px}
 .tabs{display:flex;gap:8px;margin:12px 0}.tab{flex:1;background:#0f0f14;border:1px solid #2c2c35;color:#c6c6d2;border-radius:10px;padding:10px;cursor:pointer}.tab.active{background:var(--orange);color:white}
 #signupForm{display:grid;gap:10px}#success ul{color:var(--muted)} .otp-row{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.smr-toast{position:fixed;left:50%;bottom:18px;transform:translate(-50%,18px);opacity:0;z-index:140;background:#121319;border:1px solid #2f3140;color:#f0f2f9;padding:10px 14px;border-radius:12px;box-shadow:0 10px 24px rgba(0,0,0,.35);transition:all .24s ease;max-width:min(92vw,520px);font-size:14px;text-align:center}
+.smr-toast.show{opacity:1;transform:translate(-50%,0)}
+.smr-toast.ok{border-color:#2a9f60;background:#122018}
+.smr-toast.error{border-color:#9f3a3a;background:#261515}
 section{margin:32px 0}.reveal{opacity:0;transform:translateY(20px);transition:all .5s}.reveal.show{opacity:1;transform:none}
 @keyframes pulse{0%,100%{opacity:.5}50%{opacity:1}}
 .mobile-cta{display:none}
