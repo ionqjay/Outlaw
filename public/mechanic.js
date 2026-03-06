@@ -59,6 +59,19 @@ function setStatus(text, type = 'info') {
   if (type === 'err') status.classList.add('err');
 }
 
+function parseOwnerMeta(issueDetailsRaw) {
+  const txt = String(issueDetailsRaw || '');
+  const m = txt.match(/\[OWNER_META\](.*?)\[\/OWNER_META\]/);
+  if (!m) return { ownerEmail: '', ownerPhone: '', cleanDetails: txt };
+  try {
+    const meta = JSON.parse(m[1]);
+    const cleanDetails = txt.replace(m[0], '').trim();
+    return { ownerEmail: meta.ownerEmail || '', ownerPhone: meta.ownerPhone || '', cleanDetails };
+  } catch {
+    return { ownerEmail: '', ownerPhone: '', cleanDetails: txt };
+  }
+}
+
 async function boot() {
   const session = await window.smrAuth.requireRole('mechanic');
   if (!session) return;
@@ -88,7 +101,9 @@ async function boot() {
       const repairs = data.repairs || [];
 
       wrap.innerHTML = repairs.length
-        ? repairs.map(rep => `
+        ? repairs.map(rep => {
+            const ownerMeta = parseOwnerMeta(rep.issue_details);
+            return `
           <div class='list-card'>
             <div class='head'>
               <strong>#${rep.id} · ${rep.title}</strong>
@@ -96,14 +111,15 @@ async function boot() {
             </div>
             <div class='small'>${rep.issue_category || ''} · ${rep.city || ''}, ${rep.state || ''} · ${rep.urgency || 'Standard'}</div>
             <div class='small'>${rep.vehicle_year || ''} ${rep.vehicle_make || ''} ${rep.vehicle_model || ''}</div>
-            <div class='small'><b>Repair needed:</b> ${rep.issue_details || 'No description provided.'}</div>
+            <div class='small'><b>Repair needed:</b> ${ownerMeta.cleanDetails || 'No description provided.'}</div>
             <div class='row2' style='margin-top:8px'>
               <input placeholder='Repair estimate (USD)' id='amount-${rep.id}' />
             </div>
             <textarea id='notes-${rep.id}' placeholder='Notes for owner (optional)' style='margin-top:8px'></textarea>
             <button class='btn btn-orange' data-bid='${rep.id}' style='margin-top:8px'>Submit Bid</button>
           </div>
-        `).join('')
+        `;
+          }).join('')
         : '<p>No open repairs yet.</p>';
 
       document.querySelectorAll('[data-bid]').forEach(btn => btn.addEventListener('click', async () => {
@@ -120,7 +136,9 @@ async function boot() {
         const meta = {
           businessName: savedProfile?.businessName || savedProfile?.name || session.name || session.email,
           businessAddress: savedProfile?.businessAddress || '',
-          businessZip: savedProfile?.zip || ''
+          businessZip: savedProfile?.zip || '',
+          businessEmail: savedProfile?.email || session.email || '',
+          businessPhone: savedProfile?.phone || ''
         };
 
         const payload = {
@@ -143,7 +161,7 @@ async function boot() {
             body: JSON.stringify(payload)
           });
 
-          setStatus(`Bid submitted. (Connected to: ${workingApiBase})`, 'ok');
+          setStatus('Bid submitted successfully.', 'ok');
           await loadRepairs();
           await loadDashboard();
         } catch (err) {
@@ -204,6 +222,7 @@ async function boot() {
         const status = String(b.status || 'open').toLowerCase();
         const rep = repairsById.get(Number(b.request_id));
         const repStatus = String(rep?.status || 'open').toLowerCase();
+        const ownerMeta = parseOwnerMeta(rep?.issue_details || '');
 
         return `<div class='list-card'>
           <div class='head'>
@@ -213,7 +232,8 @@ async function boot() {
           <div class='small'>Repair estimate: <b>$${b.amount}</b></div>
           <div class='small'>Repair status: <b>${repStatus}</b></div>
           <div class='small'>${rep?.city || ''}${rep?.city ? ', ' : ''}${rep?.state || ''} · ${rep?.urgency || 'Standard'}</div>
-          <div class='small'><b>Repair needed:</b> ${rep?.issue_details || 'Request details unavailable.'}</div>
+          <div class='small'><b>Repair needed:</b> ${ownerMeta.cleanDetails || 'Request details unavailable.'}</div>
+          ${status === 'accepted' ? `<div class='small'><b>Owner contact:</b> ${ownerMeta.ownerPhone || 'No phone'} · ${ownerMeta.ownerEmail || 'No email'}</div>` : ''}
         </div>`;
       };
 

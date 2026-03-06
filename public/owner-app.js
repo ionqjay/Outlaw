@@ -12,6 +12,8 @@ let workingApiBase = configuredApiBase || location.origin;
 let selectedRequestId = null;
 let repairsCache = [];
 let bidsByRequest = new Map();
+let pendingFeedback = null;
+let pendingFeedbackStars = 0;
 
 function api(base, path) {
   return `${base}${path}`;
@@ -142,6 +144,20 @@ function recordFeedback({ requestId, bidId, mechanicId, rating, text }) {
   saveFeedbacks(all);
 }
 
+function openFeedbackModal(payload) {
+  pendingFeedback = payload;
+  pendingFeedbackStars = 0;
+  document.getElementById('feedbackNote').value = '';
+  document.querySelectorAll('[data-star]').forEach(btn => btn.classList.remove('active'));
+  document.getElementById('feedbackModal').classList.remove('hidden');
+}
+
+function closeFeedbackModal() {
+  pendingFeedback = null;
+  pendingFeedbackStars = 0;
+  document.getElementById('feedbackModal').classList.add('hidden');
+}
+
 function renderRequests() {
   const reqWrap = document.getElementById('ownerRequests');
 
@@ -227,6 +243,7 @@ function renderBids() {
         <div class='muted-xs'>Repair estimate: <b>$${b.amount}</b></div>
       </div>
       <div class='muted-xs'>Business address: ${meta.businessAddress || 'Not provided'} ${meta.businessZip || ''}</div>
+      <div class='muted-xs'>Contact: ${meta.businessPhone || 'No phone'} · ${meta.businessEmail || 'No email'}</div>
       <div class='muted-xs'>Reviews: ${rating} (${reviewCount})</div>
       <div class='muted-xs'>Notes: ${parsed.notes ? parsed.notes : 'No additional notes provided.'}</div>
       ${status === 'open' ? `<button class='btn btn-green' data-accept='${b.id}' style='margin-top:8px'>Accept Repair Estimate</button>` : ''}
@@ -243,6 +260,7 @@ function renderBids() {
     </div>
     <div class='muted-xs'><b>${acceptedMeta.businessName || accepted.mechanic_name}</b></div>
     <div class='muted-xs'>Business address: ${acceptedMeta.businessAddress || 'Not provided'} ${acceptedMeta.businessZip || ''}</div>
+    <div class='muted-xs'>Contact: ${acceptedMeta.businessPhone || 'No phone'} · ${acceptedMeta.businessEmail || 'No email'}</div>
     <div class='muted-xs'>Reviews: ${acceptedRating.avg ? `${acceptedRating.avg}/5` : 'No rating yet'} (${acceptedRating.count} review${acceptedRating.count === 1 ? '' : 's'})</div>
     <div class='muted-xs'>Repair estimate: $${accepted.amount}</div>
     <div class='muted-xs'>Notes: ${acceptedParsed?.notes ? acceptedParsed.notes : 'No additional notes provided.'}</div>
@@ -262,25 +280,12 @@ function renderBids() {
     }
   }));
 
-  document.querySelectorAll('[data-feedback]').forEach(btn => btn.addEventListener('click', async () => {
-    const rating = Number(prompt('Rate this mechanic/shop from 1 to 5:', '5'));
-    if (!Number.isFinite(rating) || rating < 1 || rating > 5) {
-      alert('Please enter a rating between 1 and 5.');
-      return;
-    }
-    const text = prompt('Optional feedback note:', '') || '';
-
-    recordFeedback({
+  document.querySelectorAll('[data-feedback]').forEach(btn => btn.addEventListener('click', () => {
+    openFeedbackModal({
       requestId: Number(btn.dataset.request),
       bidId: Number(btn.dataset.feedback),
-      mechanicId: btn.dataset.mechanic,
-      rating,
-      text
+      mechanicId: btn.dataset.mechanic
     });
-
-    await loadDashboardData(window.__ownerSession);
-    renderBids();
-    alert('Thanks — your feedback has been saved.');
   }));
 }
 
@@ -311,6 +316,33 @@ async function boot() {
   if (!session) return;
 
   document.getElementById('logoutBtn').addEventListener('click', () => window.smrAuth.logoutToLogin());
+
+  document.getElementById('feedbackOverlay').addEventListener('click', closeFeedbackModal);
+  document.getElementById('feedbackCancelBtn').addEventListener('click', closeFeedbackModal);
+  document.querySelectorAll('[data-star]').forEach(btn => btn.addEventListener('click', () => {
+    pendingFeedbackStars = Number(btn.dataset.star);
+    document.querySelectorAll('[data-star]').forEach(s => s.classList.toggle('active', Number(s.dataset.star) <= pendingFeedbackStars));
+  }));
+  document.getElementById('feedbackSubmitBtn').addEventListener('click', async () => {
+    if (!pendingFeedback) return;
+    if (!Number.isFinite(pendingFeedbackStars) || pendingFeedbackStars < 1 || pendingFeedbackStars > 5) {
+      alert('Please select a star rating from 1 to 5.');
+      return;
+    }
+    const text = document.getElementById('feedbackNote').value || '';
+
+    recordFeedback({
+      requestId: pendingFeedback.requestId,
+      bidId: pendingFeedback.bidId,
+      mechanicId: pendingFeedback.mechanicId,
+      rating: pendingFeedbackStars,
+      text
+    });
+
+    closeFeedbackModal();
+    await loadDashboardData(window.__ownerSession);
+    renderBids();
+  });
 
   async function loadProfile() {
     const profile = await window.smrAuth.getOwnerProfile();
@@ -379,11 +411,15 @@ async function boot() {
       ? 'Owner will bring parts'
       : 'Mechanic/shop should provide parts';
 
+    const ownerEmail = (document.getElementById('profileEmail').value || session.email || '').trim();
+    const ownerPhone = (document.getElementById('profilePhone').value || '').trim();
+    const ownerMeta = `[OWNER_META]${JSON.stringify({ ownerEmail, ownerPhone })}[/OWNER_META]`;
+
     const payload = {
       ownerId: session.id,
       title: document.getElementById('title').value.trim(),
       issueCategory: document.getElementById('issueCategory').value,
-      issueDetails: `[Parts preference: ${partsLabel}] ${document.getElementById('issueDetails').value.trim()}`,
+      issueDetails: `${ownerMeta} [Parts preference: ${partsLabel}] ${document.getElementById('issueDetails').value.trim()}`,
       vehicleYear: document.getElementById('vehicleYear').value.trim(),
       vehicleMake: document.getElementById('vehicleMake').value.trim(),
       vehicleModel: document.getElementById('vehicleModel').value.trim(),

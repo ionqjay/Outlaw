@@ -132,6 +132,22 @@
       margin-top: 8px;
     }
 
+    .feedback-modal { position: fixed; inset: 0; display: grid; place-items: center; z-index: 120; }
+    .feedback-modal.hidden { display: none; }
+    .feedback-overlay { position: absolute; inset: 0; background: rgba(0,0,0,0.65); }
+    .feedback-card {
+      position: relative;
+      z-index: 1;
+      width: min(540px, 92vw);
+      background: #15151a;
+      border: 1px solid #2f3038;
+      border-radius: 16px;
+      padding: 16px;
+    }
+    .stars-row { display: flex; gap: 8px; margin: 10px 0; }
+    .star-btn { background: #12131a; border: 1px solid #333645; color: #c6cad9; border-radius: 10px; padding: 8px 10px; cursor: pointer; }
+    .star-btn.active { border-color: #e8441a; color: #fff; background: #2a1a15; }
+
     @media (max-width: 860px) {
       .grid2, .quote-grid, .quick-metrics { grid-template-columns: 1fr; }
     }
@@ -240,6 +256,26 @@
       <p id="profileStatus" class="status">Profile not updated yet.</p>
     </section>
   </main>
+
+  <div id="feedbackModal" class="feedback-modal hidden">
+    <div class="feedback-overlay" id="feedbackOverlay"></div>
+    <div class="feedback-card">
+      <h3 style="margin-top:0">Leave Feedback</h3>
+      <p class="subtle">Rate your completed experience from 1 to 5 stars.</p>
+      <div class="stars-row" id="feedbackStars">
+        <button type="button" class="star-btn" data-star="1">1★</button>
+        <button type="button" class="star-btn" data-star="2">2★</button>
+        <button type="button" class="star-btn" data-star="3">3★</button>
+        <button type="button" class="star-btn" data-star="4">4★</button>
+        <button type="button" class="star-btn" data-star="5">5★</button>
+      </div>
+      <textarea id="feedbackNote" placeholder="Add a note about quality, communication, and overall experience."></textarea>
+      <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:10px">
+        <button class="btn btn-dark" type="button" id="feedbackCancelBtn">Cancel</button>
+        <button class="btn btn-orange" type="button" id="feedbackSubmitBtn">Submit Feedback</button>
+      </div>
+    </div>
+  </div>
 
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="/config.js"></script>
