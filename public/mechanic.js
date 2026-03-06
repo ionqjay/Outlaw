@@ -39,7 +39,7 @@ async function fetchJson(path, options = {}) {
 }
 
 function setView(name) {
-  ['home', 'dashboard', 'repairs'].forEach(v => {
+  ['home', 'dashboard', 'repairs', 'profile'].forEach(v => {
     const el = document.getElementById(`view-${v}`);
     el.style.display = v === name ? 'block' : 'none';
   });
@@ -64,6 +64,19 @@ async function boot() {
   if (!session) return;
 
   document.getElementById('logoutBtn').addEventListener('click', () => window.smrAuth.logoutToLogin());
+
+  async function loadProfile() {
+    const profile = await window.smrAuth.getMechanicProfile();
+    if (!profile) return;
+    document.getElementById('profileBusinessName').value = profile.businessName || '';
+    document.getElementById('profileName').value = profile.name || '';
+    document.getElementById('profileEmail').value = profile.email || '';
+    document.getElementById('profilePhone').value = profile.phone || '';
+    document.getElementById('profileCity').value = profile.city || '';
+    document.getElementById('profileState').value = profile.state || 'NY';
+    document.getElementById('profileZip').value = profile.zip || '';
+    document.getElementById('profileServices').value = profile.services || '';
+  }
 
   async function loadRepairs() {
     const wrap = document.getElementById('repairFeed');
@@ -106,10 +119,11 @@ async function boot() {
           return;
         }
 
+        const savedProfile = await window.smrAuth.getMechanicProfile();
         const payload = {
           requestId: Number(id),
           mechanicId: session.id,
-          mechanicName: session.name || session.email,
+          mechanicName: savedProfile?.businessName || savedProfile?.name || session.name || session.email,
           amount,
           etaHours,
           notes: document.getElementById(`notes-${id}`).value
@@ -142,6 +156,31 @@ async function boot() {
     }
   }
 
+  document.getElementById('saveMechanicProfileBtn').addEventListener('click', async () => {
+    const status = document.getElementById('mechanicProfileStatus');
+    status.classList.remove('ok', 'err');
+    status.textContent = 'Saving profile...';
+
+    try {
+      await window.smrAuth.saveMechanicProfile({
+        businessName: document.getElementById('profileBusinessName').value,
+        name: document.getElementById('profileName').value,
+        email: document.getElementById('profileEmail').value,
+        phone: document.getElementById('profilePhone').value,
+        city: document.getElementById('profileCity').value,
+        state: document.getElementById('profileState').value,
+        zip: document.getElementById('profileZip').value,
+        services: document.getElementById('profileServices').value
+      });
+      status.textContent = 'Profile updated successfully.';
+      status.classList.add('ok');
+      await loadProfile();
+    } catch (err) {
+      status.textContent = err.message || 'Could not save profile.';
+      status.classList.add('err');
+    }
+  });
+
   async function loadDashboard() {
     const wrap = document.getElementById('mechBids');
 
@@ -166,6 +205,7 @@ async function boot() {
     }
   }
 
+  await loadProfile();
   loadRepairs();
   loadDashboard();
 }

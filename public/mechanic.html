@@ -141,6 +141,7 @@
       <button class="tab-btn active" data-view="home">Home</button>
       <button class="tab-btn" data-view="dashboard">My Bids</button>
       <button class="tab-btn" data-view="repairs">Open Repairs</button>
+      <button class="tab-btn" data-view="profile">Profile</button>
     </div>
 
     <section id="view-home" class="panel">
@@ -157,6 +158,29 @@
       <h2>Available Repairs</h2>
       <div id="repairFeed" class="subtle">Loading...</div>
       <p id="mechStatus" class="status">Ready when you are.</p>
+    </section>
+
+    <section id="view-profile" class="panel" style="display:none">
+      <h2>Mechanic / Shop Profile</h2>
+      <p class="subtle">Set your profile so owners see stronger, more trusted bids.</p>
+      <div class="row2" style="margin-top:10px">
+        <input id="profileBusinessName" placeholder="Shop or business name" />
+        <input id="profileName" placeholder="Contact name" />
+      </div>
+      <div class="row2" style="margin-top:8px">
+        <input id="profileEmail" type="email" placeholder="Email address" />
+        <input id="profilePhone" placeholder="Phone number" />
+      </div>
+      <div class="row2" style="margin-top:8px">
+        <input id="profileCity" placeholder="City" />
+        <input id="profileState" placeholder="State" value="NY" />
+      </div>
+      <div class="row2" style="margin-top:8px">
+        <input id="profileZip" placeholder="ZIP" />
+      </div>
+      <textarea id="profileServices" placeholder="Services (e.g. brakes, diagnostics, engine, mobile)" style="margin-top:8px"></textarea>
+      <button class="btn btn-orange" id="saveMechanicProfileBtn" style="margin-top:10px">Save Profile</button>
+      <p id="mechanicProfileStatus" class="status">Profile not updated yet.</p>
     </section>
   </main>
 
