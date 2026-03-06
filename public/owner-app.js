@@ -234,6 +234,7 @@ async function boot() {
     const profile = await window.smrAuth.getOwnerProfile();
     if (!profile) return;
     document.getElementById('profileName').value = profile.name || '';
+    document.getElementById('profileEmail').value = profile.email || '';
     document.getElementById('profilePhone').value = profile.phone || '';
     document.getElementById('profileCity').value = profile.city || '';
     document.getElementById('profileState').value = profile.state || 'NY';
@@ -268,6 +269,7 @@ async function boot() {
     try {
       await window.smrAuth.saveOwnerProfile({
         name: document.getElementById('profileName').value,
+        email: document.getElementById('profileEmail').value,
         phone: document.getElementById('profilePhone').value,
         city: document.getElementById('profileCity').value,
         state: document.getElementById('profileState').value,

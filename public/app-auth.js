@@ -30,6 +30,7 @@ async function saveOwnerProfile(profile = {}) {
 
   const clean = {
     name: String(profile.name || '').trim(),
+    email: String(profile.email || '').trim(),
     phone: String(profile.phone || '').trim(),
     city: String(profile.city || '').trim(),
     state: String(profile.state || '').trim(),
@@ -52,6 +53,7 @@ async function getOwnerProfile() {
   const local = JSON.parse(localStorage.getItem(`smr_owner_profile_${session.id}`) || '{}');
   const merged = {
     name: session.name || local.name || '',
+    email: session.email || local.email || '',
     phone: session.phone || local.phone || '',
     city: session.city || local.city || '',
     state: session.state || local.state || 'NY',
