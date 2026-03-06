@@ -116,7 +116,7 @@ async function boot() {
               <input placeholder='Repair estimate (USD)' id='amount-${rep.id}' />
             </div>
             <textarea id='notes-${rep.id}' placeholder='Notes for owner (optional)' style='margin-top:8px'></textarea>
-            <button class='btn btn-orange' data-bid='${rep.id}' style='margin-top:8px'>Submit Bid</button>
+            <button class='btn btn-orange' data-bid='${rep.id}' style='margin-top:8px'>Submit Repair Estimate</button>
           </div>
         `;
           }).join('')
@@ -152,7 +152,7 @@ async function boot() {
 
         btn.disabled = true;
         btn.textContent = 'Submitting...';
-        setStatus('Submitting bid...');
+        setStatus('Submitting repair estimate...');
 
         try {
           await fetchJson('/api/bids', {
@@ -168,7 +168,7 @@ async function boot() {
           setStatus(err.message || 'Failed to submit bid.', 'err');
         } finally {
           btn.disabled = false;
-          btn.textContent = 'Submit Bid';
+          btn.textContent = 'Submit Repair Estimate';
         }
       }));
     } catch (err) {
@@ -241,9 +241,9 @@ async function boot() {
       const active = bids.filter(b => String(b.status || '').toLowerCase() === 'open');
       const other = bids.filter(b => !['accepted', 'open'].includes(String(b.status || '').toLowerCase()));
 
-      wonWrap.innerHTML = won.length ? won.map(renderBidCard).join('') : '<p>No won bids yet.</p>';
-      activeWrap.innerHTML = active.length ? active.map(renderBidCard).join('') : '<p>No active bids right now.</p>';
-      otherWrap.innerHTML = other.length ? other.map(renderBidCard).join('') : '<p>No other bids yet.</p>';
+      wonWrap.innerHTML = won.length ? won.map(renderBidCard).join('') : '<p>No won repair estimates yet.</p>';
+      activeWrap.innerHTML = active.length ? active.map(renderBidCard).join('') : '<p>No active repair estimates right now.</p>';
+      otherWrap.innerHTML = other.length ? other.map(renderBidCard).join('') : '<p>No other repair estimates yet.</p>';
     } catch (err) {
       const msg = `<p style='color:#ff9a9a'>${err.message || 'Could not load bids.'}</p>`;
       wonWrap.innerHTML = msg;
