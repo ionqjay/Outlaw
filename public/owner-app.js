@@ -97,7 +97,16 @@ async function boot() {
       const repairs = data.repairs || [];
 
       reqWrap.innerHTML = repairs.length
-        ? repairs.map(x => `<div class='list-card'><b>#${x.id}</b> ${x.title} — ${x.status}</div>`).join('')
+        ? repairs.map(x => {
+            const status = String(x.status || 'open').toLowerCase();
+            return `<div class='list-card'>
+              <div class='request-head'>
+                <strong>#${x.id} · ${x.title}</strong>
+                <span class='pill ${status}'>${status}</span>
+              </div>
+              <div class='muted-xs'>${x.vehicle_year || ''} ${x.vehicle_make || ''} ${x.vehicle_model || ''} · ${x.city || ''}, ${x.state || ''}</div>
+            </div>`;
+          }).join('')
         : '<p>No open requests yet.</p>';
 
       const bids = [];
@@ -107,7 +116,20 @@ async function boot() {
       }
 
       bidWrap.innerHTML = bids.length
-        ? bids.map(b => `<div class='list-card'>$${b.amount} • ${b.eta_hours}h • ${b.mechanic_name} <button class='btn btn-green' data-accept='${b.id}'>Accept</button></div>`).join('')
+        ? bids.map(b => {
+            const status = String(b.status || 'open').toLowerCase();
+            return `<div class='list-card'>
+              <div class='bid-head'>
+                <strong>${b.mechanic_name}</strong>
+                <span class='pill ${status}'>${status}</span>
+              </div>
+              <div class='quote-grid'>
+                <div class='muted-xs'>Offer: <b>$${b.amount}</b></div>
+                <div class='muted-xs'>ETA: <b>${b.eta_hours}h</b></div>
+              </div>
+              ${status === 'open' ? `<button class='btn btn-green' data-accept='${b.id}' style='margin-top:8px'>Accept Bid</button>` : ''}
+            </div>`;
+          }).join('')
         : '<p>No bids yet.</p>';
 
       document.querySelectorAll('[data-accept]').forEach(btn => btn.addEventListener('click', async () => {
@@ -159,6 +181,12 @@ async function boot() {
       });
 
       setStatus(`Request submitted successfully. (Connected to: ${workingApiBase})`, 'ok');
+      ['title','issueDetails','vehicleYear','vehicleMake','vehicleModel','city','zip'].forEach(id => {
+        const el = document.getElementById(id);
+        if (el) el.value = '';
+      });
+      document.getElementById('issueCategory').value = '';
+      document.getElementById('urgency').value = 'Standard';
       setView('dashboard');
       await loadDashboard();
     } catch (err) {
