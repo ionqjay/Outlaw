@@ -123,7 +123,10 @@ form.addEventListener('submit', async (e) => {
     body: JSON.stringify(payload)
   });
   const data = await r.json();
-  if (!r.ok) return alert(data.error || 'Something went wrong');
+  if (!r.ok) {
+    showToast(data.error || 'Something went wrong.', 'error');
+    return;
+  }
 
   signupCount.textContent = data.counts.total;
 
@@ -137,12 +140,14 @@ form.addEventListener('submit', async (e) => {
       repairAddress: form.repairAddress?.value || ''
     };
     localStorage.setItem('smr_owner_seed', JSON.stringify(ownerSeed));
-    window.location.href = '/owner.html';
+    showToast('Signup complete. Redirecting to your dashboard...', 'ok');
+    setTimeout(() => { window.location.href = '/owner.html'; }, 450);
     return;
   }
 
   form.classList.add('hidden');
   success.classList.remove('hidden');
+  showToast('Signup complete. You’re on the list!', 'ok');
   form.reset();
   otpSent = false;
 });
