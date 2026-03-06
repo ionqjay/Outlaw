@@ -1,13 +1,84 @@
-const API_BASE = (window.APP_CONFIG?.API_BASE || '').trim().replace(/\/$/, '');
-const api = (p) => `${API_BASE}${p}`;
+const configuredApiBase = (window.APP_CONFIG?.API_BASE || '').trim().replace(/\/$/, '');
 
-function view(name) {
+const API_BASES = [
+  configuredApiBase,
+  location.origin,
+  'https://shopmyrepair-prelaunch.onrender.com',
+  'https://shopmyrepair.onrender.com'
+].filter(Boolean).filter((v, i, a) => a.indexOf(v) === i);
+
+let workingApiBase = configuredApiBase || location.origin;
+
+function api(base, path) {
+  return `${base}${path}`;
+}
+
+async function fetchJson(path, options = {}) {
+  let lastErr = null;
+
+  for (const base of API_BASES) {
+    try {
+      const res = await fetch(api(base, path), options);
+      const text = await res.text();
+      let data = {};
+      try { data = text ? JSON.parse(text) : {}; } catch { data = { error: text || 'Unexpected response' }; }
+
+      // try next candidate on route miss / obvious host mismatch
+      if (!res.ok && (res.status === 404) && /route not found|not found/i.test(String(data?.error || data?.message || text))) {
+        lastErr = new Error(`API route missing on ${base}`);
+        continue;
+      }
+
+      workingApiBase = base;
+      if (!res.ok) throw new Error(data.error || data.message || `Request failed (${res.status})`);
+      return data;
+    } catch (err) {
+      lastErr = err;
+    }
+  }
+
+  throw lastErr || new Error('Unable to reach backend API.');
+}
+
+function setView(name) {
   ['home', 'dashboard', 'quote'].forEach(v => {
-    document.getElementById(`view-${v}`).style.display = v === name ? 'block' : 'none';
+    const el = document.getElementById(`view-${v}`);
+    el.style.display = v === name ? 'block' : 'none';
+  });
+
+  document.querySelectorAll('[data-view]').forEach(btn => {
+    btn.classList.toggle('active', btn.dataset.view === name);
   });
 }
 
-document.querySelectorAll('[data-view]').forEach(b => b.addEventListener('click', () => view(b.dataset.view)));
+document.querySelectorAll('[data-view]').forEach(b => b.addEventListener('click', () => setView(b.dataset.view)));
+
+function setStatus(text, type = 'info') {
+  const status = document.getElementById('ownerStatus');
+  status.textContent = text;
+  status.classList.remove('ok', 'err');
+  if (type === 'ok') status.classList.add('ok');
+  if (type === 'err') status.classList.add('err');
+}
+
+function validateQuote() {
+  const required = [
+    ['title', 'Title'],
+    ['issueCategory', 'Issue category'],
+    ['issueDetails', 'Issue details'],
+    ['vehicleYear', 'Vehicle year'],
+    ['vehicleMake', 'Vehicle make'],
+    ['vehicleModel', 'Vehicle model'],
+    ['city', 'City'],
+    ['state', 'State'],
+    ['zip', 'ZIP']
+  ];
+
+  for (const [id, label] of required) {
+    const value = String(document.getElementById(id).value || '').trim();
+    if (!value) throw new Error(`${label} is required.`);
+  }
+}
 
 async function boot() {
   const session = await window.smrAuth.requireRole('owner');
@@ -19,59 +90,83 @@ async function boot() {
     const reqWrap = document.getElementById('ownerRequests');
     const bidWrap = document.getElementById('ownerBids');
     reqWrap.textContent = 'Loading...';
+    bidWrap.textContent = 'Loading...';
 
-    const r = await fetch(api(`/api/repairs?ownerId=${encodeURIComponent(session.id)}`));
-    const data = await r.json();
-    const repairs = data.repairs || [];
-    reqWrap.innerHTML = repairs.length
-      ? repairs.map(x => `<div class='panel'><b>#${x.id}</b> ${x.title} — ${x.status}</div>`).join('')
-      : '<p>No open requests yet.</p>';
+    try {
+      const data = await fetchJson(`/api/repairs?ownerId=${encodeURIComponent(session.id)}`);
+      const repairs = data.repairs || [];
 
-    const bids = [];
-    for (const rep of repairs) {
-      const br = await fetch(api(`/api/bids?requestId=${rep.id}`));
-      const bd = await br.json();
-      (bd.bids || []).forEach(b => bids.push(b));
+      reqWrap.innerHTML = repairs.length
+        ? repairs.map(x => `<div class='list-card'><b>#${x.id}</b> ${x.title} — ${x.status}</div>`).join('')
+        : '<p>No open requests yet.</p>';
+
+      const bids = [];
+      for (const rep of repairs) {
+        const bd = await fetchJson(`/api/bids?requestId=${rep.id}`);
+        (bd.bids || []).forEach(b => bids.push(b));
+      }
+
+      bidWrap.innerHTML = bids.length
+        ? bids.map(b => `<div class='list-card'>$${b.amount} • ${b.eta_hours}h • ${b.mechanic_name} <button class='btn btn-green' data-accept='${b.id}'>Accept</button></div>`).join('')
+        : '<p>No bids yet.</p>';
+
+      document.querySelectorAll('[data-accept]').forEach(btn => btn.addEventListener('click', async () => {
+        try {
+          await fetchJson(`/api/bids/${btn.dataset.accept}/accept`, { method: 'POST' });
+          await loadDashboard();
+        } catch (err) {
+          alert(err.message || 'Could not accept bid.');
+        }
+      }));
+    } catch (err) {
+      reqWrap.innerHTML = `<p style='color:#ff9a9a'>${err.message || 'Could not load dashboard.'}</p>`;
+      bidWrap.innerHTML = '<p>—</p>';
     }
-
-    bidWrap.innerHTML = bids.length
-      ? bids.map(b => `<div class='panel'>$${b.amount} • ${b.eta_hours}h • ${b.mechanic_name} <button class='btn btn-green' data-accept='${b.id}'>Accept</button></div>`).join('')
-      : '<p>No bids yet.</p>';
-
-    document.querySelectorAll('[data-accept]').forEach(btn => btn.addEventListener('click', async () => {
-      await fetch(api(`/api/bids/${btn.dataset.accept}/accept`), { method: 'POST' });
-      loadDashboard();
-    }));
   }
 
   document.getElementById('submitRepairBtn').addEventListener('click', async () => {
+    try {
+      validateQuote();
+    } catch (err) {
+      setStatus(err.message || 'Please check required fields.', 'err');
+      return;
+    }
+
     const payload = {
       ownerId: session.id,
-      title: document.getElementById('title').value,
+      title: document.getElementById('title').value.trim(),
       issueCategory: document.getElementById('issueCategory').value,
-      issueDetails: document.getElementById('issueDetails').value,
-      vehicleYear: document.getElementById('vehicleYear').value,
-      vehicleMake: document.getElementById('vehicleMake').value,
-      vehicleModel: document.getElementById('vehicleModel').value,
-      city: document.getElementById('city').value,
-      state: document.getElementById('state').value,
-      zip: document.getElementById('zip').value,
+      issueDetails: document.getElementById('issueDetails').value.trim(),
+      vehicleYear: document.getElementById('vehicleYear').value.trim(),
+      vehicleMake: document.getElementById('vehicleMake').value.trim(),
+      vehicleModel: document.getElementById('vehicleModel').value.trim(),
+      city: document.getElementById('city').value.trim(),
+      state: document.getElementById('state').value.trim(),
+      zip: document.getElementById('zip').value.trim(),
       urgency: document.getElementById('urgency').value
     };
 
-    const status = document.getElementById('ownerStatus');
-    status.textContent = 'Submitting...';
-    const r = await fetch(api('/api/repairs'), {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload)
-    });
-    const data = await r.json();
-    if (!r.ok) return status.textContent = data.error || 'Failed.';
+    const btn = document.getElementById('submitRepairBtn');
+    btn.disabled = true;
+    btn.textContent = 'Submitting...';
+    setStatus('Submitting your request...');
 
-    status.textContent = 'Request submitted.';
-    view('dashboard');
-    loadDashboard();
+    try {
+      await fetchJson('/api/repairs', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+
+      setStatus(`Request submitted successfully. (Connected to: ${workingApiBase})`, 'ok');
+      setView('dashboard');
+      await loadDashboard();
+    } catch (err) {
+      setStatus(`${err.message || 'Failed to submit request.'} (Tried: ${API_BASES.join(', ')})`, 'err');
+    } finally {
+      btn.disabled = false;
+      btn.textContent = 'Submit Repair Request';
+    }
   });
 
   loadDashboard();

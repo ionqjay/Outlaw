@@ -1,25 +1,170 @@
 <!doctype html>
-<html><head><meta charset="UTF-8" /><meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>Owner App</title><link rel="stylesheet" href="/styles.css" />
-<style>.dash{max-width:980px;margin:22px auto;padding:0 16px}.panel{background:#15151a;border:1px solid #2a2a31;border-radius:14px;padding:14px;margin:12px 0}input,select,textarea{width:100%;padding:10px;border-radius:10px;border:1px solid #333;background:#0f0f13;color:#fff}.grid2{display:grid;grid-template-columns:1fr 1fr;gap:10px} @media(max-width:800px){.grid2{grid-template-columns:1fr}}</style>
-</head><body>
-<nav class="nav"><div class="logo"><span>SHOPMY</span><span class="orange">REPAIR</span></div><div><button class="btn btn-dark" data-view="home">Home</button> <button class="btn btn-dark" data-view="dashboard">Dashboard</button> <button class="btn btn-orange" data-view="quote">Get a Quote</button> <button class="btn btn-dark" id="logoutBtn">Logout</button></div></nav>
-<main class="dash">
-<section id="view-home" class="panel"><h2>Owner Home</h2><p>Welcome back. Submit your repair and compare bids from local mechanics.</p></section>
-<section id="view-dashboard" class="panel" style="display:none"><h2>Your Open Requests</h2><div id="ownerRequests"></div><h3>Current Bids</h3><div id="ownerBids"></div></section>
-<section id="view-quote" class="panel" style="display:none"><h2>Get a Quote</h2>
-<div class="grid2"><input id="title" placeholder="Short title (e.g. Brake replacement)"/><select id="issueCategory"><option>Brakes</option><option>Engine</option><option>Transmission</option><option>Electrical</option><option>Other</option></select></div>
-<div class="grid2" style="margin-top:8px"><input id="vehicleYear" placeholder="Year"/><input id="vehicleMake" placeholder="Make"/></div>
-<div class="grid2" style="margin-top:8px"><input id="vehicleModel" placeholder="Model"/><select id="urgency"><option>Standard</option><option>Urgent</option><option>Emergency</option></select></div>
-<div class="grid2" style="margin-top:8px"><input id="city" placeholder="City"/><input id="state" value="NY" placeholder="State"/></div>
-<div class="grid2" style="margin-top:8px"><input id="zip" placeholder="ZIP"/></div>
-<textarea id="issueDetails" placeholder="Describe the issue" style="margin-top:8px"></textarea>
-<button class="btn btn-orange" id="submitRepairBtn" style="margin-top:10px">Submit Repair Request</button>
-<p id="ownerStatus" class="sub"></p></section>
-</main>
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-<script src="/config.js"></script>
-<script src="/supabase-client.js"></script>
-<script src="/app-auth.js"></script>
-<script src="/owner-app.js"></script>
-</body></html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Owner App — ShopMyRepair</title>
+  <link rel="stylesheet" href="/styles.css" />
+  <style>
+    :root {
+      --bg: #0d0d11;
+      --card: #15151a;
+      --card-soft: #101117;
+      --stroke: #2a2a31;
+      --text: #f7f7f9;
+      --muted: #b7b9c2;
+      --orange: #e8441a;
+      --orange-soft: rgba(232, 68, 26, 0.16);
+    }
+
+    .dash { max-width: 1080px; margin: 22px auto 44px; padding: 0 16px; }
+
+    .hero {
+      background:
+        radial-gradient(1000px 300px at -10% -40%, var(--orange-soft), transparent 58%),
+        radial-gradient(900px 260px at 120% -80%, rgba(255,255,255,0.06), transparent 55%),
+        linear-gradient(180deg, #17171f, #111117);
+      border: 1px solid var(--stroke);
+      border-radius: 18px;
+      padding: 22px;
+      margin: 12px 0;
+    }
+
+    .hero h1 { margin: 0; font-size: clamp(28px, 3.8vw, 42px); line-height: 1.02; }
+    .hero p { margin: 10px 0 0; color: var(--muted); max-width: 780px; }
+
+    .tabs { display: flex; gap: 8px; flex-wrap: wrap; margin: 12px 0 16px; }
+    .tab-btn {
+      background: #14141a;
+      border: 1px solid #2f3037;
+      color: #e9e9ee;
+      border-radius: 999px;
+      padding: 9px 14px;
+      cursor: pointer;
+    }
+    .tab-btn.active { border-color: var(--orange); box-shadow: 0 0 0 2px rgba(232, 68, 26, 0.14); }
+
+    .panel {
+      background: var(--card);
+      border: 1px solid var(--stroke);
+      border-radius: 14px;
+      padding: 16px;
+      margin: 12px 0;
+      box-shadow: 0 8px 28px rgba(0,0,0,0.2);
+    }
+
+    .panel h2, .panel h3 { margin: 0; }
+    .subtle { color: var(--muted); font-size: 13px; margin-top: 6px; }
+
+    .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+
+    input, select, textarea {
+      width: 100%;
+      padding: 11px 12px;
+      border-radius: 10px;
+      border: 1px solid #353641;
+      background: #0f1015;
+      color: #fff;
+      font-family: inherit;
+      transition: border-color .2s ease, box-shadow .2s ease;
+    }
+    input:focus, select:focus, textarea:focus {
+      outline: none;
+      border-color: rgba(232, 68, 26, 0.75);
+      box-shadow: 0 0 0 3px rgba(232, 68, 26, 0.14);
+    }
+
+    textarea { min-height: 108px; resize: vertical; }
+
+    .status { margin-top: 10px; color: var(--muted); }
+    .status.ok { color: #79e2a2; }
+    .status.err { color: #ff9a9a; }
+
+    .list-card {
+      border: 1px solid #31323b;
+      background: #101118;
+      border-radius: 12px;
+      padding: 12px;
+      margin-top: 8px;
+    }
+
+    @media (max-width: 860px) {
+      .grid2 { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+  <nav class="nav">
+    <div class="logo"><span>SHOPMY</span><span class="orange">REPAIR</span></div>
+    <button class="btn btn-dark" id="logoutBtn">Logout</button>
+  </nav>
+
+  <main class="dash">
+    <section class="hero">
+      <h1>Owner Dashboard</h1>
+      <p>Post your repair once and compare local mechanic quotes side-by-side.</p>
+    </section>
+
+    <div class="tabs">
+      <button class="tab-btn active" data-view="home">Home</button>
+      <button class="tab-btn" data-view="dashboard">Dashboard</button>
+      <button class="tab-btn" data-view="quote">Get a Quote</button>
+    </div>
+
+    <section id="view-home" class="panel">
+      <h2>Welcome back</h2>
+      <p class="subtle">Use <b>Get a Quote</b> to submit a repair request. We’ll route it to mechanics in your area.</p>
+    </section>
+
+    <section id="view-dashboard" class="panel" style="display:none">
+      <h2>Your Open Requests</h2>
+      <div id="ownerRequests" class="subtle">Loading...</div>
+      <h3 style="margin-top:14px">Current Bids</h3>
+      <div id="ownerBids" class="subtle">Loading...</div>
+    </section>
+
+    <section id="view-quote" class="panel" style="display:none">
+      <h2>Get a Quote</h2>
+      <p class="subtle">Simple details, fast matching.</p>
+
+      <div class="grid2" style="margin-top:10px">
+        <input id="title" placeholder="Short title (e.g. Brake replacement)" />
+        <select id="issueCategory">
+          <option value="">Issue category</option>
+          <option>Brakes</option><option>Engine</option><option>Transmission</option><option>Electrical</option><option>Other</option>
+        </select>
+      </div>
+
+      <div class="grid2" style="margin-top:8px">
+        <input id="vehicleYear" placeholder="Year" />
+        <input id="vehicleMake" placeholder="Make" />
+      </div>
+
+      <div class="grid2" style="margin-top:8px">
+        <input id="vehicleModel" placeholder="Model" />
+        <select id="urgency"><option>Standard</option><option>Urgent</option><option>Emergency</option></select>
+      </div>
+
+      <div class="grid2" style="margin-top:8px">
+        <input id="city" placeholder="City" />
+        <input id="state" value="NY" placeholder="State" />
+      </div>
+
+      <div class="grid2" style="margin-top:8px">
+        <input id="zip" placeholder="ZIP" />
+      </div>
+
+      <textarea id="issueDetails" placeholder="Describe the issue (symptoms, noises, warnings)" style="margin-top:8px"></textarea>
+
+      <button class="btn btn-orange" id="submitRepairBtn" style="margin-top:10px">Submit Repair Request</button>
+      <p id="ownerStatus" class="status">Ready when you are.</p>
+    </section>
+  </main>
+
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="/config.js"></script>
+  <script src="/supabase-client.js"></script>
+  <script src="/app-auth.js"></script>
+  <script src="/owner-app.js"></script>
+</body>
+</html>
