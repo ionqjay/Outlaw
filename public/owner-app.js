@@ -44,7 +44,7 @@ async function fetchJson(path, options = {}) {
 }
 
 function setView(name) {
-  ['home', 'dashboard', 'quote'].forEach(v => {
+  ['home', 'dashboard', 'quote', 'profile'].forEach(v => {
     const el = document.getElementById(`view-${v}`);
     el.style.display = v === name ? 'block' : 'none';
   });
@@ -230,6 +230,20 @@ async function boot() {
 
   document.getElementById('logoutBtn').addEventListener('click', () => window.smrAuth.logoutToLogin());
 
+  async function loadProfile() {
+    const profile = await window.smrAuth.getOwnerProfile();
+    if (!profile) return;
+    document.getElementById('profileName').value = profile.name || '';
+    document.getElementById('profilePhone').value = profile.phone || '';
+    document.getElementById('profileCity').value = profile.city || '';
+    document.getElementById('profileState').value = profile.state || 'NY';
+    document.getElementById('profileZip').value = profile.zip || '';
+
+    if (!document.getElementById('city').value && profile.city) document.getElementById('city').value = profile.city;
+    if (!document.getElementById('state').value && profile.state) document.getElementById('state').value = profile.state;
+    if (!document.getElementById('zip').value && profile.zip) document.getElementById('zip').value = profile.zip;
+  }
+
   async function refreshDashboard() {
     const reqWrap = document.getElementById('ownerRequests');
     const bidWrap = document.getElementById('ownerBids');
@@ -245,6 +259,28 @@ async function boot() {
       bidWrap.innerHTML = '<p>—</p>';
     }
   }
+
+  document.getElementById('saveProfileBtn').addEventListener('click', async () => {
+    const profileStatus = document.getElementById('profileStatus');
+    profileStatus.classList.remove('ok', 'err');
+    profileStatus.textContent = 'Saving profile...';
+
+    try {
+      await window.smrAuth.saveOwnerProfile({
+        name: document.getElementById('profileName').value,
+        phone: document.getElementById('profilePhone').value,
+        city: document.getElementById('profileCity').value,
+        state: document.getElementById('profileState').value,
+        zip: document.getElementById('profileZip').value
+      });
+      profileStatus.textContent = 'Profile updated successfully.';
+      profileStatus.classList.add('ok');
+      await loadProfile();
+    } catch (err) {
+      profileStatus.textContent = err.message || 'Could not update profile.';
+      profileStatus.classList.add('err');
+    }
+  });
 
   document.getElementById('submitRepairBtn').addEventListener('click', async () => {
     try {
@@ -297,6 +333,7 @@ async function boot() {
     }
   });
 
+  await loadProfile();
   refreshDashboard();
 }
 
