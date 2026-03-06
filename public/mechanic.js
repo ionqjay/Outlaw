@@ -74,7 +74,10 @@ async function boot() {
     document.getElementById('profilePhone').value = profile.phone || '';
     document.getElementById('profileCity').value = profile.city || '';
     document.getElementById('profileState').value = profile.state || 'NY';
+    document.getElementById('profileBusinessAddress').value = profile.businessAddress || '';
     document.getElementById('profileZip').value = profile.zip || '';
+    document.getElementById('profileRating').value = profile.rating || '';
+    document.getElementById('profileReviewCount').value = profile.reviewCount || '';
     document.getElementById('profileServices').value = profile.services || '';
   }
 
@@ -115,13 +118,22 @@ async function boot() {
         }
 
         const savedProfile = await window.smrAuth.getMechanicProfile();
+        const rawNotes = String(document.getElementById(`notes-${id}`).value || '').trim();
+        const meta = {
+          businessName: savedProfile?.businessName || savedProfile?.name || session.name || session.email,
+          businessAddress: savedProfile?.businessAddress || '',
+          businessZip: savedProfile?.zip || '',
+          rating: savedProfile?.rating || '',
+          reviewCount: savedProfile?.reviewCount || ''
+        };
+
         const payload = {
           requestId: Number(id),
           mechanicId: session.id,
-          mechanicName: savedProfile?.businessName || savedProfile?.name || session.name || session.email,
+          mechanicName: meta.businessName,
           amount,
           etaHours: 24,
-          notes: document.getElementById(`notes-${id}`).value
+          notes: `[META]${JSON.stringify(meta)}[/META] ${rawNotes}`
         };
 
         btn.disabled = true;
@@ -159,13 +171,16 @@ async function boot() {
     try {
       await window.smrAuth.saveMechanicProfile({
         businessName: document.getElementById('profileBusinessName').value,
+        businessAddress: document.getElementById('profileBusinessAddress').value,
         name: document.getElementById('profileName').value,
         email: document.getElementById('profileEmail').value,
         phone: document.getElementById('profilePhone').value,
         city: document.getElementById('profileCity').value,
         state: document.getElementById('profileState').value,
         zip: document.getElementById('profileZip').value,
-        services: document.getElementById('profileServices').value
+        services: document.getElementById('profileServices').value,
+        rating: document.getElementById('profileRating').value,
+        reviewCount: document.getElementById('profileReviewCount').value
       });
       status.textContent = 'Profile updated successfully.';
       status.classList.add('ok');

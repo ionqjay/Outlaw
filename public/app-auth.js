@@ -79,13 +79,16 @@ async function saveMechanicProfile(profile = {}) {
 
   const clean = {
     businessName: String(profile.businessName || '').trim(),
+    businessAddress: String(profile.businessAddress || '').trim(),
     name: String(profile.name || '').trim(),
     email: String(profile.email || '').trim(),
     phone: String(profile.phone || '').trim(),
     city: String(profile.city || '').trim(),
     state: String(profile.state || '').trim(),
     zip: String(profile.zip || '').trim(),
-    services: String(profile.services || '').trim()
+    services: String(profile.services || '').trim(),
+    rating: String(profile.rating || '').trim(),
+    reviewCount: String(profile.reviewCount || '').trim()
   };
 
   localStorage.setItem(`smr_mechanic_profile_${session.id}`, JSON.stringify(clean));
@@ -104,13 +107,16 @@ async function getMechanicProfile() {
   const local = JSON.parse(localStorage.getItem(`smr_mechanic_profile_${session.id}`) || '{}');
   return {
     businessName: local.businessName || '',
+    businessAddress: local.businessAddress || '',
     name: local.name || session.name || '',
     email: local.email || session.contactEmail || session.email || '',
     phone: local.phone || session.phone || '',
     city: local.city || session.city || '',
     state: local.state || session.state || 'NY',
     zip: local.zip || session.zip || '',
-    services: local.services || ''
+    services: local.services || '',
+    rating: local.rating || '',
+    reviewCount: local.reviewCount || ''
   };
 }
 

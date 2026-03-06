@@ -94,6 +94,19 @@ function validateQuote() {
   }
 }
 
+function parseBidNotes(notesRaw) {
+  const txt = String(notesRaw || '');
+  const m = txt.match(/\[META\](.*?)\[\/META\]/);
+  if (!m) return { meta: null, notes: txt.trim() };
+  try {
+    const meta = JSON.parse(m[1]);
+    const notes = txt.replace(m[0], '').trim();
+    return { meta, notes };
+  } catch {
+    return { meta: null, notes: txt.trim() };
+  }
+}
+
 function renderRequests() {
   const reqWrap = document.getElementById('ownerRequests');
 
@@ -115,7 +128,7 @@ function renderRequests() {
       <div class='muted-xs'>${x.vehicle_year || ''} ${x.vehicle_make || ''} ${x.vehicle_model || ''} · ${x.city || ''}, ${x.state || ''}</div>
       <div class='muted-xs'>Next step: ${status === 'open' ? 'wait for bids' : status === 'accepted' ? 'coordinate service' : status === 'in_progress' ? 'service in progress' : status === 'completed' ? 'job completed' : 'review status'}.</div>
       <div style='display:flex;gap:8px;flex-wrap:wrap;margin-top:8px'>
-        <button class='btn btn-dark' data-view-request='${x.id}' style='padding:8px 12px'>${isSelected ? 'Viewing Bids' : 'View Bids'}</button>
+        <button class='btn btn-dark' data-view-request='${x.id}' style='padding:8px 12px'>${isSelected ? 'Viewing Repair Estimates' : 'View Repair Estimates'}</button>
         ${status === 'open' ? `<button class='btn btn-dark' data-cancel-request='${x.id}' style='padding:8px 12px;border-color:#7b3b3b;color:#ffb3b3'>Cancel Request</button>` : ''}
       </div>
     </div>`;
@@ -156,7 +169,7 @@ function renderBids() {
   const bids = bidsByRequest.get(Number(selected.id)) || [];
   const accepted = bids.find(b => String(b.status || '').toLowerCase() === 'accepted');
 
-  const header = `<div class='muted-xs' style='margin-bottom:8px'>Showing bids for <b>Request #${selected.id}</b> — ${selected.title}</div>`;
+  const header = `<div class='muted-xs' style='margin-bottom:8px'>Showing repair estimates for <b>Request #${selected.id}</b> — ${selected.title}</div>`;
 
   if (!bids.length) {
     bidWrap.innerHTML = `${header}<p>No bids yet for this request.</p>`;
@@ -165,27 +178,37 @@ function renderBids() {
 
   const cards = bids.map(b => {
     const status = String(b.status || 'open').toLowerCase();
+    const parsed = parseBidNotes(b.notes);
+    const meta = parsed.meta || {};
+    const rating = meta.rating ? `${meta.rating}/5` : 'N/A';
+    const reviewCount = meta.reviewCount ? `${meta.reviewCount} reviews` : 'No review count';
     return `<div class='list-card'>
       <div class='bid-head'>
-        <strong>${b.mechanic_name}</strong>
+        <strong>${meta.businessName || b.mechanic_name}</strong>
         <span class='pill ${status}'>${labelForStatus(status)}</span>
       </div>
       <div class='quote-grid'>
         <div class='muted-xs'>Repair estimate: <b>$${b.amount}</b></div>
       </div>
-      <div class='muted-xs'>Notes: ${b.notes ? b.notes : 'No additional notes provided.'}</div>
-      ${status === 'open' ? `<button class='btn btn-green' data-accept='${b.id}' style='margin-top:8px'>Accept Bid</button>` : ''}
+      <div class='muted-xs'>Business address: ${meta.businessAddress || 'Not provided'} ${meta.businessZip || ''}</div>
+      <div class='muted-xs'>Reviews: ${rating} (${reviewCount})</div>
+      <div class='muted-xs'>Notes: ${parsed.notes ? parsed.notes : 'No additional notes provided.'}</div>
+      ${status === 'open' ? `<button class='btn btn-green' data-accept='${b.id}' style='margin-top:8px'>Accept Repair Estimate</button>` : ''}
     </div>`;
   }).join('');
 
+  const acceptedParsed = accepted ? parseBidNotes(accepted.notes) : null;
+  const acceptedMeta = acceptedParsed?.meta || {};
   const acceptedInfo = accepted ? `<div class='list-card' style='border-color:#2a9f60'>
     <div class='request-head'>
       <strong>Accepted Company Info</strong>
       <span class='pill accepted'>accepted</span>
     </div>
-    <div class='muted-xs'><b>${accepted.mechanic_name}</b></div>
+    <div class='muted-xs'><b>${acceptedMeta.businessName || accepted.mechanic_name}</b></div>
+    <div class='muted-xs'>Business address: ${acceptedMeta.businessAddress || 'Not provided'} ${acceptedMeta.businessZip || ''}</div>
+    <div class='muted-xs'>Reviews: ${acceptedMeta.rating ? `${acceptedMeta.rating}/5` : 'N/A'} (${acceptedMeta.reviewCount || 'No'} reviews)</div>
     <div class='muted-xs'>Repair estimate: $${accepted.amount}</div>
-    <div class='muted-xs'>Notes: ${accepted.notes ? accepted.notes : 'No additional notes provided.'}</div>
+    <div class='muted-xs'>Notes: ${acceptedParsed?.notes ? acceptedParsed.notes : 'No additional notes provided.'}</div>
   </div>` : '';
 
   bidWrap.innerHTML = `${header}${acceptedInfo}${cards}`;
