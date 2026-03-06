@@ -76,8 +76,6 @@ async function boot() {
     document.getElementById('profileState').value = profile.state || 'NY';
     document.getElementById('profileBusinessAddress').value = profile.businessAddress || '';
     document.getElementById('profileZip').value = profile.zip || '';
-    document.getElementById('profileRating').value = profile.rating || '';
-    document.getElementById('profileReviewCount').value = profile.reviewCount || '';
     document.getElementById('profileServices').value = profile.services || '';
   }
 
@@ -122,9 +120,7 @@ async function boot() {
         const meta = {
           businessName: savedProfile?.businessName || savedProfile?.name || session.name || session.email,
           businessAddress: savedProfile?.businessAddress || '',
-          businessZip: savedProfile?.zip || '',
-          rating: savedProfile?.rating || '',
-          reviewCount: savedProfile?.reviewCount || ''
+          businessZip: savedProfile?.zip || ''
         };
 
         const payload = {
@@ -178,9 +174,7 @@ async function boot() {
         city: document.getElementById('profileCity').value,
         state: document.getElementById('profileState').value,
         zip: document.getElementById('profileZip').value,
-        services: document.getElementById('profileServices').value,
-        rating: document.getElementById('profileRating').value,
-        reviewCount: document.getElementById('profileReviewCount').value
+        services: document.getElementById('profileServices').value
       });
       status.textContent = 'Profile updated successfully.';
       status.classList.add('ok');

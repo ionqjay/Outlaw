@@ -107,6 +107,41 @@ function parseBidNotes(notesRaw) {
   }
 }
 
+function getFeedbacks() {
+  return JSON.parse(localStorage.getItem('smr_feedback_v1') || '[]');
+}
+
+function saveFeedbacks(list) {
+  localStorage.setItem('smr_feedback_v1', JSON.stringify(list));
+}
+
+function getMechanicRating(mechanicId) {
+  if (!mechanicId) return { avg: null, count: 0 };
+  const rows = getFeedbacks().filter(x => String(x.mechanicId) === String(mechanicId));
+  if (!rows.length) return { avg: null, count: 0 };
+  const total = rows.reduce((s, x) => s + Number(x.rating || 0), 0);
+  const avg = Math.round((total / rows.length) * 10) / 10;
+  return { avg, count: rows.length };
+}
+
+function recordFeedback({ requestId, bidId, mechanicId, rating, text }) {
+  const all = getFeedbacks();
+  const existingIdx = all.findIndex(x => String(x.requestId) === String(requestId));
+  const payload = {
+    requestId,
+    bidId,
+    mechanicId,
+    rating: Number(rating),
+    text: String(text || '').trim(),
+    createdAt: new Date().toISOString()
+  };
+
+  if (existingIdx >= 0) all[existingIdx] = payload;
+  else all.push(payload);
+
+  saveFeedbacks(all);
+}
+
 function renderRequests() {
   const reqWrap = document.getElementById('ownerRequests');
 
@@ -180,8 +215,9 @@ function renderBids() {
     const status = String(b.status || 'open').toLowerCase();
     const parsed = parseBidNotes(b.notes);
     const meta = parsed.meta || {};
-    const rating = meta.rating ? `${meta.rating}/5` : 'N/A';
-    const reviewCount = meta.reviewCount ? `${meta.reviewCount} reviews` : 'No review count';
+    const r = getMechanicRating(b.mechanic_id);
+    const rating = r.avg ? `${r.avg}/5` : 'No rating yet';
+    const reviewCount = `${r.count} review${r.count === 1 ? '' : 's'}`;
     return `<div class='list-card'>
       <div class='bid-head'>
         <strong>${meta.businessName || b.mechanic_name}</strong>
@@ -199,6 +235,7 @@ function renderBids() {
 
   const acceptedParsed = accepted ? parseBidNotes(accepted.notes) : null;
   const acceptedMeta = acceptedParsed?.meta || {};
+  const acceptedRating = accepted ? getMechanicRating(accepted.mechanic_id) : { avg: null, count: 0 };
   const acceptedInfo = accepted ? `<div class='list-card' style='border-color:#2a9f60'>
     <div class='request-head'>
       <strong>Accepted Company Info</strong>
@@ -206,9 +243,10 @@ function renderBids() {
     </div>
     <div class='muted-xs'><b>${acceptedMeta.businessName || accepted.mechanic_name}</b></div>
     <div class='muted-xs'>Business address: ${acceptedMeta.businessAddress || 'Not provided'} ${acceptedMeta.businessZip || ''}</div>
-    <div class='muted-xs'>Reviews: ${acceptedMeta.rating ? `${acceptedMeta.rating}/5` : 'N/A'} (${acceptedMeta.reviewCount || 'No'} reviews)</div>
+    <div class='muted-xs'>Reviews: ${acceptedRating.avg ? `${acceptedRating.avg}/5` : 'No rating yet'} (${acceptedRating.count} review${acceptedRating.count === 1 ? '' : 's'})</div>
     <div class='muted-xs'>Repair estimate: $${accepted.amount}</div>
     <div class='muted-xs'>Notes: ${acceptedParsed?.notes ? acceptedParsed.notes : 'No additional notes provided.'}</div>
+    <button class='btn btn-dark' data-feedback='${accepted.id}' data-request='${selected.id}' data-mechanic='${accepted.mechanic_id}' style='margin-top:8px'>Leave Feedback</button>
   </div>` : '';
 
   bidWrap.innerHTML = `${header}${acceptedInfo}${cards}`;
@@ -222,6 +260,27 @@ function renderBids() {
     } catch (err) {
       alert(err.message || 'Could not accept bid.');
     }
+  }));
+
+  document.querySelectorAll('[data-feedback]').forEach(btn => btn.addEventListener('click', async () => {
+    const rating = Number(prompt('Rate this mechanic/shop from 1 to 5:', '5'));
+    if (!Number.isFinite(rating) || rating < 1 || rating > 5) {
+      alert('Please enter a rating between 1 and 5.');
+      return;
+    }
+    const text = prompt('Optional feedback note:', '') || '';
+
+    recordFeedback({
+      requestId: Number(btn.dataset.request),
+      bidId: Number(btn.dataset.feedback),
+      mechanicId: btn.dataset.mechanic,
+      rating,
+      text
+    });
+
+    await loadDashboardData(window.__ownerSession);
+    renderBids();
+    alert('Thanks — your feedback has been saved.');
   }));
 }
 
