@@ -244,12 +244,46 @@ async function boot() {
       wonWrap.innerHTML = won.length ? won.map(renderBidCard).join('') : '<p>No won repair estimates yet.</p>';
       activeWrap.innerHTML = active.length ? active.map(renderBidCard).join('') : '<p>No active repair estimates right now.</p>';
       otherWrap.innerHTML = other.length ? other.map(renderBidCard).join('') : '<p>No other repair estimates yet.</p>';
+
+      await loadHomeMetrics({ bids, repairs, won, active });
     } catch (err) {
       const msg = `<p style='color:#ff9a9a'>${err.message || 'Could not load bids.'}</p>`;
       wonWrap.innerHTML = msg;
       activeWrap.innerHTML = msg;
       otherWrap.innerHTML = msg;
     }
+  }
+
+  async function loadHomeMetrics({ bids = [], repairs = [], won = [], active = [] } = {}) {
+    const profile = await window.smrAuth.getMechanicProfile();
+    const profileFields = [profile?.businessName, profile?.businessAddress, profile?.phone, profile?.services, profile?.city, profile?.zip];
+    const completed = profileFields.filter(v => String(v || '').trim()).length;
+    const strength = Math.round((completed / profileFields.length) * 100);
+
+    const acceptedRate = bids.length ? Math.round((won.length / bids.length) * 100) : 0;
+    const avgEstimate = bids.length ? Math.round(bids.reduce((s, b) => s + Number(b.amount || 0), 0) / bids.length) : 0;
+
+    document.getElementById('homeOpenCount').textContent = String(repairs.filter(r => String(r.status || '').toLowerCase() === 'open').length);
+    document.getElementById('homeActiveCount').textContent = String(active.length);
+    document.getElementById('homeWonCount').textContent = String(won.length);
+    document.getElementById('homeProfileStrength').textContent = `${strength}%`;
+    document.getElementById('homeAcceptedRate').textContent = `${acceptedRate}%`;
+    document.getElementById('homeAvgEstimate').textContent = `$${avgEstimate}`;
+
+    const tip = strength < 70
+      ? 'Tip: Complete your profile (address, phone, services) to improve owner trust.'
+      : acceptedRate < 20
+        ? 'Tip: Improve estimate notes to highlight value and turnaround.'
+        : 'Tip: Keep response times fast to maintain strong win rates.';
+    document.getElementById('homeTip').textContent = tip;
+
+    const recent = bids.slice(0, 4).map(b => {
+      const st = String(b.status || 'open').toLowerCase();
+      if (st === 'accepted') return `✅ Estimate accepted for request #${b.request_id}`;
+      if (st === 'open') return `🕒 Estimate pending for request #${b.request_id}`;
+      return `ℹ️ Estimate ${st} for request #${b.request_id}`;
+    });
+    document.getElementById('homeActivity').innerHTML = recent.length ? recent.map(x => `<div class='small'>${x}</div>`).join('') : 'No recent activity yet.';
   }
 
   await loadProfile();

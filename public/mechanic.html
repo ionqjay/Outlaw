@@ -146,7 +146,33 @@
 
     <section id="view-home" class="panel">
       <h2>Welcome back</h2>
-      <p class="subtle">Check <b>Open Repairs</b> to submit repair estimates, then track outcomes in <b>My Repairs</b>.</p>
+      <p class="subtle">Your goal: send strong repair estimates fast and win quality jobs.</p>
+
+      <div class="row2" style="margin-top:10px">
+        <div class="list-card"><div class="small">Open Repair Requests</div><div id="homeOpenCount" style="font-size:28px;font-weight:700">0</div></div>
+        <div class="list-card"><div class="small">Active Repair Estimates</div><div id="homeActiveCount" style="font-size:28px;font-weight:700">0</div></div>
+      </div>
+      <div class="row2" style="margin-top:8px">
+        <div class="list-card"><div class="small">Won Jobs</div><div id="homeWonCount" style="font-size:28px;font-weight:700">0</div></div>
+        <div class="list-card"><div class="small">Profile Strength</div><div id="homeProfileStrength" style="font-size:28px;font-weight:700">0%</div></div>
+      </div>
+
+      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:10px">
+        <button class="btn btn-orange" data-view="repairs">View Open Repairs</button>
+        <button class="btn btn-dark" data-view="profile">Complete Profile</button>
+      </div>
+
+      <div class="list-card" style="margin-top:10px">
+        <h3 style="margin-top:0">Performance Insights</h3>
+        <div class="small">Accepted rate: <b id="homeAcceptedRate">0%</b></div>
+        <div class="small">Average repair estimate: <b id="homeAvgEstimate">$0</b></div>
+        <div class="small" id="homeTip">Tip: Add business address and services to improve owner trust.</div>
+      </div>
+
+      <div class="list-card" style="margin-top:10px">
+        <h3 style="margin-top:0">Recent Activity</h3>
+        <div id="homeActivity" class="small">No recent activity yet.</div>
+      </div>
     </section>
 
     <section id="view-dashboard" class="panel" style="display:none">
