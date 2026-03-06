@@ -426,8 +426,8 @@ app.post('/api/repairs', async (req, res) => {
       created_at: new Date().toISOString()
     });
     res.json({ ok: true, repair: created });
-  } catch {
-    res.status(500).json({ error: 'Could not create repair request.' });
+  } catch (e) {
+    res.status(500).json({ error: 'Could not create repair request.', detail: String(e?.message || e) });
   }
 });
 
@@ -437,8 +437,8 @@ app.get('/api/repairs', async (req, res) => {
     const status = req.query.status ? String(req.query.status) : undefined;
     const rows = await listRepairRequests({ ownerId, status });
     res.json({ ok: true, repairs: rows });
-  } catch {
-    res.status(500).json({ error: 'Could not load repairs.' });
+  } catch (e) {
+    res.status(500).json({ error: 'Could not load repairs.', detail: String(e?.message || e) });
   }
 });
 
