@@ -311,6 +311,56 @@ async function loadDashboardData(session) {
   bidsByRequest = new Map(entries);
 }
 
+function renderHomeSummary() {
+  const allBids = Array.from(bidsByRequest.values()).flat();
+  const openRequests = repairsCache.filter(r => String(r.status || '').toLowerCase() === 'open').length;
+  const acceptedJobs = repairsCache.filter(r => ['accepted', 'in_progress', 'completed'].includes(String(r.status || '').toLowerCase())).length;
+  const newEstimates = allBids.filter(b => String(b.status || '').toLowerCase() === 'open').length;
+  const avgEstimate = allBids.length ? Math.round(allBids.reduce((s, b) => s + Number(b.amount || 0), 0) / allBids.length) : 0;
+
+  const openEl = document.getElementById('homeOpenRequests');
+  const newEl = document.getElementById('homeNewEstimates');
+  const acceptedEl = document.getElementById('homeAcceptedJobs');
+  const avgEl = document.getElementById('homeAvgEstimate');
+  if (openEl) openEl.textContent = String(openRequests);
+  if (newEl) newEl.textContent = String(newEstimates);
+  if (acceptedEl) acceptedEl.textContent = String(acceptedJobs);
+  if (avgEl) avgEl.textContent = `$${avgEstimate}`;
+
+  const statusEl = document.getElementById('homeStatus');
+  if (statusEl) {
+    if (!repairsCache.length) statusEl.textContent = 'No active repair requests yet.';
+    else if (newEstimates > 0) statusEl.textContent = `You have ${openRequests} open request(s) and ${newEstimates} repair estimate(s) waiting for review.`;
+    else statusEl.textContent = `You have ${openRequests} open request(s). Next step: monitor new repair estimates.`;
+  }
+
+  const topEl = document.getElementById('homeTopEstimates');
+  if (topEl) {
+    const top = allBids
+      .filter(b => String(b.status || '').toLowerCase() === 'open')
+      .sort((a, b) => Number(a.amount || 0) - Number(b.amount || 0))
+      .slice(0, 2)
+      .map(b => {
+        const parsed = parseBidNotes(b.notes);
+        const meta = parsed.meta || {};
+        const r = getMechanicRating(b.mechanic_id);
+        return `<div class='muted-xs'>${meta.businessName || b.mechanic_name}: <b>$${b.amount}</b> · ${r.avg ? `${r.avg}/5` : 'No rating yet'} (${r.count})</div>`;
+      });
+    topEl.innerHTML = top.length ? top.join('') : 'No estimates to review yet.';
+  }
+
+  const recentEl = document.getElementById('homeRecentActivity');
+  if (recentEl) {
+    const recent = allBids.slice(0, 4).map(b => {
+      const st = String(b.status || 'open').toLowerCase();
+      if (st === 'accepted') return `✅ You accepted an estimate from ${b.mechanic_name}.`;
+      if (st === 'open') return `🕒 New estimate received from ${b.mechanic_name}.`;
+      return `ℹ️ Estimate ${st} from ${b.mechanic_name}.`;
+    });
+    recentEl.innerHTML = recent.length ? recent.map(x => `<div class='muted-xs'>${x}</div>`).join('') : 'No recent activity yet.';
+  }
+}
+
 async function boot() {
   const session = await window.smrAuth.requireRole('owner');
   if (!session) return;
@@ -367,6 +417,7 @@ async function boot() {
 
     try {
       await loadDashboardData(session);
+      renderHomeSummary();
       renderRequests();
       renderBids();
     } catch (err) {
