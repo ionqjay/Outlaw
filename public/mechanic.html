@@ -1,0 +1,12 @@
+<!doctype html><html><head><meta charset="UTF-8"/><meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Mechanic App</title><link rel="stylesheet" href="/styles.css"/>
+<style>.dash{max-width:980px;margin:22px auto;padding:0 16px}.panel{background:#15151a;border:1px solid #2a2a31;border-radius:14px;padding:14px;margin:12px 0}input,textarea{width:100%;padding:10px;border-radius:10px;border:1px solid #333;background:#0f0f13;color:#fff}</style>
+</head><body>
+<nav class="nav"><div class="logo"><span>SHOPMY</span><span class="orange">REPAIR</span></div><div><button class="btn btn-dark" data-view="home">Home</button> <button class="btn btn-dark" data-view="dashboard">Dashboard</button> <button class="btn btn-orange" data-view="repairs">Repairs</button> <button class="btn btn-dark" id="logoutBtn">Logout</button></div></nav>
+<main class="dash">
+<section id="view-home" class="panel"><h2>Mechanic Home</h2><p>See nearby requests and submit competitive estimates.</p></section>
+<section id="view-dashboard" class="panel" style="display:none"><h2>Your Open Bids / Accepted Jobs</h2><div id="mechBids"></div></section>
+<section id="view-repairs" class="panel" style="display:none"><h2>Available Repairs</h2><div id="repairFeed"></div></section>
+</main>
+<script src="/config.js"></script><script src="/mechanic.js"></script>
+</body></html>

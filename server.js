@@ -13,6 +13,8 @@ const PORT = process.env.PORT || 3000;
 const ADMIN_TOKEN = process.env.ADMIN_TOKEN || 'change-me';
 const DB_PATH = path.join(__dirname, 'signups.json');
 const OWNER_REQUESTS_PATH = path.join(__dirname, 'owner_requests.json');
+const REPAIR_REQUESTS_PATH = path.join(__dirname, 'repair_requests.json');
+const BIDS_PATH = path.join(__dirname, 'bids.json');
 
 const TURNSTILE_SECRET = process.env.TURNSTILE_SECRET || '';
 const TWILIO_ACCOUNT_SID = process.env.TWILIO_ACCOUNT_SID || '';
@@ -137,6 +139,83 @@ async function createOwnerRequest(row) {
   requests.unshift(local);
   writeJson(OWNER_REQUESTS_PATH, requests);
   return local;
+}
+
+async function createRepairRequest(row) {
+  if (USE_SUPABASE) {
+    const out = await supabaseRequest('repair_requests', { method: 'POST', body: [row] });
+    return out[0];
+  }
+  const requests = readJson(REPAIR_REQUESTS_PATH, []);
+  const local = {
+    id: (requests[0]?.id || 0) + 1,
+    owner_id: row.owner_id,
+    title: row.title,
+    issue_category: row.issue_category,
+    issue_details: row.issue_details,
+    vehicle_year: row.vehicle_year,
+    vehicle_make: row.vehicle_make,
+    vehicle_model: row.vehicle_model,
+    city: row.city,
+    state: row.state,
+    zip: row.zip,
+    urgency: row.urgency,
+    status: row.status,
+    created_at: row.created_at
+  };
+  requests.unshift(local);
+  writeJson(REPAIR_REQUESTS_PATH, requests);
+  return local;
+}
+
+async function listRepairRequests({ ownerId, status } = {}) {
+  if (USE_SUPABASE) {
+    const q = ['select=*', 'order=created_at.desc'];
+    if (ownerId) q.push(`owner_id=eq.${encodeURIComponent(ownerId)}`);
+    if (status) q.push(`status=eq.${encodeURIComponent(status)}`);
+    return supabaseRequest(`repair_requests?${q.join('&')}`);
+  }
+  let data = readJson(REPAIR_REQUESTS_PATH, []);
+  if (ownerId) data = data.filter(x => String(x.owner_id) === String(ownerId));
+  if (status) data = data.filter(x => String(x.status) === String(status));
+  return data;
+}
+
+async function createBid(row) {
+  if (USE_SUPABASE) {
+    const out = await supabaseRequest('bids', { method: 'POST', body: [row] });
+    return out[0];
+  }
+  const bids = readJson(BIDS_PATH, []);
+  const local = {
+    id: (bids[0]?.id || 0) + 1,
+    request_id: row.request_id,
+    mechanic_id: row.mechanic_id,
+    mechanic_name: row.mechanic_name,
+    amount: row.amount,
+    eta_hours: row.eta_hours,
+    notes: row.notes,
+    status: row.status,
+    created_at: row.created_at
+  };
+  bids.unshift(local);
+  writeJson(BIDS_PATH, bids);
+  return local;
+}
+
+async function listBids({ requestId, mechanicId, status } = {}) {
+  if (USE_SUPABASE) {
+    const q = ['select=*', 'order=created_at.desc'];
+    if (requestId) q.push(`request_id=eq.${encodeURIComponent(requestId)}`);
+    if (mechanicId) q.push(`mechanic_id=eq.${encodeURIComponent(mechanicId)}`);
+    if (status) q.push(`status=eq.${encodeURIComponent(status)}`);
+    return supabaseRequest(`bids?${q.join('&')}`);
+  }
+  let data = readJson(BIDS_PATH, []);
+  if (requestId) data = data.filter(x => String(x.request_id) === String(requestId));
+  if (mechanicId) data = data.filter(x => String(x.mechanic_id) === String(mechanicId));
+  if (status) data = data.filter(x => String(x.status) === String(status));
+  return data;
 }
 
 function counts(data) {
@@ -310,6 +389,128 @@ app.post('/api/owner-request', async (req, res) => {
   }
 });
 
+// --- V1 marketplace APIs ---
+app.post('/api/repairs', async (req, res) => {
+  const {
+    ownerId,
+    title,
+    issueCategory,
+    issueDetails,
+    vehicleYear,
+    vehicleMake,
+    vehicleModel,
+    city,
+    state,
+    zip,
+    urgency
+  } = req.body || {};
+
+  if (!ownerId || !title || !issueCategory || !issueDetails || !vehicleYear || !vehicleMake || !vehicleModel || !city || !state || !zip) {
+    return res.status(400).json({ error: 'Missing required fields.' });
+  }
+
+  try {
+    const created = await createRepairRequest({
+      owner_id: String(ownerId).trim(),
+      title: String(title).trim(),
+      issue_category: String(issueCategory).trim(),
+      issue_details: String(issueDetails).trim(),
+      vehicle_year: String(vehicleYear).trim(),
+      vehicle_make: String(vehicleMake).trim(),
+      vehicle_model: String(vehicleModel).trim(),
+      city: String(city).trim(),
+      state: String(state).trim(),
+      zip: String(zip).trim(),
+      urgency: String(urgency || 'Standard').trim(),
+      status: 'open',
+      created_at: new Date().toISOString()
+    });
+    res.json({ ok: true, repair: created });
+  } catch {
+    res.status(500).json({ error: 'Could not create repair request.' });
+  }
+});
+
+app.get('/api/repairs', async (req, res) => {
+  try {
+    const ownerId = req.query.ownerId ? String(req.query.ownerId) : undefined;
+    const status = req.query.status ? String(req.query.status) : undefined;
+    const rows = await listRepairRequests({ ownerId, status });
+    res.json({ ok: true, repairs: rows });
+  } catch {
+    res.status(500).json({ error: 'Could not load repairs.' });
+  }
+});
+
+app.post('/api/bids', async (req, res) => {
+  const { requestId, mechanicId, mechanicName, amount, etaHours, notes } = req.body || {};
+  if (!requestId || !mechanicId || !mechanicName || !amount || !etaHours) {
+    return res.status(400).json({ error: 'Missing required fields.' });
+  }
+
+  try {
+    const created = await createBid({
+      request_id: Number(requestId),
+      mechanic_id: String(mechanicId).trim(),
+      mechanic_name: String(mechanicName).trim(),
+      amount: Number(amount),
+      eta_hours: Number(etaHours),
+      notes: String(notes || '').trim(),
+      status: 'open',
+      created_at: new Date().toISOString()
+    });
+    res.json({ ok: true, bid: created });
+  } catch {
+    res.status(500).json({ error: 'Could not create bid.' });
+  }
+});
+
+app.get('/api/bids', async (req, res) => {
+  try {
+    const requestId = req.query.requestId ? Number(req.query.requestId) : undefined;
+    const mechanicId = req.query.mechanicId ? String(req.query.mechanicId) : undefined;
+    const status = req.query.status ? String(req.query.status) : undefined;
+    const rows = await listBids({ requestId, mechanicId, status });
+    res.json({ ok: true, bids: rows });
+  } catch {
+    res.status(500).json({ error: 'Could not load bids.' });
+  }
+});
+
+app.post('/api/bids/:id/accept', async (req, res) => {
+  const bidId = Number(req.params.id);
+  if (!bidId) return res.status(400).json({ error: 'Invalid bid id.' });
+
+  try {
+    if (USE_SUPABASE) {
+      const found = await supabaseRequest(`bids?select=*&id=eq.${bidId}&limit=1`);
+      if (!found[0]) return res.status(404).json({ error: 'Bid not found.' });
+      const bid = found[0];
+      await supabaseRequest(`bids?id=eq.${bidId}`, { method: 'PATCH', body: { status: 'accepted' } });
+      await supabaseRequest(`bids?request_id=eq.${bid.request_id}&id=neq.${bidId}`, { method: 'PATCH', body: { status: 'declined' } });
+      await supabaseRequest(`repair_requests?id=eq.${bid.request_id}`, { method: 'PATCH', body: { status: 'accepted' } });
+      return res.json({ ok: true });
+    }
+
+    const bids = readJson(BIDS_PATH, []);
+    const target = bids.find(b => Number(b.id) === bidId);
+    if (!target) return res.status(404).json({ error: 'Bid not found.' });
+    bids.forEach(b => {
+      if (Number(b.request_id) === Number(target.request_id)) b.status = Number(b.id) === bidId ? 'accepted' : 'declined';
+    });
+    writeJson(BIDS_PATH, bids);
+
+    const requests = readJson(REPAIR_REQUESTS_PATH, []);
+    requests.forEach(r => {
+      if (Number(r.id) === Number(target.request_id)) r.status = 'accepted';
+    });
+    writeJson(REPAIR_REQUESTS_PATH, requests);
+
+    res.json({ ok: true });
+  } catch {
+    res.status(500).json({ error: 'Could not accept bid.' });
+  }
+});
 app.get('/admin', async (req, res) => {
   if (req.query.token !== ADMIN_TOKEN) {
     return res.status(401).send('<h2>Unauthorized</h2><p>Use /admin?token=YOUR_TOKEN</p>');

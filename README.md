@@ -7,6 +7,12 @@ Clean V1 baseline for ShopMyRepair marketplace.
 - Backend API: Node/Express in `server.js` (deploy on Render)
 - Database: Supabase (`supabase/schema.sql`)
 
+## V1 Screens
+- `/` marketing landing
+- `/login.html` role-based sign in/sign up (owner vs mechanic/shop)
+- `/owner-app.html` owner Home / Dashboard / Get a Quote
+- `/mechanic.html` mechanic Home / Dashboard / Repairs
+
 ## Run locally
 ```bash
 npm install

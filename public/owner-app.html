@@ -1,0 +1,21 @@
+<!doctype html>
+<html><head><meta charset="UTF-8" /><meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Owner App</title><link rel="stylesheet" href="/styles.css" />
+<style>.dash{max-width:980px;margin:22px auto;padding:0 16px}.panel{background:#15151a;border:1px solid #2a2a31;border-radius:14px;padding:14px;margin:12px 0}input,select,textarea{width:100%;padding:10px;border-radius:10px;border:1px solid #333;background:#0f0f13;color:#fff}.grid2{display:grid;grid-template-columns:1fr 1fr;gap:10px} @media(max-width:800px){.grid2{grid-template-columns:1fr}}</style>
+</head><body>
+<nav class="nav"><div class="logo"><span>SHOPMY</span><span class="orange">REPAIR</span></div><div><button class="btn btn-dark" data-view="home">Home</button> <button class="btn btn-dark" data-view="dashboard">Dashboard</button> <button class="btn btn-orange" data-view="quote">Get a Quote</button> <button class="btn btn-dark" id="logoutBtn">Logout</button></div></nav>
+<main class="dash">
+<section id="view-home" class="panel"><h2>Owner Home</h2><p>Welcome back. Submit your repair and compare bids from local mechanics.</p></section>
+<section id="view-dashboard" class="panel" style="display:none"><h2>Your Open Requests</h2><div id="ownerRequests"></div><h3>Current Bids</h3><div id="ownerBids"></div></section>
+<section id="view-quote" class="panel" style="display:none"><h2>Get a Quote</h2>
+<div class="grid2"><input id="title" placeholder="Short title (e.g. Brake replacement)"/><select id="issueCategory"><option>Brakes</option><option>Engine</option><option>Transmission</option><option>Electrical</option><option>Other</option></select></div>
+<div class="grid2" style="margin-top:8px"><input id="vehicleYear" placeholder="Year"/><input id="vehicleMake" placeholder="Make"/></div>
+<div class="grid2" style="margin-top:8px"><input id="vehicleModel" placeholder="Model"/><select id="urgency"><option>Standard</option><option>Urgent</option><option>Emergency</option></select></div>
+<div class="grid2" style="margin-top:8px"><input id="city" placeholder="City"/><input id="state" value="NY" placeholder="State"/></div>
+<div class="grid2" style="margin-top:8px"><input id="zip" placeholder="ZIP"/></div>
+<textarea id="issueDetails" placeholder="Describe the issue" style="margin-top:8px"></textarea>
+<button class="btn btn-orange" id="submitRepairBtn" style="margin-top:10px">Submit Repair Request</button>
+<p id="ownerStatus" class="sub"></p></section>
+</main>
+<script src="/config.js"></script><script src="/owner-app.js"></script>
+</body></html>
