@@ -442,6 +442,45 @@ app.get('/api/repairs', async (req, res) => {
   }
 });
 
+app.post('/api/repairs/:id/cancel', async (req, res) => {
+  const repairId = Number(req.params.id);
+  if (!repairId) return res.status(400).json({ error: 'Invalid repair id.' });
+
+  try {
+    if (USE_SUPABASE) {
+      const found = await supabaseRequest(`repair_requests?select=*&id=eq.${repairId}&limit=1`);
+      if (!found[0]) return res.status(404).json({ error: 'Repair request not found.' });
+      if (String(found[0].status || '').toLowerCase() === 'accepted') {
+        return res.status(400).json({ error: 'Accepted requests cannot be cancelled.' });
+      }
+      await supabaseRequest(`repair_requests?id=eq.${repairId}`, { method: 'PATCH', body: { status: 'cancelled' } });
+      await supabaseRequest(`bids?request_id=eq.${repairId}&status=eq.open`, { method: 'PATCH', body: { status: 'declined' } });
+      return res.json({ ok: true });
+    }
+
+    const requests = readJson(REPAIR_REQUESTS_PATH, []);
+    const target = requests.find(r => Number(r.id) === repairId);
+    if (!target) return res.status(404).json({ error: 'Repair request not found.' });
+    if (String(target.status || '').toLowerCase() === 'accepted') {
+      return res.status(400).json({ error: 'Accepted requests cannot be cancelled.' });
+    }
+    requests.forEach(r => {
+      if (Number(r.id) === repairId) r.status = 'cancelled';
+    });
+    writeJson(REPAIR_REQUESTS_PATH, requests);
+
+    const bids = readJson(BIDS_PATH, []);
+    bids.forEach(b => {
+      if (Number(b.request_id) === repairId && String(b.status || '').toLowerCase() === 'open') b.status = 'declined';
+    });
+    writeJson(BIDS_PATH, bids);
+
+    res.json({ ok: true });
+  } catch (e) {
+    res.status(500).json({ error: 'Could not cancel request.', detail: String(e?.message || e) });
+  }
+});
+
 app.post('/api/bids', async (req, res) => {
   const { requestId, mechanicId, mechanicName, amount, etaHours, notes } = req.body || {};
   if (!requestId || !mechanicId || !mechanicName || !amount || !etaHours) {
