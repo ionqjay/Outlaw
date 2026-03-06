@@ -82,6 +82,7 @@ function validateQuote() {
     ['vehicleYear', 'Vehicle year'],
     ['vehicleMake', 'Vehicle make'],
     ['vehicleModel', 'Vehicle model'],
+    ['partsPreference', 'Parts preference'],
     ['city', 'City'],
     ['state', 'State'],
     ['zip', 'ZIP']
@@ -170,8 +171,7 @@ function renderBids() {
         <span class='pill ${status}'>${labelForStatus(status)}</span>
       </div>
       <div class='quote-grid'>
-        <div class='muted-xs'>Offer: <b>$${b.amount}</b></div>
-        <div class='muted-xs'>ETA: <b>${b.eta_hours}h</b></div>
+        <div class='muted-xs'>Repair estimate: <b>$${b.amount}</b></div>
       </div>
       <div class='muted-xs'>Notes: ${b.notes ? b.notes : 'No additional notes provided.'}</div>
       ${status === 'open' ? `<button class='btn btn-green' data-accept='${b.id}' style='margin-top:8px'>Accept Bid</button>` : ''}
@@ -184,7 +184,7 @@ function renderBids() {
       <span class='pill accepted'>accepted</span>
     </div>
     <div class='muted-xs'><b>${accepted.mechanic_name}</b></div>
-    <div class='muted-xs'>Offer: $${accepted.amount} · ETA: ${accepted.eta_hours}h</div>
+    <div class='muted-xs'>Repair estimate: $${accepted.amount}</div>
     <div class='muted-xs'>Notes: ${accepted.notes ? accepted.notes : 'No additional notes provided.'}</div>
   </div>` : '';
 
@@ -292,11 +292,16 @@ async function boot() {
       return;
     }
 
+    const partsPreference = document.getElementById('partsPreference').value;
+    const partsLabel = partsPreference === 'owner-brings-parts'
+      ? 'Owner will bring parts'
+      : 'Mechanic/shop should provide parts';
+
     const payload = {
       ownerId: session.id,
       title: document.getElementById('title').value.trim(),
       issueCategory: document.getElementById('issueCategory').value,
-      issueDetails: document.getElementById('issueDetails').value.trim(),
+      issueDetails: `[Parts preference: ${partsLabel}] ${document.getElementById('issueDetails').value.trim()}`,
       vehicleYear: document.getElementById('vehicleYear').value.trim(),
       vehicleMake: document.getElementById('vehicleMake').value.trim(),
       vehicleModel: document.getElementById('vehicleModel').value.trim(),
@@ -325,6 +330,7 @@ async function boot() {
       });
       document.getElementById('issueCategory').value = '';
       document.getElementById('urgency').value = 'Standard';
+      document.getElementById('partsPreference').value = '';
       setView('dashboard');
       await refreshDashboard();
     } catch (err) {

@@ -97,8 +97,7 @@ async function boot() {
             <div class='small'>${rep.vehicle_year || ''} ${rep.vehicle_make || ''} ${rep.vehicle_model || ''}</div>
             <div class='small'><b>Repair needed:</b> ${rep.issue_details || 'No description provided.'}</div>
             <div class='row2' style='margin-top:8px'>
-              <input placeholder='Bid amount (USD)' id='amount-${rep.id}' />
-              <input placeholder='ETA (hours)' id='eta-${rep.id}' />
+              <input placeholder='Repair estimate (USD)' id='amount-${rep.id}' />
             </div>
             <textarea id='notes-${rep.id}' placeholder='Notes for owner (optional)' style='margin-top:8px'></textarea>
             <button class='btn btn-orange' data-bid='${rep.id}' style='margin-top:8px'>Submit Bid</button>
@@ -109,14 +108,9 @@ async function boot() {
       document.querySelectorAll('[data-bid]').forEach(btn => btn.addEventListener('click', async () => {
         const id = btn.dataset.bid;
         const amount = Number(document.getElementById(`amount-${id}`).value);
-        const etaHours = Number(document.getElementById(`eta-${id}`).value);
 
         if (!Number.isFinite(amount) || amount <= 0) {
-          setStatus('Please enter a valid bid amount.', 'err');
-          return;
-        }
-        if (!Number.isFinite(etaHours) || etaHours <= 0) {
-          setStatus('Please enter a valid ETA in hours.', 'err');
+          setStatus('Please enter a valid repair estimate.', 'err');
           return;
         }
 
@@ -126,7 +120,7 @@ async function boot() {
           mechanicId: session.id,
           mechanicName: savedProfile?.businessName || savedProfile?.name || session.name || session.email,
           amount,
-          etaHours,
+          etaHours: 24,
           notes: document.getElementById(`notes-${id}`).value
         };
 
@@ -207,7 +201,7 @@ async function boot() {
             <strong>${rep?.title ? rep.title : `Request #${b.request_id}`}</strong>
             <span class='pill ${status}'>${status}</span>
           </div>
-          <div class='small'>Offer: <b>$${b.amount}</b> · ETA: <b>${b.eta_hours}h</b></div>
+          <div class='small'>Repair estimate: <b>$${b.amount}</b></div>
           <div class='small'>Repair status: <b>${repStatus}</b></div>
           <div class='small'>${rep?.city || ''}${rep?.city ? ', ' : ''}${rep?.state || ''} · ${rep?.urgency || 'Standard'}</div>
           <div class='small'><b>Repair needed:</b> ${rep?.issue_details || 'Request details unavailable.'}</div>
