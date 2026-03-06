@@ -9,16 +9,135 @@
   <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=DM+Sans:wght@400;500;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="/styles.css" />
   <style>
-    .dash {max-width: 980px; margin: 30px auto; padding: 0 18px 40px;}
-    .dash h1 {margin-bottom: 4px;}
-    .sub {color:#bbb; margin-bottom:18px;}
-    .panel {background:#15151a; border:1px solid #2a2a31; border-radius:14px; padding:16px; margin:14px 0;}
-    .grid2 {display:grid; grid-template-columns:1fr 1fr; gap:12px;}
-    .grid3 {display:grid; grid-template-columns:1fr 1fr 1fr; gap:12px;}
-    input, select, textarea {width:100%; padding:11px; border-radius:10px; border:1px solid #333; background:#0f0f13; color:#fff;}
-    textarea {min-height:96px;}
-    .row {display:flex; gap:10px; align-items:center; justify-content:space-between;}
-    @media (max-width: 800px){ .grid2,.grid3{grid-template-columns:1fr;} }
+    :root {
+      --bg: #0d0d11;
+      --card: #15151a;
+      --card-soft: #111116;
+      --stroke: #2b2b34;
+      --text: #f5f5f7;
+      --muted: #b9bac2;
+      --orange: #e8441a;
+      --orange-soft: rgba(232, 68, 26, 0.16);
+    }
+
+    .dash {
+      max-width: 1060px;
+      margin: 22px auto 48px;
+      padding: 0 18px;
+    }
+
+    .hero {
+      background:
+        radial-gradient(1200px 340px at -10% -40%, var(--orange-soft), transparent 55%),
+        radial-gradient(1000px 300px at 120% -60%, rgba(255,255,255,0.06), transparent 50%),
+        linear-gradient(180deg, #15151c, #111117);
+      border: 1px solid var(--stroke);
+      border-radius: 18px;
+      padding: 24px;
+      margin-bottom: 14px;
+    }
+
+    .hero h1 {
+      margin: 0;
+      font-size: clamp(28px, 3.8vw, 42px);
+      line-height: 1;
+      letter-spacing: 0.4px;
+    }
+
+    .hero p {
+      margin: 10px 0 0;
+      color: var(--muted);
+      max-width: 780px;
+    }
+
+    .quick {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 10px;
+      margin-top: 14px;
+    }
+
+    .quick .chip {
+      background: var(--card-soft);
+      border: 1px solid var(--stroke);
+      border-radius: 12px;
+      padding: 10px 12px;
+      color: var(--muted);
+      font-size: 13px;
+    }
+
+    .panel {
+      background: var(--card);
+      border: 1px solid var(--stroke);
+      border-radius: 14px;
+      padding: 16px;
+      margin: 12px 0;
+      box-shadow: 0 6px 26px rgba(0,0,0,0.18);
+    }
+
+    .panel h3 {
+      margin: 0;
+      font-size: 17px;
+    }
+
+    .panel-sub {
+      margin: 6px 0 0;
+      color: var(--muted);
+      font-size: 13px;
+    }
+
+    .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+    .grid3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px; }
+
+    input, select, textarea {
+      width: 100%;
+      padding: 12px;
+      border-radius: 11px;
+      border: 1px solid #343540;
+      background: #0f1015;
+      color: #fff;
+      transition: border-color .2s ease, box-shadow .2s ease;
+      font-family: inherit;
+    }
+
+    input:focus, select:focus, textarea:focus {
+      outline: none;
+      border-color: rgba(232, 68, 26, 0.75);
+      box-shadow: 0 0 0 3px rgba(232, 68, 26, 0.14);
+    }
+
+    textarea { min-height: 110px; resize: vertical; }
+
+    .cta-row {
+      display: flex;
+      gap: 10px;
+      align-items: center;
+      margin-top: 14px;
+    }
+
+    #submitOwnerRequest {
+      min-width: 250px;
+    }
+
+    #submitOwnerRequest[disabled] {
+      opacity: 0.75;
+      cursor: not-allowed;
+    }
+
+    #ownerStatus {
+      margin: 0;
+      color: var(--muted);
+      font-size: 14px;
+    }
+
+    #ownerStatus.success { color: #76e5a2; }
+    #ownerStatus.error { color: #ff8f8f; }
+
+    @media (max-width: 880px) {
+      .grid2, .grid3, .quick { grid-template-columns: 1fr; }
+      .cta-row { flex-direction: column; align-items: stretch; }
+      #submitOwnerRequest { width: 100%; }
+    }
   </style>
 </head>
 <body>
@@ -28,23 +147,30 @@
   </nav>
 
   <main class="dash">
-    <h1>Car Owner Dashboard</h1>
-    <p class="sub">Tell us where your vehicle is and what it needs. We’ll route your request for competing bids.</p>
-
-    <section class="panel">
-      <div class="row">
-        <h3 style="margin:0">Your Contact Info</h3>
-      </div>
-      <div class="grid3" style="margin-top:10px;">
-        <input id="fullName" placeholder="Full name" />
-        <input id="email" type="email" placeholder="Best email for quote updates" />
-        <input id="mobile" placeholder="Mobile number (for bid alerts)" />
+    <section class="hero">
+      <h1>Get Quotes from Trusted Local Mechanics</h1>
+      <p>Tell us your vehicle issue once. We route your request so mechanics can compete with clear pricing and availability.</p>
+      <div class="quick">
+        <div class="chip">✔ Multiple competing quotes</div>
+        <div class="chip">✔ Local mechanics only</div>
+        <div class="chip">✔ Fast responses in your area</div>
       </div>
     </section>
 
     <section class="panel">
-      <h3 style="margin-top:0">Vehicle Details</h3>
-      <div class="grid3">
+      <h3>1) Contact Info</h3>
+      <p class="panel-sub">We’ll use this to notify you when quotes come in.</p>
+      <div class="grid3" style="margin-top:10px;">
+        <input id="fullName" placeholder="Full name" />
+        <input id="email" type="email" placeholder="Best email" />
+        <input id="mobile" placeholder="Mobile number" />
+      </div>
+    </section>
+
+    <section class="panel">
+      <h3>2) Vehicle Details</h3>
+      <p class="panel-sub">Basic vehicle info helps mechanics quote accurately.</p>
+      <div class="grid3" style="margin-top:10px;">
         <input id="vehicleYear" placeholder="Year (e.g. 2019)" />
         <input id="vehicleMake" placeholder="Make (e.g. Honda)" />
         <input id="vehicleModel" placeholder="Model (e.g. Accord)" />
@@ -52,8 +178,9 @@
     </section>
 
     <section class="panel">
-      <h3 style="margin-top:0">Repair Request</h3>
-      <div class="grid2">
+      <h3>3) Repair Request</h3>
+      <p class="panel-sub">The more details you share, the better your quotes.</p>
+      <div class="grid2" style="margin-top:10px;">
         <select id="issueCategory">
           <option value="">Issue category</option>
           <option>Brakes</option><option>Engine</option><option>Transmission</option><option>Electrical</option><option>AC/Heat</option><option>Suspension</option><option>Battery/Starter</option><option>Other</option>
@@ -65,14 +192,15 @@
         </select>
       </div>
       <div style="margin-top:10px;">
-        <textarea id="issueDetails" placeholder="Describe symptoms, noises, warning lights, and anything already diagnosed."></textarea>
+        <textarea id="issueDetails" placeholder="Describe symptoms, warning lights, sounds, and any diagnosis."></textarea>
       </div>
     </section>
 
     <section class="panel">
-      <h3 style="margin-top:0">Vehicle Service Location</h3>
-      <div class="grid2">
-        <input id="serviceAddress" placeholder="Street address, garage, lot, or clear landmark" />
+      <h3>4) Service Location</h3>
+      <p class="panel-sub">Where should mechanics service your vehicle?</p>
+      <div class="grid2" style="margin-top:10px;">
+        <input id="serviceAddress" placeholder="Street address / lot / landmark" />
         <input id="city" placeholder="City" />
       </div>
       <div class="grid2" style="margin-top:10px;">
@@ -81,8 +209,10 @@
       </div>
     </section>
 
-    <button id="submitOwnerRequest" class="btn btn-orange">Submit Request for Bids</button>
-    <p id="ownerStatus" class="sub"></p>
+    <div class="cta-row">
+      <button id="submitOwnerRequest" class="btn btn-orange">Submit Request for Quotes</button>
+      <p id="ownerStatus">Ready when you are.</p>
+    </div>
   </main>
 
   <script src="/config.js"></script>
