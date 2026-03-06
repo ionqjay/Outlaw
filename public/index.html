@@ -1,0 +1,153 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>ShopMyRepair — Mechanics Compete. You Save.</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=DM+Sans:wght@400;500;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/styles.css" />
+</head>
+<body>
+  <nav class="nav">
+    <div class="logo"><span>SHOPMY</span><span class="orange">REPAIR</span></div>
+    <button class="btn btn-orange open-modal" data-tab="owner">Get Free Quotes →</button>
+  </nav>
+
+  <main>
+    <section class="hero reveal">
+      <h1 id="heroHeadline">Mechanics Compete. You Save.</h1>
+      <p id="heroSubtext">Post your repair. Get 3 guaranteed quotes in 24 hours from local mechanics. Always free for car owners.</p>
+      <div class="cta-row">
+        <button class="btn btn-orange open-modal" data-tab="owner">Get My Free Quotes →</button>
+        <button class="btn btn-dark open-modal" data-tab="mechanic">Join as a Mechanic</button>
+      </div>
+      <div class="proof-row">
+        <div>⭐ 4.9 stars</div><div>🛡️ Payment protected</div><div>🧰 Local mechanics only</div>
+      </div>
+      <div class="live-pill"><span class="dot"></span><span id="repairsCounter">847</span> repairs completed this week in NY</div>
+    </section>
+
+    <section class="stats reveal">
+      <div><strong>$480</strong><span>AVG. SAVED</span></div>
+      <div><strong>3,200+</strong><span>ACTIVE MECHANICS</span></div>
+      <div><strong>24HR</strong><span>GUARANTEED QUOTES</span></div>
+      <div><strong>4.9★</strong><span>AVERAGE RATING</span></div>
+    </section>
+
+    <section class="email-banner reveal">
+      <h2>Get Early Access 🚀</h2>
+      <p>We’re launching Queens and Long Island first. Join the first wave.</p>
+      <div class="inline-form">
+        <input id="prefillEmail" type="email" placeholder="Enter your email" />
+        <button class="btn btn-orange" id="notifyBtn">Notify Me →</button>
+      </div>
+    </section>
+
+    <section class="how reveal">
+      <h2>How It Works</h2>
+      <div class="grid-4">
+        <article class="card"><span class="num">01</span><h3>Post Your Repair</h3></article>
+        <article class="card"><span class="num">02</span><h3>Mechanics Compete</h3></article>
+        <article class="card"><span class="num">03</span><h3>Compare and Choose</h3></article>
+        <article class="card"><span class="num">04</span><h3>Get It Fixed</h3></article>
+      </div>
+    </section>
+
+    <section class="trust reveal">
+      <h2>Why New Yorkers Use ShopMyRepair</h2>
+      <div class="grid-3">
+        <article class="card">💸 <h3>Save Up to 40%</h3><p>Mechanics compete for your deal.</p></article>
+        <article class="card">🔒 <h3>Protected Payment</h3><p>No surprises, no weird charges.</p></article>
+        <article class="card">📍 <h3>Local Mechanics Only</h3><p>Quotes from mechanics near you.</p></article>
+        <article class="card">⏱️ <h3>3 Quotes in 24 Hours</h3><p>Fast responses, real options.</p></article>
+        <article class="card">📲 <h3>SMS Notifications</h3><p>Instant updates when quotes land.</p></article>
+        <article class="card">✅ <h3>Always Free for Owners</h3><p>You compare. You choose. No fee.</p></article>
+      </div>
+    </section>
+
+    <section class="mechanic-banner reveal">
+      <div>
+        <span class="tag">The Hustler Program</span>
+        <h2>No Shop? No Problem.</h2>
+        <p>Mobile and independent mechanics: build your rep, choose your schedule, and get real local jobs.</p>
+        <button class="btn btn-gold open-modal" data-tab="mechanic">Reserve Mechanic Spot</button>
+      </div>
+      <div class="tiers">
+        <div class="tier gold">Hustler 0–5 jobs<br/><small>Founding visibility</small></div>
+        <div class="tier blue">Rising Pro 5–20<br/><small>Priority matching</small></div>
+        <div class="tier green">Verified Pro 20–50<br/><small>Top placement</small></div>
+        <div class="tier orange">Elite 50+<br/><small>Premium leads</small></div>
+      </div>
+    </section>
+
+    <section class="testimonials reveal">
+      <h2>What NYC Drivers Are Saying</h2>
+      <div class="grid-3">
+        <article class="card"><div class="stars">★★★★★</div><p><i>“Saved $620 on my brake job in one day. Wild.”</i></p><div class="avatar">JM</div><small>J. Mendez — Queens</small></article>
+        <article class="card"><div class="stars">★★★★★</div><p><i>“Finally got straight quotes with no games.”</i></p><div class="avatar">RT</div><small>R. Torres — Bronx</small></article>
+        <article class="card"><div class="stars">★★★★★</div><p><i>“Best deal I’ve gotten in NYC, hands down.”</i></p><div class="avatar">AL</div><small>A. Lewis — Brooklyn</small></article>
+      </div>
+    </section>
+  </main>
+
+  <div id="modal" class="modal hidden">
+    <div class="overlay"></div>
+    <div class="modal-card">
+      <button class="close" id="closeModal">✕</button>
+      <span class="badge">🚀 Now Launching Queens and Long Island</span>
+      <h2 id="modalTitle">Get Early Access</h2>
+      <p><span class="dot"></span> <span id="signupCount">0</span> total signups</p>
+      <div class="tabs">
+        <button class="tab active" data-tab="owner">I Own a Car</button>
+        <button class="tab" data-tab="mechanic">I’m a Mechanic</button>
+      </div>
+
+      <form id="signupForm">
+        <input name="name" placeholder="Full name" required />
+        <input name="email" type="email" placeholder="Best email for quote updates" required />
+        <input name="phone" placeholder="Mobile number (for instant bid alerts)" required />
+        <input name="zip" placeholder="ZIP code where the vehicle is located" required />
+        <input name="repairAddress" placeholder="Service location (street address, parking lot, or landmark)" required />
+        <select name="borough" required>
+          <option value="">Service area</option>
+          <option>Queens</option><option>Long Island</option><option>Bronx</option><option>Brooklyn</option><option>Manhattan</option><option>Staten Island</option><option>Westchester</option><option>Other</option>
+        </select>
+
+        <div id="mechOnly" class="hidden">
+          <select name="experience">
+            <option value="">Years of Experience</option>
+            <option>0-2</option><option>3-5</option><option>6-10</option><option>10+</option>
+          </select>
+          <select name="hasShop">
+            <option value="">Do you have a shop?</option>
+            <option value="Yes">Yes</option><option value="No">No</option>
+          </select>
+        </div>
+
+        <div class="otp-row">
+          <button class="btn btn-dark" type="button" id="sendOtpBtn">Send SMS Code</button>
+          <input name="otpCode" placeholder="Enter SMS code" maxlength="6" required />
+        </div>
+
+        <input type="hidden" name="turnstileToken" id="turnstileToken" />
+        <button class="btn btn-orange" id="submitBtn">Notify Me When We Launch</button>
+      </form>
+
+      <div id="success" class="hidden">
+        <h3>🎉 You’re on the list!</h3>
+        <ul>
+          <li>SMS alert when we launch</li>
+          <li>Founding member perks by email</li>
+          <li>Priority access for early signups</li>
+        </ul>
+        <button class="btn btn-green" id="closeSuccess">Close</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="/config.js"></script>
+  <script src="/script.js"></script>
+</body>
+</html>

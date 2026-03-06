@@ -1,0 +1,91 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Owner Dashboard — ShopMyRepair</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=DM+Sans:wght@400;500;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/styles.css" />
+  <style>
+    .dash {max-width: 980px; margin: 30px auto; padding: 0 18px 40px;}
+    .dash h1 {margin-bottom: 4px;}
+    .sub {color:#bbb; margin-bottom:18px;}
+    .panel {background:#15151a; border:1px solid #2a2a31; border-radius:14px; padding:16px; margin:14px 0;}
+    .grid2 {display:grid; grid-template-columns:1fr 1fr; gap:12px;}
+    .grid3 {display:grid; grid-template-columns:1fr 1fr 1fr; gap:12px;}
+    input, select, textarea {width:100%; padding:11px; border-radius:10px; border:1px solid #333; background:#0f0f13; color:#fff;}
+    textarea {min-height:96px;}
+    .row {display:flex; gap:10px; align-items:center; justify-content:space-between;}
+    @media (max-width: 800px){ .grid2,.grid3{grid-template-columns:1fr;} }
+  </style>
+</head>
+<body>
+  <nav class="nav">
+    <div class="logo"><span>SHOPMY</span><span class="orange">REPAIR</span></div>
+    <button id="signOutBtn" class="btn btn-dark">Sign Out</button>
+  </nav>
+
+  <main class="dash">
+    <h1>Car Owner Dashboard</h1>
+    <p class="sub">Tell us where your vehicle is and what it needs. We’ll route your request for competing bids.</p>
+
+    <section class="panel">
+      <div class="row">
+        <h3 style="margin:0">Your Contact Info</h3>
+      </div>
+      <div class="grid3" style="margin-top:10px;">
+        <input id="fullName" placeholder="Full name" />
+        <input id="email" type="email" placeholder="Best email for quote updates" />
+        <input id="mobile" placeholder="Mobile number (for bid alerts)" />
+      </div>
+    </section>
+
+    <section class="panel">
+      <h3 style="margin-top:0">Vehicle Details</h3>
+      <div class="grid3">
+        <input id="vehicleYear" placeholder="Year (e.g. 2019)" />
+        <input id="vehicleMake" placeholder="Make (e.g. Honda)" />
+        <input id="vehicleModel" placeholder="Model (e.g. Accord)" />
+      </div>
+    </section>
+
+    <section class="panel">
+      <h3 style="margin-top:0">Repair Request</h3>
+      <div class="grid2">
+        <select id="issueCategory">
+          <option value="">Issue category</option>
+          <option>Brakes</option><option>Engine</option><option>Transmission</option><option>Electrical</option><option>AC/Heat</option><option>Suspension</option><option>Battery/Starter</option><option>Other</option>
+        </select>
+        <select id="urgency">
+          <option>Standard (within 24h)</option>
+          <option>Urgent (same day)</option>
+          <option>Emergency (as soon as possible)</option>
+        </select>
+      </div>
+      <div style="margin-top:10px;">
+        <textarea id="issueDetails" placeholder="Describe symptoms, noises, warning lights, and anything already diagnosed."></textarea>
+      </div>
+    </section>
+
+    <section class="panel">
+      <h3 style="margin-top:0">Vehicle Service Location</h3>
+      <div class="grid2">
+        <input id="serviceAddress" placeholder="Street address, garage, lot, or clear landmark" />
+        <input id="city" placeholder="City" />
+      </div>
+      <div class="grid2" style="margin-top:10px;">
+        <input id="state" placeholder="State" value="NY" />
+        <input id="zip" placeholder="ZIP code" />
+      </div>
+    </section>
+
+    <button id="submitOwnerRequest" class="btn btn-orange">Submit Request for Bids</button>
+    <p id="ownerStatus" class="sub"></p>
+  </main>
+
+  <script src="/config.js"></script>
+  <script src="/owner.js"></script>
+</body>
+</html>
