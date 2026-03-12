@@ -348,33 +348,17 @@ app.get('/api/stats', async (req, res) => {
 });
 
 app.post('/api/send-otp', async (req, res) => {
-  const phone = String(req.body?.phone || '').replace(/\D/g, '');
-  if (phone.length !== 10) return res.status(400).json({ error: 'Invalid phone.' });
-  const code = String(Math.floor(100000 + Math.random() * 900000));
-  otpStore.set(phone, { code, exp: Date.now() + 10 * 60 * 1000 });
-
-  try {
-    const sent = await sendSms(phone, `ShopMyRepair code: ${code} (valid 10 minutes)`);
-    if (!sent) return res.json({ ok: true, devCode: code, note: 'Twilio not configured; using dev mode.' });
-    res.json({ ok: true });
-  } catch {
-    res.status(500).json({ error: 'SMS failed.' });
-  }
+  res.json({ ok: true, disabled: true, note: 'SMS verification is temporarily disabled.' });
 });
 
 app.post('/api/signup', async (req, res) => {
-  const { name, email, phone, zip, repairAddress, borough, type, experience, hasShop, otpCode, turnstileToken, utm, heroVariant } = req.body || {};
+  const { name, email, phone, zip, repairAddress, borough, type, experience, hasShop, turnstileToken, utm, heroVariant } = req.body || {};
   if (!name || !email || !phone || !zip || !borough || !type) return res.status(400).json({ error: 'Missing required fields.' });
   if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return res.status(400).json({ error: 'Invalid email.' });
   if (!['owner', 'mechanic'].includes(type)) return res.status(400).json({ error: 'Invalid type.' });
 
   const cleanPhone = String(phone).replace(/\D/g, '');
   if (cleanPhone.length !== 10) return res.status(400).json({ error: 'Invalid phone.' });
-
-  const otp = otpStore.get(cleanPhone);
-  if (!otp || otp.code !== String(otpCode || '') || Date.now() > otp.exp) {
-    return res.status(400).json({ error: 'Invalid or expired SMS code.' });
-  }
 
   const human = await verifyTurnstile(turnstileToken, req.ip);
   if (!human) return res.status(400).json({ error: 'Captcha verification failed.' });
@@ -393,7 +377,7 @@ app.post('/api/signup', async (req, res) => {
     utm: utm || {},
     created_at: new Date().toISOString()
   });
-  otpStore.delete(cleanPhone);
+  // SMS OTP disabled for now.
 
   // Best effort automations
   try {

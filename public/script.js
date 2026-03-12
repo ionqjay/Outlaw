@@ -32,7 +32,6 @@ function showToast(message, type = 'ok') {
 
 let currentTab = 'owner';
 let liveCounter = 847;
-let otpSent = false;
 
 const configuredApiBase = window.APP_CONFIG?.API_BASE || '';
 const API_BASE = configuredApiBase.trim().replace(/\/$/, '');
@@ -69,37 +68,14 @@ closeSuccess.addEventListener('click', ()=>modal.classList.add('hidden'));
 modal.querySelector('.overlay').addEventListener('click', ()=>modal.classList.add('hidden'));
 tabs.forEach(t => t.addEventListener('click', ()=>setTab(t.dataset.tab)));
 
-sendOtpBtn.addEventListener('click', async () => {
-  const phone = (form.phone.value || '').trim();
-  if (!/^\d{10}$/.test(phone.replace(/\D/g,''))) {
-    showToast('Enter a valid 10-digit US phone number first.', 'error');
-    return;
-  }
-
-  const r = await fetch(api('/api/send-otp'), {
-    method: 'POST', headers: {'Content-Type': 'application/json'},
-    body: JSON.stringify({ phone })
-  });
-  const data = await r.json();
-
-  if (!r.ok) {
-    showToast(data.error || 'Could not send code.', 'error');
-    return;
-  }
-
-  otpSent = true;
-  if (data.devCode) {
-    showToast(`Code sent. Dev code: ${data.devCode}`, 'ok');
-    return;
-  }
-  showToast('Code sent. Check your phone.', 'ok');
-});
+if (sendOtpBtn) {
+  sendOtpBtn.style.display = 'none';
+}
 
 form.addEventListener('submit', async (e) => {
   e.preventDefault();
   const rawPhone = (form.phone.value || '').replace(/\D/g,'');
   if (rawPhone.length !== 10) return alert('Phone must be 10 digits');
-  if (!otpSent) return alert('Please send SMS code first');
 
   const payload = {
     name: form.name.value,
@@ -111,7 +87,6 @@ form.addEventListener('submit', async (e) => {
     type: currentTab,
     experience: form.experience?.value,
     hasShop: form.hasShop?.value,
-    otpCode: form.otpCode.value,
     turnstileToken: 'dev-bypass',
     utm: Object.fromEntries(new URLSearchParams(location.search).entries()),
     heroVariant: variant.h
@@ -149,7 +124,6 @@ form.addEventListener('submit', async (e) => {
   success.classList.remove('hidden');
   showToast('Signup complete. You’re on the list!', 'ok');
   form.reset();
-  otpSent = false;
 });
 
 async function loadCounts(){
