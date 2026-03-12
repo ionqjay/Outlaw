@@ -116,6 +116,8 @@
     .status { margin-top: 10px; color: var(--muted); }
     .status.ok { color: #79e2a2; }
     .status.err { color: #ff9a9a; }
+    .inline-alert { margin-top:10px; border:1px solid #6f3b3b; background:#2a1414; color:#ffcdcd; border-radius:10px; padding:10px 12px; font-size:13px; display:none; }
+    .inline-alert.show { display:block; }
 
     .estimate-card { background: linear-gradient(180deg,#171b25,#11141c); border:1px solid #2f3545; border-radius:14px; padding:14px; margin-top:10px; }
     .estimate-top { display:flex; justify-content:space-between; align-items:flex-start; gap:10px; flex-wrap:wrap; }
@@ -216,6 +218,7 @@
       <h2>Available Repairs</h2>
       <div id="repairFeed" class="subtle">Loading...</div>
       <p id="mechStatus" class="status">Ready when you are.</p>
+      <div id="mechInlineAlert" class="inline-alert"></div>
     </section>
 
     <section id="view-profile" class="panel" style="display:none">

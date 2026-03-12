@@ -62,6 +62,19 @@ function setStatus(text, type = 'info') {
   if (type === 'err') status.classList.add('err');
 }
 
+function setInlineAlert(message = '') {
+  const box = document.getElementById('mechInlineAlert');
+  if (!box) return;
+  const msg = String(message || '').trim();
+  if (!msg) {
+    box.textContent = '';
+    box.classList.remove('show');
+    return;
+  }
+  box.textContent = msg;
+  box.classList.add('show');
+}
+
 function parseOwnerMeta(issueDetailsRaw) {
   const txt = String(issueDetailsRaw || '');
   const m = txt.match(/\[OWNER_META\](.*?)\[\/OWNER_META\]/);
@@ -132,6 +145,7 @@ async function boot() {
 
   async function loadRepairs() {
     const wrap = document.getElementById('repairFeed');
+    setInlineAlert('');
     wrap.innerHTML = "<div class='skeleton'></div><div class='skeleton'></div>";
 
     try {
@@ -166,7 +180,7 @@ async function boot() {
         const id = btn.dataset.bid;
         const fail = (msg, goProfile = false) => {
           setStatus(msg, 'err');
-          alert(msg);
+          setInlineAlert(msg);
           if (goProfile) setView('profile');
         };
 
@@ -236,13 +250,14 @@ async function boot() {
             body: JSON.stringify(payload)
           });
 
+          setInlineAlert('');
           setStatus(`Repair estimate submitted as ${getProviderTypeLabel(session.role)}.`, 'ok');
           await loadRepairs();
           await loadDashboard();
         } catch (err) {
           const msg = err.message || 'Failed to submit bid.';
           setStatus(msg, 'err');
-          alert(msg);
+          setInlineAlert(msg);
         } finally {
           btn.disabled = false;
           btn.textContent = 'Submit Repair Estimate';
