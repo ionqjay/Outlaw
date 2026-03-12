@@ -339,6 +339,26 @@ async function boot() {
     }
   }
 
+  function renderMechanicChecklist({ profile, bids = [], won = [] } = {}) {
+    const el = document.getElementById('mechanicChecklist');
+    if (!el) return;
+
+    const providerType = getProviderType(session.role);
+    const profileDone = providerType === 'shop'
+      ? !!(String(profile?.businessName || '').trim() && String(profile?.email || '').trim() && String(profile?.phone || '').trim() && String(profile?.services || '').trim())
+      : !!(String(profile?.name || '').trim() && String(profile?.email || '').trim() && String(profile?.phone || '').trim() && String(profile?.services || '').trim());
+    const submittedEstimate = bids.length > 0;
+    const wonFirstJob = won.length > 0;
+    const doneCount = [profileDone, submittedEstimate, wonFirstJob].filter(Boolean).length;
+
+    el.innerHTML = `
+      <div class='small'>Progress: <b>${doneCount}/3 complete</b></div>
+      <div class='small'>${profileDone ? '✅' : '⬜'} Complete your profile</div>
+      <div class='small'>${submittedEstimate ? '✅' : '⬜'} Submit your first estimate</div>
+      <div class='small'>${wonFirstJob ? '✅' : '⬜'} Win your first job</div>
+    `;
+  }
+
   async function loadHomeMetrics({ bids = [], repairs = [], won = [], active = [] } = {}) {
     const profile = await window.smrAuth.getMechanicProfile();
     const providerType = getProviderType(session.role);
@@ -347,6 +367,8 @@ async function boot() {
       : [profile?.name, profile?.phone, profile?.services, profile?.city, profile?.zip, profile?.serviceRadiusMiles, profile?.certifications];
     const completed = profileFields.filter(v => String(v || '').trim()).length;
     const strength = Math.round((completed / profileFields.length) * 100);
+
+    renderMechanicChecklist({ profile, bids, won });
 
     const acceptedRate = bids.length ? Math.round((won.length / bids.length) * 100) : 0;
     const avgEstimate = bids.length ? Math.round(bids.reduce((s, b) => s + Number(b.amount || 0), 0) / bids.length) : 0;

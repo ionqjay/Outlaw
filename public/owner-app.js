@@ -351,9 +351,32 @@ async function loadDashboardData(session) {
   bidsByRequest = new Map(entries);
 }
 
+function renderOwnerChecklist({ allBids = [] } = {}) {
+  const el = document.getElementById('ownerChecklist');
+  if (!el) return;
+
+  const profile = {
+    name: String(document.getElementById('profileName')?.value || '').trim(),
+    email: String(document.getElementById('profileEmail')?.value || '').trim(),
+    phone: String(document.getElementById('profilePhone')?.value || '').trim()
+  };
+  const profileDone = !!(profile.name && profile.email && profile.phone);
+  const postedRequest = repairsCache.length > 0;
+  const reviewedEstimate = allBids.length > 0;
+
+  const doneCount = [profileDone, postedRequest, reviewedEstimate].filter(Boolean).length;
+  el.innerHTML = `
+    <div class='muted-xs'>Progress: <b>${doneCount}/3 complete</b></div>
+    <div class='muted-xs'>${profileDone ? '✅' : '⬜'} Complete profile (name, email, phone)</div>
+    <div class='muted-xs'>${postedRequest ? '✅' : '⬜'} Post your first repair request</div>
+    <div class='muted-xs'>${reviewedEstimate ? '✅' : '⬜'} Review your first estimate</div>
+  `;
+}
+
 function renderHomeSummary() {
   const allBids = Array.from(bidsByRequest.values()).flat();
   const openRequests = repairsCache.filter(r => String(r.status || '').toLowerCase() === 'open').length;
+  renderOwnerChecklist({ allBids });
   const acceptedJobs = repairsCache.filter(r => ['accepted', 'in_progress', 'completed'].includes(String(r.status || '').toLowerCase())).length;
   const newEstimates = allBids.filter(b => String(b.status || '').toLowerCase() === 'open').length;
   const avgEstimate = allBids.length ? Math.round(allBids.reduce((s, b) => s + Number(b.amount || 0), 0) / allBids.length) : 0;
