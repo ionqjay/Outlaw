@@ -234,13 +234,14 @@ function renderBids() {
     const r = getMechanicRating(b.mechanic_id);
     const rating = r.avg ? `${r.avg}/5` : 'No rating yet';
     const reviewCount = `${r.count} review${r.count === 1 ? '' : 's'}`;
-    const providerTypeLabel = meta.providerTypeLabel || (String(meta.providerType || '').toLowerCase() === 'shop' ? 'Mechanic Shop' : 'Individual Mechanic');
+    const providerType = String(meta.providerType || '').toLowerCase() === 'shop' ? 'shop' : 'mechanic';
+    const providerTypeLabel = meta.providerTypeLabel || (providerType === 'shop' ? 'Mechanic Shop' : 'Individual Mechanic');
     return `<div class='list-card'>
       <div class='bid-head'>
         <strong>${meta.businessName || b.mechanic_name}</strong>
         <span class='pill ${status}'>${labelForStatus(status)}</span>
       </div>
-      <div class='muted-xs'>Provider type: <b>${providerTypeLabel}</b></div>
+      <div class='provider-chip ${providerType}'>${providerType === 'shop' ? '🏪' : '🧰'} ${providerTypeLabel}</div>
       <div class='quote-grid'>
         <div class='muted-xs'>Repair estimate: <b>$${b.amount}</b></div>
       </div>
@@ -255,14 +256,15 @@ function renderBids() {
   const acceptedParsed = accepted ? parseBidNotes(accepted.notes) : null;
   const acceptedMeta = acceptedParsed?.meta || {};
   const acceptedRating = accepted ? getMechanicRating(accepted.mechanic_id) : { avg: null, count: 0 };
-  const acceptedProviderTypeLabel = acceptedMeta.providerTypeLabel || (String(acceptedMeta.providerType || '').toLowerCase() === 'shop' ? 'Mechanic Shop' : 'Individual Mechanic');
+  const acceptedProviderType = String(acceptedMeta.providerType || '').toLowerCase() === 'shop' ? 'shop' : 'mechanic';
+  const acceptedProviderTypeLabel = acceptedMeta.providerTypeLabel || (acceptedProviderType === 'shop' ? 'Mechanic Shop' : 'Individual Mechanic');
   const acceptedInfo = accepted ? `<div class='list-card' style='border-color:#2a9f60'>
     <div class='request-head'>
       <strong>Accepted Company Info</strong>
       <span class='pill accepted'>accepted</span>
     </div>
     <div class='muted-xs'><b>${acceptedMeta.businessName || accepted.mechanic_name}</b></div>
-    <div class='muted-xs'>Provider type: <b>${acceptedProviderTypeLabel}</b></div>
+    <div class='provider-chip ${acceptedProviderType}'>${acceptedProviderType === 'shop' ? '🏪' : '🧰'} ${acceptedProviderTypeLabel}</div>
     <div class='muted-xs'>Business address: ${acceptedMeta.businessAddress || 'Not provided'} ${acceptedMeta.businessZip || ''}</div>
     <div class='muted-xs'>Contact: ${acceptedMeta.businessPhone || 'No phone'} · ${acceptedMeta.businessEmail || 'No email'}</div>
     <div class='muted-xs'>Reviews: ${acceptedRating.avg ? `${acceptedRating.avg}/5` : 'No rating yet'} (${acceptedRating.count} review${acceptedRating.count === 1 ? '' : 's'})</div>

@@ -106,6 +106,8 @@ async function boot() {
   if (businessNameInput) {
     businessNameInput.placeholder = isShop ? 'Shop name' : 'Public display name';
   }
+  const individualOnlyFields = document.getElementById('individualOnlyFields');
+  if (individualOnlyFields) individualOnlyFields.style.display = isShop ? 'none' : 'block';
 
   async function loadProfile() {
     const profile = await window.smrAuth.getMechanicProfile();
@@ -119,6 +121,10 @@ async function boot() {
     document.getElementById('profileBusinessAddress').value = profile.businessAddress || '';
     document.getElementById('profileZip').value = profile.zip || '';
     document.getElementById('profileServices').value = profile.services || '';
+    const radiusEl = document.getElementById('profileServiceRadius');
+    const certEl = document.getElementById('profileCertifications');
+    if (radiusEl) radiusEl.value = profile.serviceRadiusMiles || '';
+    if (certEl) certEl.value = profile.certifications || '';
   }
 
   async function loadRepairs() {
@@ -143,8 +149,9 @@ async function boot() {
             <div class='small'><b>Repair needed:</b> ${ownerMeta.cleanDetails || 'No description provided.'}</div>
             <div class='row2' style='margin-top:8px'>
               <input placeholder='Repair estimate (USD)' id='amount-${rep.id}' />
+              <input placeholder='ETA (hours)' id='eta-${rep.id}' value='24' />
             </div>
-            <textarea id='notes-${rep.id}' placeholder='Notes for owner (optional)' style='margin-top:8px'></textarea>
+            <textarea id='notes-${rep.id}' placeholder='Notes for owner (minimum 15 characters)' style='margin-top:8px'></textarea>
             <button class='btn btn-orange' data-bid='${rep.id}' style='margin-top:8px'>Submit Repair Estimate</button>
           </div>
         `;
@@ -154,14 +161,36 @@ async function boot() {
       document.querySelectorAll('[data-bid]').forEach(btn => btn.addEventListener('click', async () => {
         const id = btn.dataset.bid;
         const amount = Number(document.getElementById(`amount-${id}`).value);
+        const etaHours = Number(document.getElementById(`eta-${id}`).value);
 
         if (!Number.isFinite(amount) || amount <= 0) {
           setStatus('Please enter a valid repair estimate.', 'err');
           return;
         }
+        if (!Number.isFinite(etaHours) || etaHours <= 0) {
+          setStatus('Please enter a valid ETA in hours.', 'err');
+          return;
+        }
 
         const savedProfile = await window.smrAuth.getMechanicProfile();
         const rawNotes = String(document.getElementById(`notes-${id}`).value || '').trim();
+        if (rawNotes.length < 15) {
+          setStatus('Please include at least 15 characters in notes so owners get a quality estimate.', 'err');
+          return;
+        }
+
+        const requiredProfile = [
+          savedProfile?.email,
+          savedProfile?.phone,
+          savedProfile?.services,
+          providerType === 'shop' ? (savedProfile?.businessName || savedProfile?.name) : savedProfile?.name
+        ];
+        const hasMinimumProfile = requiredProfile.every(v => String(v || '').trim());
+        if (!hasMinimumProfile) {
+          setStatus('Complete profile first (name, email, phone, services) before submitting estimates.', 'err');
+          setView('profile');
+          return;
+        }
         const providerType = getProviderType(session.role);
         const providerTypeLabel = getProviderTypeLabel(session.role);
         const displayName = providerType === 'shop'
@@ -175,7 +204,9 @@ async function boot() {
           businessAddress: savedProfile?.businessAddress || '',
           businessZip: savedProfile?.zip || '',
           businessEmail: savedProfile?.email || session.email || '',
-          businessPhone: savedProfile?.phone || ''
+          businessPhone: savedProfile?.phone || '',
+          serviceRadiusMiles: savedProfile?.serviceRadiusMiles || '',
+          certifications: savedProfile?.certifications || ''
         };
 
         const payload = {
@@ -183,7 +214,7 @@ async function boot() {
           mechanicId: session.id,
           mechanicName: meta.businessName,
           amount,
-          etaHours: 24,
+          etaHours,
           notes: `[META]${JSON.stringify(meta)}[/META] ${rawNotes}`
         };
 
@@ -229,7 +260,9 @@ async function boot() {
         city: document.getElementById('profileCity').value,
         state: document.getElementById('profileState').value,
         zip: document.getElementById('profileZip').value,
-        services: document.getElementById('profileServices').value
+        services: document.getElementById('profileServices').value,
+        serviceRadiusMiles: document.getElementById('profileServiceRadius')?.value || '',
+        certifications: document.getElementById('profileCertifications')?.value || ''
       });
       status.textContent = 'Profile updated successfully.';
       status.classList.add('ok');
@@ -293,7 +326,10 @@ async function boot() {
 
   async function loadHomeMetrics({ bids = [], repairs = [], won = [], active = [] } = {}) {
     const profile = await window.smrAuth.getMechanicProfile();
-    const profileFields = [profile?.businessName, profile?.businessAddress, profile?.phone, profile?.services, profile?.city, profile?.zip];
+    const providerType = getProviderType(session.role);
+    const profileFields = providerType === 'shop'
+      ? [profile?.businessName, profile?.businessAddress, profile?.phone, profile?.services, profile?.city, profile?.zip]
+      : [profile?.name, profile?.phone, profile?.services, profile?.city, profile?.zip, profile?.serviceRadiusMiles, profile?.certifications];
     const completed = profileFields.filter(v => String(v || '').trim()).length;
     const strength = Math.round((completed / profileFields.length) * 100);
 

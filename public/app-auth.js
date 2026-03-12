@@ -87,7 +87,9 @@ async function saveMechanicProfile(profile = {}) {
     city: String(profile.city || '').trim(),
     state: String(profile.state || '').trim(),
     zip: String(profile.zip || '').trim(),
-    services: String(profile.services || '').trim()
+    services: String(profile.services || '').trim(),
+    serviceRadiusMiles: String(profile.serviceRadiusMiles || '').trim(),
+    certifications: String(profile.certifications || '').trim()
   };
 
   localStorage.setItem(`smr_mechanic_profile_${session.id}`, JSON.stringify(clean));
@@ -113,7 +115,9 @@ async function getMechanicProfile() {
     city: local.city || session.city || '',
     state: local.state || session.state || 'NY',
     zip: local.zip || session.zip || '',
-    services: local.services || ''
+    services: local.services || '',
+    serviceRadiusMiles: local.serviceRadiusMiles || '',
+    certifications: local.certifications || ''
   };
 }
 

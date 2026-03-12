@@ -487,14 +487,57 @@ app.post('/api/bids', async (req, res) => {
     return res.status(400).json({ error: 'Missing required fields.' });
   }
 
+  const cleanNotes = String(notes || '').trim();
+  if (cleanNotes.replace(/\[META\][\s\S]*?\[\/META\]/g, '').trim().length < 15) {
+    return res.status(400).json({ error: 'Please include at least 15 characters in estimate notes.' });
+  }
+
+  let providerType = 'mechanic';
   try {
+    const m = cleanNotes.match(/\[META\]([\s\S]*?)\[\/META\]/);
+    if (m) {
+      const parsed = JSON.parse(m[1]);
+      const t = String(parsed?.providerType || '').toLowerCase();
+      if (t === 'shop' || t === 'mechanic') providerType = t;
+
+      const minimumProfile = [parsed?.businessName, parsed?.businessEmail, parsed?.businessPhone];
+      if (minimumProfile.some(v => !String(v || '').trim())) {
+        return res.status(400).json({ error: 'Please complete minimum profile info (name, email, phone) before submitting.' });
+      }
+    }
+  } catch {}
+
+  try {
+    const existing = await listBids({ requestId: Number(requestId), status: 'open' });
+    const countByType = { shop: 0, mechanic: 0 };
+    for (const b of existing) {
+      const raw = String(b?.notes || '');
+      const mm = raw.match(/\[META\]([\s\S]*?)\[\/META\]/);
+      let t = 'mechanic';
+      if (mm) {
+        try {
+          const meta = JSON.parse(mm[1]);
+          const parsedType = String(meta?.providerType || '').toLowerCase();
+          if (parsedType === 'shop' || parsedType === 'mechanic') t = parsedType;
+        } catch {}
+      }
+      countByType[t] += 1;
+    }
+
+    if (providerType === 'shop' && countByType.shop >= 3) {
+      return res.status(400).json({ error: 'This request already has 3 shop estimates.' });
+    }
+    if (providerType === 'mechanic' && countByType.mechanic >= 2) {
+      return res.status(400).json({ error: 'This request already has 2 individual mechanic estimates.' });
+    }
+
     const created = await createBid({
       request_id: Number(requestId),
       mechanic_id: String(mechanicId).trim(),
       mechanic_name: String(mechanicName).trim(),
       amount: Number(amount),
       eta_hours: Number(etaHours),
-      notes: String(notes || '').trim(),
+      notes: cleanNotes,
       status: 'open',
       created_at: new Date().toISOString()
     });
