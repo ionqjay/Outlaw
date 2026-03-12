@@ -227,29 +227,52 @@ function renderBids() {
     return;
   }
 
+  const openBids = bids.filter(b => String(b.status || '').toLowerCase() === 'open');
+  const cheapestOpen = openBids.length ? Math.min(...openBids.map(b => Number(b.amount || 0))) : null;
+  const fastestOpen = openBids.length ? Math.min(...openBids.map(b => Number(b.eta_hours || 999999))) : null;
+  const topRatedOpen = openBids.length
+    ? openBids.reduce((best, b) => {
+        const rb = getMechanicRating(b.mechanic_id).avg || 0;
+        const rbest = best ? (getMechanicRating(best.mechanic_id).avg || 0) : -1;
+        return rb > rbest ? b : best;
+      }, null)
+    : null;
+
   const cards = bids.map(b => {
     const status = String(b.status || 'open').toLowerCase();
     const parsed = parseBidNotes(b.notes);
     const meta = parsed.meta || {};
     const r = getMechanicRating(b.mechanic_id);
-    const rating = r.avg ? `${r.avg}/5` : 'No rating yet';
+    const rating = r.avg ? `${r.avg}/5` : 'New';
     const reviewCount = `${r.count} review${r.count === 1 ? '' : 's'}`;
     const providerType = String(meta.providerType || '').toLowerCase() === 'shop' ? 'shop' : 'mechanic';
     const providerTypeLabel = meta.providerTypeLabel || (providerType === 'shop' ? 'Mechanic Shop' : 'Individual Mechanic');
-    return `<div class='list-card'>
-      <div class='bid-head'>
-        <strong>${meta.businessName || b.mechanic_name}</strong>
+    const tags = [];
+    if (status === 'open' && cheapestOpen !== null && Number(b.amount || 0) === cheapestOpen) tags.push("<span class='tag best'>💸 Best Price</span>");
+    if (status === 'open' && fastestOpen !== null && Number(b.eta_hours || 999999) === fastestOpen) tags.push("<span class='tag fast'>⚡ Fastest</span>");
+    if (status === 'open' && topRatedOpen && Number(topRatedOpen.id) === Number(b.id) && (getMechanicRating(b.mechanic_id).avg || 0) > 0) tags.push("<span class='tag rated'>⭐ Top Rated</span>");
+
+    return `<div class='estimate-card ${providerType}'>
+      <div class='estimate-top'>
+        <div>
+          <div class='estimate-name'>${meta.businessName || b.mechanic_name}</div>
+          <div class='provider-chip ${providerType}'>${providerType === 'shop' ? '🏪' : '🧰'} ${providerTypeLabel}</div>
+        </div>
         <span class='pill ${status}'>${labelForStatus(status)}</span>
       </div>
-      <div class='provider-chip ${providerType}'>${providerType === 'shop' ? '🏪' : '🧰'} ${providerTypeLabel}</div>
-      <div class='quote-grid'>
-        <div class='muted-xs'>Repair estimate: <b>$${b.amount}</b></div>
+      <div class='estimate-kpis'>
+        <div class='kpi-pill'><div class='lbl'>Repair Estimate</div><div class='val'>$${b.amount}</div></div>
+        <div class='kpi-pill'><div class='lbl'>ETA</div><div class='val small'>${Number(b.eta_hours || 24)}h</div></div>
       </div>
-      <div class='muted-xs'>Business address: ${meta.businessAddress || 'Not provided'} ${meta.businessZip || ''}</div>
-      <div class='muted-xs'>Contact: ${meta.businessPhone || 'No phone'} · ${meta.businessEmail || 'No email'}</div>
-      <div class='muted-xs'>Reviews: ${rating} (${reviewCount})</div>
+      <div class='badge-row'>${tags.join('')}</div>
+      <div class='muted-xs'>📍 ${meta.businessAddress || 'Address not provided'} ${meta.businessZip || ''}</div>
+      <div class='contact-row'>
+        <span class='contact-pill'>📞 ${meta.businessPhone || 'No phone'}</span>
+        <span class='contact-pill'>✉️ ${meta.businessEmail || 'No email'}</span>
+        <span class='contact-pill'>⭐ ${rating} (${reviewCount})</span>
+      </div>
       <div class='muted-xs'>Notes: ${parsed.notes ? parsed.notes : 'No additional notes provided.'}</div>
-      ${status === 'open' ? `<button class='btn btn-green' data-accept='${b.id}' style='margin-top:8px'>Accept Repair Estimate</button>` : ''}
+      ${status === 'open' ? `<button class='btn btn-green' data-accept='${b.id}' style='margin-top:10px'>Accept Repair Estimate</button>` : ''}
     </div>`;
   }).join('');
 
