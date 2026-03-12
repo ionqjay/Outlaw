@@ -17,7 +17,10 @@ async function fetchJson(path, options = {}) {
 
   for (const base of API_BASES) {
     try {
-      const res = await fetch(api(base, path), options);
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), 8000);
+      const res = await fetch(api(base, path), { ...options, signal: controller.signal });
+      clearTimeout(timer);
       const text = await res.text();
       let data = {};
       try { data = text ? JSON.parse(text) : {}; } catch { data = { error: text || 'Unexpected response' }; }
@@ -160,22 +163,25 @@ async function boot() {
 
       document.querySelectorAll('[data-bid]').forEach(btn => btn.addEventListener('click', async () => {
         const id = btn.dataset.bid;
-        const amount = Number(document.getElementById(`amount-${id}`).value);
-        const etaHours = Number(document.getElementById(`eta-${id}`).value);
+        const fail = (msg, goProfile = false) => {
+          setStatus(msg, 'err');
+          alert(msg);
+          if (goProfile) setView('profile');
+        };
+
+        const amount = Number(document.getElementById(`amount-${id}`)?.value);
+        const etaRaw = Number(document.getElementById(`eta-${id}`)?.value);
+        const etaHours = Number.isFinite(etaRaw) && etaRaw > 0 ? etaRaw : 24;
 
         if (!Number.isFinite(amount) || amount <= 0) {
-          setStatus('Please enter a valid repair estimate.', 'err');
-          return;
-        }
-        if (!Number.isFinite(etaHours) || etaHours <= 0) {
-          setStatus('Please enter a valid ETA in hours.', 'err');
+          fail('Please enter a valid repair estimate.');
           return;
         }
 
         const savedProfile = await window.smrAuth.getMechanicProfile();
-        const rawNotes = String(document.getElementById(`notes-${id}`).value || '').trim();
+        const rawNotes = String(document.getElementById(`notes-${id}`)?.value || '').trim();
         if (rawNotes.length < 15) {
-          setStatus('Please include at least 15 characters in notes so owners get a quality estimate.', 'err');
+          fail('Please include at least 15 characters in notes so owners get a quality estimate.');
           return;
         }
 
@@ -187,8 +193,7 @@ async function boot() {
         ];
         const hasMinimumProfile = requiredProfile.every(v => String(v || '').trim());
         if (!hasMinimumProfile) {
-          setStatus('Complete profile first (name, email, phone, services) before submitting estimates.', 'err');
-          setView('profile');
+          fail('Complete profile first (name, email, phone, services) before submitting estimates.', true);
           return;
         }
         const providerType = getProviderType(session.role);
