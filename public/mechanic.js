@@ -233,7 +233,9 @@ async function boot() {
           await loadRepairs();
           await loadDashboard();
         } catch (err) {
-          setStatus(err.message || 'Failed to submit bid.', 'err');
+          const msg = err.message || 'Failed to submit bid.';
+          setStatus(msg, 'err');
+          alert(msg);
         } finally {
           btn.disabled = false;
           btn.textContent = 'Submit Repair Estimate';

@@ -513,7 +513,7 @@ app.post('/api/bids', async (req, res) => {
     for (const b of existing) {
       const raw = String(b?.notes || '');
       const mm = raw.match(/\[META\]([\s\S]*?)\[\/META\]/);
-      let t = 'mechanic';
+      let t = null;
       if (mm) {
         try {
           const meta = JSON.parse(mm[1]);
@@ -521,7 +521,7 @@ app.post('/api/bids', async (req, res) => {
           if (parsedType === 'shop' || parsedType === 'mechanic') t = parsedType;
         } catch {}
       }
-      countByType[t] += 1;
+      if (t) countByType[t] += 1;
     }
 
     if (providerType === 'shop' && countByType.shop >= 3) {
