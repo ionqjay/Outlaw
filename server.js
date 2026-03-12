@@ -723,7 +723,13 @@ app.get('/admin', async (req, res) => {
   if (req.query.token !== ADMIN_TOKEN) {
     return res.status(401).send('<h2>Unauthorized</h2><p>Use /admin?token=YOUR_TOKEN</p>');
   }
-  const data = await listSignups();
+  let data = [];
+  let loadError = '';
+  try {
+    data = await listSignups();
+  } catch (e) {
+    loadError = String(e?.message || e);
+  }
   const c = counts(data);
 
   const byBorough = Object.entries(data.reduce((a, r) => {
@@ -741,6 +747,7 @@ app.get('/admin', async (req, res) => {
   .panel{background:#131316;padding:12px;border-radius:12px;margin:12px 0}
   </style></head><body><h1>ShopMyRepair Signups</h1><p><a style='color:#ff9c7a' href='/admin/ops?token=${encodeURIComponent(String(req.query.token||''))}'>Open Ops Dashboard →</a></p><div class='k'>
   <div class='b'>Total <b>${c.total}</b></div><div class='b'>Owners <b>${c.owners}</b></div><div class='b'>Mechanics <b>${c.mechanics}</b></div></div>
+  ${loadError ? `<div class='panel' style='border:1px solid #7b3b3b;color:#ffbcbc'><h3 style='margin-top:0'>Data source error</h3><div>${esc(loadError)}</div><div style='margin-top:6px'>Check SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY on your deploy, or unset both to use local JSON fallback.</div></div>` : ''}
   <div class='panel'><h3 style='margin-top:0'>Demand by Borough</h3>${boroughBars || 'No data yet'}</div>
   <table><thead><tr><th>ID</th><th>Name</th><th>Email</th><th>Phone</th><th>ZIP</th><th>Service Address</th><th>Borough</th><th>Type</th><th>Experience</th><th>HasShop</th><th>Created</th></tr></thead><tbody>${rows}</tbody></table></body></html>`);
 });
