@@ -6,7 +6,10 @@ function setLocalSession({ email, role, name }) {
 }
 function getUsers() { return JSON.parse(localStorage.getItem('smr_users') || '[]'); }
 function saveUsers(users) { localStorage.setItem('smr_users', JSON.stringify(users)); }
-function go(role) { window.location.href = role === 'mechanic' ? '/mechanic.html' : '/owner-app.html'; }
+function go(role) {
+  const normalized = String(role || '').toLowerCase();
+  window.location.href = (normalized === 'mechanic' || normalized === 'shop') ? '/mechanic.html' : '/owner-app.html';
+}
 
 const statusEl = document.getElementById('authStatus');
 const signInBtn = document.getElementById('signInBtn');

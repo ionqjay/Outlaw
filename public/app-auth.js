@@ -18,7 +18,8 @@ async function getActiveSession() {
 
 async function requireRole(requiredRole) {
   const session = await getActiveSession();
-  if (!session?.id || session.role !== requiredRole) {
+  const allowedRoles = Array.isArray(requiredRole) ? requiredRole : [requiredRole];
+  if (!session?.id || !allowedRoles.includes(session.role)) {
     window.location.href = '/login.html';
     return null;
   }

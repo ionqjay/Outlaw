@@ -72,11 +72,40 @@ function parseOwnerMeta(issueDetailsRaw) {
   }
 }
 
+function getProviderType(role) {
+  return String(role || '').toLowerCase() === 'shop' ? 'shop' : 'mechanic';
+}
+
+function getProviderTypeLabel(role) {
+  return getProviderType(role) === 'shop' ? 'Mechanic Shop' : 'Individual Mechanic';
+}
+
 async function boot() {
-  const session = await window.smrAuth.requireRole('mechanic');
+  const session = await window.smrAuth.requireRole(['mechanic', 'shop']);
   if (!session) return;
 
   document.getElementById('logoutBtn').addEventListener('click', () => window.smrAuth.logoutToLogin());
+
+  const providerType = getProviderType(session.role);
+  const providerTypeLabel = getProviderTypeLabel(session.role);
+  const isShop = providerType === 'shop';
+  const dashboardTitle = document.getElementById('providerDashboardTitle');
+  const dashboardSubtitle = document.getElementById('providerDashboardSubtitle');
+  const profileTitle = document.getElementById('providerProfileTitle');
+  const profileSubtitle = document.getElementById('providerProfileSubtitle');
+  if (dashboardTitle) dashboardTitle.textContent = `${providerTypeLabel} Dashboard`;
+  if (dashboardSubtitle) dashboardSubtitle.textContent = isShop
+    ? 'Find qualified repair requests, send competitive shop estimates, and win more local jobs.'
+    : 'Find qualified repair requests, send competitive mechanic estimates, and win more local jobs.';
+  if (profileTitle) profileTitle.textContent = `${providerTypeLabel} Profile`;
+  if (profileSubtitle) profileSubtitle.textContent = isShop
+    ? 'Set your shop profile so owners clearly see business identity and trust your estimates.'
+    : 'Set your mechanic profile so owners clearly see this is an individual mechanic estimate.';
+
+  const businessNameInput = document.getElementById('profileBusinessName');
+  if (businessNameInput) {
+    businessNameInput.placeholder = isShop ? 'Shop name' : 'Public display name';
+  }
 
   async function loadProfile() {
     const profile = await window.smrAuth.getMechanicProfile();
@@ -133,8 +162,16 @@ async function boot() {
 
         const savedProfile = await window.smrAuth.getMechanicProfile();
         const rawNotes = String(document.getElementById(`notes-${id}`).value || '').trim();
+        const providerType = getProviderType(session.role);
+        const providerTypeLabel = getProviderTypeLabel(session.role);
+        const displayName = providerType === 'shop'
+          ? (savedProfile?.businessName || savedProfile?.name || session.name || session.email)
+          : (savedProfile?.name || savedProfile?.businessName || session.name || session.email);
+
         const meta = {
-          businessName: savedProfile?.businessName || savedProfile?.name || session.name || session.email,
+          providerType,
+          providerTypeLabel,
+          businessName: displayName,
           businessAddress: savedProfile?.businessAddress || '',
           businessZip: savedProfile?.zip || '',
           businessEmail: savedProfile?.email || session.email || '',
@@ -161,7 +198,7 @@ async function boot() {
             body: JSON.stringify(payload)
           });
 
-          setStatus('Bid submitted successfully.', 'ok');
+          setStatus(`Repair estimate submitted as ${getProviderTypeLabel(session.role)}.`, 'ok');
           await loadRepairs();
           await loadDashboard();
         } catch (err) {
