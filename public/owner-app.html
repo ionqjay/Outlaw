@@ -123,6 +123,9 @@
 
     .pill.open { border-color: #3f6ee8; color: #bcd0ff; }
     .pill.accepted { border-color: #2a9f60; color: #a8ebc5; }
+    .pill.in_progress { border-color: #e8a93f; color: #ffe3b0; }
+    .pill.completed { border-color: #39b8a2; color: #b9fff3; }
+    .pill.cancelled, .pill.declined { border-color: #9a4a4a; color: #ffc2c2; }
     .provider-chip { display:inline-block; border-radius:999px; padding:3px 9px; font-size:11px; margin-top:6px; border:1px solid #3a3b44; }
     .provider-chip.shop { border-color:#6f8cff; color:#c9d7ff; background:#12182a; }
     .provider-chip.mechanic { border-color:#62b37d; color:#c5f0d2; background:#122116; }
@@ -153,6 +156,12 @@
       margin-top: 8px;
     }
 
+    .skeleton { position: relative; overflow: hidden; background:#131722; border:1px solid #2b3140; border-radius:12px; min-height:80px; margin-top:8px; }
+    .skeleton::after { content:''; position:absolute; inset:0; transform:translateX(-100%); background:linear-gradient(90deg,transparent,rgba(255,255,255,.06),transparent); animation: shimmer 1.2s infinite; }
+    @keyframes shimmer { 100% { transform: translateX(100%); } }
+
+    .mobile-cta { display:none; }
+
     .feedback-modal { position: fixed; inset: 0; display: grid; place-items: center; z-index: 120; }
     .feedback-modal.hidden { display: none; }
     .feedback-overlay { position: absolute; inset: 0; background: rgba(0,0,0,0.65); }
@@ -171,6 +180,9 @@
 
     @media (max-width: 860px) {
       .grid2, .quote-grid, .quick-metrics { grid-template-columns: 1fr; }
+      .dash { padding-bottom: 76px; }
+      .mobile-cta { display:flex; position:fixed; left:10px; right:10px; bottom:10px; gap:8px; z-index:90; background:#10131c; border:1px solid #2f3748; border-radius:14px; padding:8px; }
+      .mobile-cta .btn { flex:1; padding:10px 12px; }
     }
   </style>
 </head>
@@ -193,8 +205,8 @@
 
     <div class="tabs">
       <button class="tab-btn active" data-view="home">Home</button>
-      <button class="tab-btn" data-view="dashboard">Dashboard</button>
-      <button class="tab-btn" data-view="quote">Get a Quote</button>
+      <button class="tab-btn" data-view="dashboard">My Requests & Estimates</button>
+      <button class="tab-btn" data-view="quote">Post Repair Request</button>
       <button class="tab-btn" data-view="profile">Profile</button>
     </div>
 
@@ -233,16 +245,16 @@
     </section>
 
     <section id="view-dashboard" class="panel" style="display:none">
-      <h2>Your Open Requests</h2>
-      <p class="subtle">Lifecycle: submitted → bids received → accepted → in progress → completed</p>
+      <h2>My Requests & Estimates</h2>
+      <p class="subtle">Lifecycle: submitted → bids received → accepted → in progress → completed · Estimate status colors are now standardized for clarity.</p>
       <div id="ownerRequests" class="subtle">Loading...</div>
       <h3 style="margin-top:14px">Current Repair Estimates</h3>
       <div id="ownerBids" class="subtle">Loading...</div>
     </section>
 
     <section id="view-quote" class="panel" style="display:none">
-      <h2>Get a Quote</h2>
-      <p class="subtle">Simple details, fast matching.</p>
+      <h2>Post Repair Request</h2>
+      <p class="subtle">Simple details, fast matching with quality-focused estimates.</p>
 
       <div class="grid2" style="margin-top:10px">
         <input id="title" placeholder="Short title (e.g. Brake replacement)" />
@@ -325,6 +337,11 @@
         <button class="btn btn-orange" type="button" id="feedbackSubmitBtn">Submit Feedback</button>
       </div>
     </div>
+  </div>
+
+  <div class="mobile-cta">
+    <button class="btn btn-orange" data-view="quote">Post Request</button>
+    <button class="btn btn-dark" data-view="dashboard">My Estimates</button>
   </div>
 
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>

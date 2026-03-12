@@ -162,7 +162,7 @@ function renderRequests() {
   const reqWrap = document.getElementById('ownerRequests');
 
   if (!repairsCache.length) {
-    reqWrap.innerHTML = '<p>No open requests yet.</p>';
+    reqWrap.innerHTML = "<div class='list-card'><strong>No requests yet.</strong><div class='muted-xs'>Post your first repair request to start receiving estimates.</div><button class='btn btn-orange' data-view='quote' style='margin-top:8px'>Post Repair Request</button></div>";
     return;
   }
 
@@ -204,6 +204,8 @@ function renderRequests() {
       alert(err.message || 'Could not cancel request.');
     }
   }));
+
+  document.querySelectorAll('#ownerRequests [data-view]').forEach(btn => btn.addEventListener('click', () => setView(btn.dataset.view)));
 }
 
 function renderBids() {
@@ -223,7 +225,8 @@ function renderBids() {
   const header = `<div class='muted-xs' style='margin-bottom:8px'>Showing repair estimates for <b>Request #${selected.id}</b> — ${selected.title}</div>`;
 
   if (!bids.length) {
-    bidWrap.innerHTML = `${header}<p>No bids yet for this request.</p>`;
+    bidWrap.innerHTML = `${header}<div class='list-card'><strong>No estimates yet.</strong><div class='muted-xs'>We are matching your request now. You can improve response quality by adding a little more detail.</div><button class='btn btn-dark' data-view='quote' style='margin-top:8px'>Update Request Details</button></div>`;
+    document.querySelectorAll('#ownerBids [data-view]').forEach(btn => btn.addEventListener('click', () => setView(btn.dataset.view)));
     return;
   }
 
@@ -450,8 +453,8 @@ async function boot() {
   async function refreshDashboard() {
     const reqWrap = document.getElementById('ownerRequests');
     const bidWrap = document.getElementById('ownerBids');
-    reqWrap.textContent = 'Loading...';
-    bidWrap.textContent = 'Loading...';
+    reqWrap.innerHTML = "<div class='skeleton'></div><div class='skeleton'></div>";
+    bidWrap.innerHTML = "<div class='skeleton'></div><div class='skeleton'></div>";
 
     try {
       await loadDashboardData(session);

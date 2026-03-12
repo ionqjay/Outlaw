@@ -132,7 +132,7 @@ async function boot() {
 
   async function loadRepairs() {
     const wrap = document.getElementById('repairFeed');
-    wrap.textContent = 'Loading...';
+    wrap.innerHTML = "<div class='skeleton'></div><div class='skeleton'></div>";
 
     try {
       const data = await fetchJson('/api/repairs?status=open');
@@ -142,24 +142,24 @@ async function boot() {
         ? repairs.map(rep => {
             const ownerMeta = parseOwnerMeta(rep.issue_details);
             return `
-          <div class='list-card'>
-            <div class='head'>
+          <div class='estimate-card'>
+            <div class='estimate-top'>
               <strong>#${rep.id} · ${rep.title}</strong>
               <span class='pill open'>open</span>
             </div>
             <div class='small'>${rep.issue_category || ''} · ${rep.city || ''}, ${rep.state || ''} · ${rep.urgency || 'Standard'}</div>
             <div class='small'>${rep.vehicle_year || ''} ${rep.vehicle_make || ''} ${rep.vehicle_model || ''}</div>
             <div class='small'><b>Repair needed:</b> ${ownerMeta.cleanDetails || 'No description provided.'}</div>
-            <div class='row2' style='margin-top:8px'>
-              <input placeholder='Repair estimate (USD)' id='amount-${rep.id}' />
-              <input placeholder='ETA (hours)' id='eta-${rep.id}' value='24' />
+            <div class='estimate-kpis'>
+              <div class='kpi-pill'><div class='lbl'>Your estimate (USD)</div><input placeholder='e.g. 325' id='amount-${rep.id}' /></div>
+              <div class='kpi-pill'><div class='lbl'>ETA (hours)</div><input placeholder='24' id='eta-${rep.id}' value='24' /></div>
             </div>
             <textarea id='notes-${rep.id}' placeholder='Notes for owner (minimum 15 characters)' style='margin-top:8px'></textarea>
-            <button class='btn btn-orange' data-bid='${rep.id}' style='margin-top:8px'>Submit Repair Estimate</button>
+            <button class='btn btn-orange' data-bid='${rep.id}' style='margin-top:10px'>Submit Estimate</button>
           </div>
         `;
           }).join('')
-        : '<p>No open repairs yet.</p>';
+        : "<div class='list-card'><strong>No open repairs right now.</strong><div class='small'>Check back shortly — new owner demand comes in throughout the day.</div></div>";
 
       document.querySelectorAll('[data-bid]').forEach(btn => btn.addEventListener('click', async () => {
         const id = btn.dataset.bid;
@@ -285,6 +285,10 @@ async function boot() {
     const wonWrap = document.getElementById('mechBidsWon');
     const activeWrap = document.getElementById('mechBidsActive');
     const otherWrap = document.getElementById('mechBidsOther');
+    const skeleton = "<div class='skeleton'></div><div class='skeleton'></div>";
+    wonWrap.innerHTML = skeleton;
+    activeWrap.innerHTML = skeleton;
+    otherWrap.innerHTML = skeleton;
 
     try {
       const [bidsData, repairsData] = await Promise.all([
@@ -302,16 +306,18 @@ async function boot() {
         const repStatus = String(rep?.status || 'open').toLowerCase();
         const ownerMeta = parseOwnerMeta(rep?.issue_details || '');
 
-        return `<div class='list-card'>
-          <div class='head'>
+        return `<div class='estimate-card'>
+          <div class='estimate-top'>
             <strong>${rep?.title ? rep.title : `Request #${b.request_id}`}</strong>
             <span class='pill ${status}'>${status}</span>
           </div>
-          <div class='small'>Repair estimate: <b>$${b.amount}</b></div>
-          <div class='small'>Repair status: <b>${repStatus}</b></div>
+          <div class='estimate-kpis'>
+            <div class='kpi-pill'><div class='lbl'>Your estimate</div><div class='val'>$${b.amount}</div></div>
+            <div class='kpi-pill'><div class='lbl'>Request status</div><div class='val' style='font-size:16px;text-transform:capitalize'>${repStatus.replace('_',' ')}</div></div>
+          </div>
           <div class='small'>${rep?.city || ''}${rep?.city ? ', ' : ''}${rep?.state || ''} · ${rep?.urgency || 'Standard'}</div>
           <div class='small'><b>Repair needed:</b> ${ownerMeta.cleanDetails || 'Request details unavailable.'}</div>
-          ${status === 'accepted' ? `<div class='small'><b>Owner contact:</b> ${ownerMeta.ownerPhone || 'No phone'} · ${ownerMeta.ownerEmail || 'No email'}</div>` : ''}
+          ${status === 'accepted' ? `<span class='contact-pill'>📞 ${ownerMeta.ownerPhone || 'No phone'}</span> <span class='contact-pill'>✉️ ${ownerMeta.ownerEmail || 'No email'}</span>` : ''}
         </div>`;
       };
 
@@ -319,9 +325,10 @@ async function boot() {
       const active = bids.filter(b => String(b.status || '').toLowerCase() === 'open');
       const other = bids.filter(b => !['accepted', 'open'].includes(String(b.status || '').toLowerCase()));
 
-      wonWrap.innerHTML = won.length ? won.map(renderBidCard).join('') : '<p>No won repair estimates yet.</p>';
-      activeWrap.innerHTML = active.length ? active.map(renderBidCard).join('') : '<p>No active repair estimates right now.</p>';
+      wonWrap.innerHTML = won.length ? won.map(renderBidCard).join('') : "<div class='list-card'><strong>No won jobs yet.</strong><div class='small'>Win your first one by responding fast and adding clear notes.</div><button class='btn btn-orange' data-view='repairs' style='margin-top:8px'>Find Open Repairs</button></div>";
+      activeWrap.innerHTML = active.length ? active.map(renderBidCard).join('') : "<div class='list-card'><strong>No active estimates.</strong><div class='small'>Browse open requests and submit competitive estimates.</div><button class='btn btn-orange' data-view='repairs' style='margin-top:8px'>Find Open Repairs</button></div>";
       otherWrap.innerHTML = other.length ? other.map(renderBidCard).join('') : '<p>No other repair estimates yet.</p>';
+      document.querySelectorAll('#view-dashboard [data-view]').forEach(btn => btn.addEventListener('click', () => setView(btn.dataset.view)));
 
       await loadHomeMetrics({ bids, repairs, won, active });
     } catch (err) {
