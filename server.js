@@ -703,20 +703,31 @@ app.get('/admin/ops', async (req, res) => {
   if (req.query.token !== ADMIN_TOKEN) {
     return res.status(401).send('<h2>Unauthorized</h2><p>Use /admin/ops?token=YOUR_TOKEN</p>');
   }
-  res.send(`<!doctype html><html><head><meta charset='utf-8'><title>Ops Dashboard</title><style>
-  body{font-family:Arial;background:#0c0c0e;color:#f0ede8;padding:20px} .k{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}
-  .card{background:#131316;border:1px solid #2d2f3a;border-radius:12px;padding:12px}
-  .lbl{font-size:12px;color:#b8bbca} .val{font-size:28px;font-weight:700;margin-top:4px}
-  a{color:#ff9c7a}
-  </style></head><body><h1>ShopMyRepair Ops</h1><p><a href='/admin?token=${encodeURIComponent(String(req.query.token||''))}'>← Back to Signups Admin</a></p>
+  res.send(`<!doctype html><html><head><meta charset='utf-8'><title>Ops Dashboard</title><meta name='viewport' content='width=device-width,initial-scale=1'><style>
+  :root{--bg:#0b0d12;--card:#131722;--stroke:#293043;--text:#f2f4fb;--muted:#aeb7cc}
+  *{box-sizing:border-box} body{font-family:Inter,Arial,sans-serif;background:radial-gradient(900px 300px at 0 -120px,rgba(95,143,255,.14),transparent 60%),var(--bg);color:var(--text);margin:0;padding:22px}
+  .wrap{max-width:1200px;margin:0 auto} .top{display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;margin-bottom:12px}
+  .k{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px} .card{background:var(--card);border:1px solid var(--stroke);border-radius:14px;padding:12px}
+  .lbl{font-size:12px;color:var(--muted)} .val{font-size:30px;font-weight:800;margin-top:4px}
+  .hint{color:var(--muted);font-size:12px;margin-top:6px} a{color:#9fc1ff;text-decoration:none}
+  @media(max-width:980px){.k{grid-template-columns:repeat(2,minmax(0,1fr))}}
+  </style></head><body><div class='wrap'><div class='top'><div><h1>ShopMyRepair Ops Dashboard</h1><div class='hint'>Live marketplace health and delivery metrics</div></div><div><a href='/admin?token=${encodeURIComponent(String(req.query.token||''))}'>← Back to Signups Admin</a></div></div>
   <div id='k' class='k'><div class='card'>Loading...</div></div>
   <script>
     fetch('/api/admin/ops?token=${encodeURIComponent(String(req.query.token||''))}').then(r=>r.json()).then(d=>{
       const k=d.kpis||{};
-      const entries=[['Total Repairs',k.totalRepairs],['Open Repairs',k.openRepairs],['Accepted Repairs',k.acceptedRepairs],['Total Estimates',k.totalBids],['Open Estimates',k.openBids],['Avg Estimates / Open Repair',k.avgBidsPerOpen],['Dispatch Invites',k.totalInvites]];
-      document.getElementById('k').innerHTML=entries.map(([l,v])=>'<div class="card"><div class="lbl">'+l+'</div><div class="val">'+(v??0)+'</div></div>').join('');
+      const entries=[
+        ['Total Repairs',k.totalRepairs,'All requests created'],
+        ['Open Repairs',k.openRepairs,'Need more estimate coverage'],
+        ['Accepted Repairs',k.acceptedRepairs,'Converted jobs'],
+        ['Total Estimates',k.totalBids,'All estimates submitted'],
+        ['Open Estimates',k.openBids,'Awaiting owner action'],
+        ['Avg Estimates / Open Repair',k.avgBidsPerOpen,'Supply depth indicator'],
+        ['Dispatch Invites',k.totalInvites,'Providers invited to jobs']
+      ];
+      document.getElementById('k').innerHTML=entries.map(([l,v,h])=>'<div class="card"><div class="lbl">'+l+'</div><div class="val">'+(v??0)+'</div><div class="hint">'+h+'</div></div>').join('');
     }).catch(()=>{ document.getElementById('k').innerHTML='<div class="card">Could not load ops data.</div>'; });
-  </script></body></html>`);
+  </script></div></body></html>`);
 });
 
 app.get('/admin', async (req, res) => {
@@ -736,20 +747,58 @@ app.get('/admin', async (req, res) => {
     const k = r.Borough || r.borough || 'Unknown'; a[k] = (a[k] || 0) + 1; return a;
   }, {})).sort((a, b) => b[1] - a[1]);
 
-  const boroughBars = byBorough.map(([k, v]) => `<div style='margin:6px 0'>${esc(k)}: <b>${v}</b> <span style='display:inline-block;height:8px;background:#e8441a;width:${Math.min(300, v * 12)}px;border-radius:999px'></span></div>`).join('');
+  const byZip = Object.entries(data.reduce((a, r) => {
+    const k = String(r.ZIP || r.zip || 'Unknown').trim() || 'Unknown'; a[k] = (a[k] || 0) + 1; return a;
+  }, {})).sort((a, b) => b[1] - a[1]);
 
-  const rows = data.map(r => `<tr><td>${r.Id || r.id || ''}</td><td>${esc(r.Name || r.name || '')}</td><td>${esc(r.Email || r.email || '')}</td><td>${esc(r.Phone || r.phone || '')}</td><td>${esc(r.ZIP || r.zip || '')}</td><td>${esc(r.RepairAddress || r.repair_address || '')}</td><td>${esc(r.Borough || r.borough || '')}</td><td>${r.Type || r.type || ''}</td><td>${esc(r.Experience || r.experience || '')}</td><td>${esc(r.HasShop || r.has_shop || '')}</td><td>${r.CreatedDate || r.created_at || ''}</td></tr>`).join('');
+  const since = Date.now() - (7 * 24 * 60 * 60 * 1000);
+  const last7 = data.filter(r => {
+    const dt = new Date(r.CreatedDate || r.created_at || 0).getTime();
+    return Number.isFinite(dt) && dt >= since;
+  }).length;
 
-  res.send(`<!doctype html><html><head><meta charset='utf-8'><title>Admin</title><style>
-  body{font-family:Arial;background:#0c0c0e;color:#f0ede8;padding:20px}
-  table{width:100%;border-collapse:collapse}th,td{border:1px solid #333;padding:8px;font-size:12px}
-  th{background:#131316}.k{display:flex;gap:12px;margin-bottom:10px}.b{background:#131316;padding:8px 12px;border-radius:10px}
-  .panel{background:#131316;padding:12px;border-radius:12px;margin:12px 0}
-  </style></head><body><h1>ShopMyRepair Signups</h1><p><a style='color:#ff9c7a' href='/admin/ops?token=${encodeURIComponent(String(req.query.token||''))}'>Open Ops Dashboard →</a></p><div class='k'>
-  <div class='b'>Total <b>${c.total}</b></div><div class='b'>Owners <b>${c.owners}</b></div><div class='b'>Mechanics <b>${c.mechanics}</b></div></div>
-  ${loadError ? `<div class='panel' style='border:1px solid #7b3b3b;color:#ffbcbc'><h3 style='margin-top:0'>Data source error</h3><div>${esc(loadError)}</div><div style='margin-top:6px'>Check SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY on your deploy, or unset both to use local JSON fallback.</div></div>` : ''}
-  <div class='panel'><h3 style='margin-top:0'>Demand by Borough</h3>${boroughBars || 'No data yet'}</div>
-  <table><thead><tr><th>ID</th><th>Name</th><th>Email</th><th>Phone</th><th>ZIP</th><th>Service Address</th><th>Borough</th><th>Type</th><th>Experience</th><th>HasShop</th><th>Created</th></tr></thead><tbody>${rows}</tbody></table></body></html>`);
+  const shopCount = data.filter(r => {
+    const hasShop = String(r.HasShop || r.has_shop || '').toLowerCase();
+    return hasShop === 'yes' || hasShop === 'true' || hasShop === 'shop';
+  }).length;
+  const indyMech = Math.max(0, c.mechanics - shopCount);
+  const ownerPct = c.total ? Math.round((c.owners / c.total) * 100) : 0;
+  const mechPct = c.total ? Math.round((c.mechanics / c.total) * 100) : 0;
+
+  const boroughBars = byBorough.slice(0, 8).map(([k, v]) => `<div style='margin:8px 0'>${esc(k)} <b style='float:right'>${v}</b><div style='margin-top:5px;height:8px;background:#1a1d27;border-radius:999px;overflow:hidden'><span style='display:block;height:100%;background:linear-gradient(90deg,#ff7b54,#e8441a);width:${Math.min(100, c.total ? (v / c.total) * 100 : 0)}%'></span></div></div>`).join('');
+
+  const recentRows = data.slice(0, 50).map(r => `<tr><td>${r.Id || r.id || ''}</td><td>${esc(r.Name || r.name || '')}</td><td>${esc(r.Type || r.type || '')}</td><td>${esc(r.Borough || r.borough || '')}</td><td>${esc(r.ZIP || r.zip || '')}</td><td>${esc(r.Email || r.email || '')}</td><td>${r.CreatedDate || r.created_at || ''}</td></tr>`).join('');
+
+  res.send(`<!doctype html><html><head><meta charset='utf-8'><title>ShopMyRepair Admin</title><meta name='viewport' content='width=device-width,initial-scale=1'><style>
+  :root{--bg:#0b0d12;--card:#131722;--stroke:#293043;--text:#f2f4fb;--muted:#aeb7cc;--orange:#e8441a}
+  *{box-sizing:border-box} body{font-family:Inter,Arial,sans-serif;background:radial-gradient(900px 300px at 0 -120px,rgba(232,68,26,.16),transparent 60%),var(--bg);color:var(--text);margin:0;padding:22px}
+  h1,h2,h3{margin:0} .wrap{max-width:1200px;margin:0 auto} .top{display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:12px}
+  a{color:#ffb194;text-decoration:none} .grid{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:10px} .card{background:var(--card);border:1px solid var(--stroke);border-radius:14px;padding:12px}
+  .k{font-size:12px;color:var(--muted)} .v{font-size:28px;font-weight:800;margin-top:4px} .span2{grid-column:span 2} .span3{grid-column:span 3} .span6{grid-column:span 6}
+  .pill{display:inline-block;border:1px solid #38415a;background:#151c2d;color:#dbe5ff;border-radius:999px;padding:4px 9px;font-size:11px}
+  table{width:100%;border-collapse:collapse} th,td{padding:8px;border-bottom:1px solid #252c3e;font-size:12px;text-align:left} th{color:#c7d0e5;background:#111625;position:sticky;top:0}
+  .tbl{max-height:420px;overflow:auto;border:1px solid var(--stroke);border-radius:12px}
+  .warn{border:1px solid #7b3b3b;background:#2a1414;color:#ffcbcb;border-radius:12px;padding:10px;margin-top:10px}
+  @media(max-width:1000px){.grid{grid-template-columns:repeat(2,minmax(0,1fr))}.span2,.span3,.span6{grid-column:span 2}}
+  </style></head><body><div class='wrap'>
+  <div class='top'><div><h1>ShopMyRepair Admin</h1><div style='color:var(--muted);margin-top:4px'>Business overview + lead quality + demand hotspots</div></div><div><a href='/admin/ops?token=${encodeURIComponent(String(req.query.token||''))}'>Open Ops Dashboard →</a></div></div>
+
+  <div class='grid'>
+    <div class='card'><div class='k'>Total Signups</div><div class='v'>${c.total}</div></div>
+    <div class='card'><div class='k'>Owners</div><div class='v'>${c.owners}</div><div class='k'>${ownerPct}% of total</div></div>
+    <div class='card'><div class='k'>Mechanics (All)</div><div class='v'>${c.mechanics}</div><div class='k'>${mechPct}% of total</div></div>
+    <div class='card'><div class='k'>Mechanic Shops</div><div class='v'>${shopCount}</div></div>
+    <div class='card'><div class='k'>Individual Mechanics</div><div class='v'>${indyMech}</div></div>
+    <div class='card'><div class='k'>New Last 7 Days</div><div class='v'>${last7}</div></div>
+
+    <div class='card span3'><h3>Demand by Borough</h3><div style='margin-top:8px'>${boroughBars || '<div class="k">No borough data yet</div>'}</div></div>
+    <div class='card span3'><h3>Quick Signals</h3><div style='margin-top:8px' class='k'>Top ZIP: <b>${esc(byZip[0]?.[0] || 'N/A')}</b> (${byZip[0]?.[1] || 0})</div><div class='k' style='margin-top:6px'>Top Borough: <b>${esc(byBorough[0]?.[0] || 'N/A')}</b> (${byBorough[0]?.[1] || 0})</div><div class='k' style='margin-top:10px'>Use this to focus ad spend + mechanic recruitment in top demand zones.</div><div style='margin-top:10px'><span class='pill'>Leads</span> <span class='pill'>Supply Mix</span> <span class='pill'>Geo Demand</span></div></div>
+
+    ${loadError ? `<div class='span6 warn'><h3 style='margin:0 0 6px 0'>Data source error</h3><div>${esc(loadError)}</div><div style='margin-top:6px'>Check SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY on deploy, or unset both for JSON fallback.</div></div>` : ''}
+
+    <div class='card span6'><h3>Recent Signups (latest 50)</h3><div class='tbl' style='margin-top:8px'><table><thead><tr><th>ID</th><th>Name</th><th>Type</th><th>Borough</th><th>ZIP</th><th>Email</th><th>Created</th></tr></thead><tbody>${recentRows || '<tr><td colspan="7">No signups yet.</td></tr>'}</tbody></table></div></div>
+  </div>
+  </div></body></html>`);
 });
 
 app.listen(PORT, () => console.log(`Live: http://localhost:${PORT}`));
