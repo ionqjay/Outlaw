@@ -281,19 +281,27 @@ function renderBids() {
   const acceptedRating = accepted ? getMechanicRating(accepted.mechanic_id) : { avg: null, count: 0 };
   const acceptedProviderType = String(acceptedMeta.providerType || '').toLowerCase() === 'shop' ? 'shop' : 'mechanic';
   const acceptedProviderTypeLabel = acceptedMeta.providerTypeLabel || (acceptedProviderType === 'shop' ? 'Mechanic Shop' : 'Individual Mechanic');
-  const acceptedInfo = accepted ? `<div class='list-card' style='border-color:#2a9f60'>
-    <div class='request-head'>
-      <strong>Accepted Company Info</strong>
+  const acceptedInfo = accepted ? `<div class='estimate-card ${acceptedProviderType}' style='border-color:#2a9f60;box-shadow:0 0 0 1px rgba(42,159,96,.18) inset'>
+    <div class='estimate-top'>
+      <div>
+        <div class='estimate-name'>${acceptedMeta.businessName || accepted.mechanic_name}</div>
+        <div class='provider-chip ${acceptedProviderType}'>${acceptedProviderType === 'shop' ? '🏪' : '🧰'} ${acceptedProviderTypeLabel}</div>
+      </div>
       <span class='pill accepted'>accepted</span>
     </div>
-    <div class='muted-xs'><b>${acceptedMeta.businessName || accepted.mechanic_name}</b></div>
-    <div class='provider-chip ${acceptedProviderType}'>${acceptedProviderType === 'shop' ? '🏪' : '🧰'} ${acceptedProviderTypeLabel}</div>
-    <div class='muted-xs'>Business address: ${acceptedMeta.businessAddress || 'Not provided'} ${acceptedMeta.businessZip || ''}</div>
-    <div class='muted-xs'>Contact: ${acceptedMeta.businessPhone || 'No phone'} · ${acceptedMeta.businessEmail || 'No email'}</div>
-    <div class='muted-xs'>Reviews: ${acceptedRating.avg ? `${acceptedRating.avg}/5` : 'No rating yet'} (${acceptedRating.count} review${acceptedRating.count === 1 ? '' : 's'})</div>
-    <div class='muted-xs'>Repair estimate: $${accepted.amount}</div>
+    <div class='estimate-kpis'>
+      <div class='kpi-pill'><div class='lbl'>Accepted Estimate</div><div class='val'>$${accepted.amount}</div></div>
+      <div class='kpi-pill'><div class='lbl'>ETA</div><div class='val small'>${Number(accepted.eta_hours || 24)}h</div></div>
+    </div>
+    <div class='badge-row'><span class='tag rated'>✅ Selected Provider</span></div>
+    <div class='muted-xs'>📍 ${acceptedMeta.businessAddress || 'Address not provided'} ${acceptedMeta.businessZip || ''}</div>
+    <div class='contact-row'>
+      <span class='contact-pill'>📞 ${acceptedMeta.businessPhone || 'No phone'}</span>
+      <span class='contact-pill'>✉️ ${acceptedMeta.businessEmail || 'No email'}</span>
+      <span class='contact-pill'>⭐ ${acceptedRating.avg ? `${acceptedRating.avg}/5` : 'New'} (${acceptedRating.count} review${acceptedRating.count === 1 ? '' : 's'})</span>
+    </div>
     <div class='muted-xs'>Notes: ${acceptedParsed?.notes ? acceptedParsed.notes : 'No additional notes provided.'}</div>
-    <button class='btn btn-dark' data-feedback='${accepted.id}' data-request='${selected.id}' data-mechanic='${accepted.mechanic_id}' style='margin-top:8px'>Leave Feedback</button>
+    <button class='btn btn-dark' data-feedback='${accepted.id}' data-request='${selected.id}' data-mechanic='${accepted.mechanic_id}' style='margin-top:10px'>Leave Feedback</button>
   </div>` : '';
 
   bidWrap.innerHTML = `${header}${acceptedInfo}${cards}`;
