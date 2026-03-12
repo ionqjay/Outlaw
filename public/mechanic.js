@@ -135,7 +135,8 @@ async function boot() {
     wrap.innerHTML = "<div class='skeleton'></div><div class='skeleton'></div>";
 
     try {
-      const data = await fetchJson('/api/repairs?status=open');
+      const providerEmail = encodeURIComponent(String((await window.smrAuth.getMechanicProfile())?.email || session.email || '').trim().toLowerCase());
+      const data = await fetchJson(`/api/repairs?status=open&providerEmail=${providerEmail}`);
       const repairs = data.repairs || [];
 
       wrap.innerHTML = repairs.length
@@ -373,9 +374,12 @@ async function boot() {
     const acceptedRate = bids.length ? Math.round((won.length / bids.length) * 100) : 0;
     const avgEstimate = bids.length ? Math.round(bids.reduce((s, b) => s + Number(b.amount || 0), 0) / bids.length) : 0;
 
-    document.getElementById('homeOpenCount').textContent = String(repairs.filter(r => String(r.status || '').toLowerCase() === 'open').length);
+    const openRepairs = repairs.filter(r => String(r.status || '').toLowerCase() === 'open').length;
+    document.getElementById('homeOpenCount').textContent = String(openRepairs);
     document.getElementById('homeActiveCount').textContent = String(active.length);
     document.getElementById('homeWonCount').textContent = String(won.length);
+    document.getElementById('homeSubmittedCount').textContent = String(bids.length);
+    document.getElementById('homeMissedCount').textContent = String(Math.max(0, openRepairs - active.length));
     document.getElementById('homeProfileStrength').textContent = `${strength}%`;
     document.getElementById('homeAcceptedRate').textContent = `${acceptedRate}%`;
     document.getElementById('homeAvgEstimate').textContent = `$${avgEstimate}`;

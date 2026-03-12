@@ -14,6 +14,7 @@ let repairsCache = [];
 let bidsByRequest = new Map();
 let pendingFeedback = null;
 let pendingFeedbackStars = 0;
+let comparePinned = [];
 
 function api(base, path) {
   return `${base}${path}`;
@@ -208,6 +209,27 @@ function renderRequests() {
   document.querySelectorAll('#ownerRequests [data-view]').forEach(btn => btn.addEventListener('click', () => setView(btn.dataset.view)));
 }
 
+function renderCompareTray(allBids = []) {
+  const tray = document.getElementById('compareTray');
+  const items = document.getElementById('compareItems');
+  if (!tray || !items) return;
+
+  if (!comparePinned.length) {
+    tray.style.display = 'none';
+    items.innerHTML = '';
+    return;
+  }
+
+  const byId = new Map(allBids.map(b => [Number(b.id), b]));
+  const cards = comparePinned
+    .map(id => byId.get(Number(id)))
+    .filter(Boolean)
+    .map(b => `<span class='compare-pill'>#${b.id} · $${b.amount} · ${Number(b.eta_hours || 24)}h</span>`)
+    .join('');
+  tray.style.display = 'block';
+  items.innerHTML = cards;
+}
+
 function renderBids() {
   const bidWrap = document.getElementById('ownerBids');
 
@@ -241,6 +263,14 @@ function renderBids() {
       }, null)
     : null;
 
+  const valueScore = (b) => {
+    const amt = Number(b.amount || 0) || 1;
+    const eta = Number(b.eta_hours || 24) || 24;
+    const rating = getMechanicRating(b.mechanic_id).avg || 0;
+    return (rating * 18) + (200 / eta) + (220 / amt);
+  };
+  const bestValueBid = openBids.length ? openBids.slice().sort((a, b) => valueScore(b) - valueScore(a))[0] : null;
+
   const cards = bids.map(b => {
     const status = String(b.status || 'open').toLowerCase();
     const parsed = parseBidNotes(b.notes);
@@ -254,6 +284,7 @@ function renderBids() {
     if (status === 'open' && cheapestOpen !== null && Number(b.amount || 0) === cheapestOpen) tags.push("<span class='tag best'>💸 Best Price</span>");
     if (status === 'open' && fastestOpen !== null && Number(b.eta_hours || 999999) === fastestOpen) tags.push("<span class='tag fast'>⚡ Fastest</span>");
     if (status === 'open' && topRatedOpen && Number(topRatedOpen.id) === Number(b.id) && (getMechanicRating(b.mechanic_id).avg || 0) > 0) tags.push("<span class='tag rated'>⭐ Top Rated</span>");
+    if (status === 'open' && bestValueBid && Number(bestValueBid.id) === Number(b.id)) tags.push("<span class='tag rated'>🏆 Best Value</span>");
 
     return `<div class='estimate-card ${providerType}'>
       <div class='estimate-top'>
@@ -275,7 +306,10 @@ function renderBids() {
         <span class='contact-pill'>⭐ ${rating} (${reviewCount})</span>
       </div>
       <div class='muted-xs'>Notes: ${parsed.notes ? parsed.notes : 'No additional notes provided.'}</div>
-      ${status === 'open' ? `<button class='btn btn-green' data-accept='${b.id}' style='margin-top:10px'>Accept Repair Estimate</button>` : ''}
+      <div style='display:flex;gap:8px;flex-wrap:wrap;margin-top:10px'>
+        ${status === 'open' ? `<button class='btn btn-green' data-accept='${b.id}'>Accept Repair Estimate</button>` : ''}
+        ${status === 'open' ? `<button class='btn btn-dark' data-pin='${b.id}'>${comparePinned.includes(Number(b.id)) ? 'Pinned' : 'Pin to Compare'}</button>` : ''}
+      </div>
     </div>`;
   }).join('');
 
@@ -308,6 +342,7 @@ function renderBids() {
   </div>` : '';
 
   bidWrap.innerHTML = `${header}${acceptedInfo}${cards}`;
+  renderCompareTray(bids);
 
   document.querySelectorAll('[data-accept]').forEach(btn => btn.addEventListener('click', async () => {
     try {
@@ -318,6 +353,15 @@ function renderBids() {
     } catch (err) {
       alert(err.message || 'Could not accept bid.');
     }
+  }));
+
+  document.querySelectorAll('[data-pin]').forEach(btn => btn.addEventListener('click', () => {
+    const id = Number(btn.dataset.pin);
+    if (comparePinned.includes(id)) comparePinned = comparePinned.filter(x => x !== id);
+    else {
+      comparePinned = [id, ...comparePinned.filter(x => x !== id)].slice(0, 3);
+    }
+    renderBids();
   }));
 
   document.querySelectorAll('[data-feedback]').forEach(btn => btn.addEventListener('click', () => {

@@ -15,6 +15,7 @@ const DB_PATH = path.join(__dirname, 'signups.json');
 const OWNER_REQUESTS_PATH = path.join(__dirname, 'owner_requests.json');
 const REPAIR_REQUESTS_PATH = path.join(__dirname, 'repair_requests.json');
 const BIDS_PATH = path.join(__dirname, 'bids.json');
+const REQUEST_INVITES_PATH = path.join(__dirname, 'request_invites.json');
 
 const TURNSTILE_SECRET = process.env.TURNSTILE_SECRET || '';
 const TWILIO_ACCOUNT_SID = process.env.TWILIO_ACCOUNT_SID || '';
@@ -168,16 +169,78 @@ async function createRepairRequest(row) {
   return local;
 }
 
-async function listRepairRequests({ ownerId, status } = {}) {
+function normalizeProviderType(v) {
+  const s = String(v || '').toLowerCase();
+  return s === 'shop' ? 'shop' : 'mechanic';
+}
+
+function readInvites() {
+  return readJson(REQUEST_INVITES_PATH, []);
+}
+
+function writeInvites(rows) {
+  writeJson(REQUEST_INVITES_PATH, rows);
+}
+
+async function createDispatchSnapshot(repair) {
+  const allSignups = await listSignups();
+  const mechanics = allSignups
+    .filter(x => String(x.type || x.Type || '').toLowerCase() === 'mechanic')
+    .map(x => {
+      const email = String(x.email || x.Email || '').trim().toLowerCase();
+      const hasShop = String(x.has_shop || x.HasShop || '').toLowerCase();
+      const providerType = (hasShop === 'yes' || hasShop === 'true' || hasShop === 'shop') ? 'shop' : 'mechanic';
+      return { email, providerType };
+    })
+    .filter(x => x.email);
+
+  const shops = mechanics.filter(x => x.providerType === 'shop').slice(0, 3);
+  const inds = mechanics.filter(x => x.providerType === 'mechanic').slice(0, 2);
+  let invited = [...shops, ...inds];
+
+  if (invited.length < 5) {
+    const used = new Set(invited.map(x => `${x.email}:${x.providerType}`));
+    for (const p of mechanics) {
+      const key = `${p.email}:${p.providerType}`;
+      if (used.has(key)) continue;
+      invited.push(p);
+      used.add(key);
+      if (invited.length >= 5) break;
+    }
+  }
+
+  const rows = readInvites();
+  const now = new Date().toISOString();
+  const additions = invited.map(p => ({
+    repair_id: Number(repair.id || repair.Id),
+    provider_email: p.email,
+    provider_type: p.providerType,
+    created_at: now
+  }));
+  writeInvites([...rows.filter(r => Number(r.repair_id) !== Number(repair.id || repair.Id)), ...additions]);
+}
+
+async function listRepairRequests({ ownerId, status, providerEmail } = {}) {
   if (USE_SUPABASE) {
     const q = ['select=*', 'order=created_at.desc'];
     if (ownerId) q.push(`owner_id=eq.${encodeURIComponent(ownerId)}`);
     if (status) q.push(`status=eq.${encodeURIComponent(status)}`);
-    return supabaseRequest(`repair_requests?${q.join('&')}`);
+    let rows = await supabaseRequest(`repair_requests?${q.join('&')}`);
+    if (providerEmail) {
+      const invites = readInvites();
+      const allowed = new Set(invites.filter(i => String(i.provider_email) === String(providerEmail).toLowerCase()).map(i => Number(i.repair_id)));
+      if (allowed.size) rows = rows.filter(r => allowed.has(Number(r.id)));
+    }
+    return rows;
   }
   let data = readJson(REPAIR_REQUESTS_PATH, []);
   if (ownerId) data = data.filter(x => String(x.owner_id) === String(ownerId));
   if (status) data = data.filter(x => String(x.status) === String(status));
+  if (providerEmail) {
+    const invites = readInvites();
+    const allowed = new Set(invites.filter(i => String(i.provider_email) === String(providerEmail).toLowerCase()).map(i => Number(i.repair_id)));
+    if (allowed.size) data = data.filter(x => allowed.has(Number(x.id)));
+  }
   return data;
 }
 
@@ -425,6 +488,7 @@ app.post('/api/repairs', async (req, res) => {
       status: 'open',
       created_at: new Date().toISOString()
     });
+    try { await createDispatchSnapshot(created); } catch {}
     res.json({ ok: true, repair: created });
   } catch (e) {
     res.status(500).json({ error: 'Could not create repair request.', detail: String(e?.message || e) });
@@ -435,7 +499,8 @@ app.get('/api/repairs', async (req, res) => {
   try {
     const ownerId = req.query.ownerId ? String(req.query.ownerId) : undefined;
     const status = req.query.status ? String(req.query.status) : undefined;
-    const rows = await listRepairRequests({ ownerId, status });
+    const providerEmail = req.query.providerEmail ? String(req.query.providerEmail).toLowerCase() : undefined;
+    const rows = await listRepairRequests({ ownerId, status, providerEmail });
     res.json({ ok: true, repairs: rows });
   } catch (e) {
     res.status(500).json({ error: 'Could not load repairs.', detail: String(e?.message || e) });
@@ -493,12 +558,14 @@ app.post('/api/bids', async (req, res) => {
   }
 
   let providerType = 'mechanic';
+  let providerEmail = '';
   try {
     const m = cleanNotes.match(/\[META\]([\s\S]*?)\[\/META\]/);
     if (m) {
       const parsed = JSON.parse(m[1]);
       const t = String(parsed?.providerType || '').toLowerCase();
       if (t === 'shop' || t === 'mechanic') providerType = t;
+      providerEmail = String(parsed?.businessEmail || '').trim().toLowerCase();
 
       const minimumProfile = [parsed?.businessName, parsed?.businessEmail, parsed?.businessPhone];
       if (minimumProfile.some(v => !String(v || '').trim())) {
@@ -508,6 +575,19 @@ app.post('/api/bids', async (req, res) => {
   } catch {}
 
   try {
+    const existingAllForRequest = await listBids({ requestId: Number(requestId) });
+    if (existingAllForRequest.some(b => String(b.mechanic_id) === String(mechanicId) && String(b.status || '').toLowerCase() !== 'declined')) {
+      return res.status(400).json({ error: 'You already submitted an estimate for this request.' });
+    }
+
+    const invites = readInvites().filter(i => Number(i.repair_id) === Number(requestId));
+    if (invites.length && providerEmail) {
+      const invited = invites.some(i => String(i.provider_email) === providerEmail && normalizeProviderType(i.provider_type) === providerType);
+      if (!invited) {
+        return res.status(400).json({ error: 'This request was not dispatched to your profile type.' });
+      }
+    }
+
     const existing = await listBids({ requestId: Number(requestId), status: 'open' });
     const countByType = { shop: 0, mechanic: 0 };
     for (const b of existing) {
@@ -593,6 +673,52 @@ app.post('/api/bids/:id/accept', async (req, res) => {
     res.status(500).json({ error: 'Could not accept bid.' });
   }
 });
+app.get('/api/admin/ops', async (req, res) => {
+  if (req.query.token !== ADMIN_TOKEN) return res.status(401).json({ error: 'Unauthorized' });
+  try {
+    const repairs = await listRepairRequests({});
+    const bids = await listBids({});
+    const invites = readInvites();
+    const openRepairs = repairs.filter(r => String(r.status || '').toLowerCase() === 'open').length;
+    const acceptedRepairs = repairs.filter(r => String(r.status || '').toLowerCase() === 'accepted').length;
+    const avgBidsPerOpen = openRepairs ? (bids.filter(b => String(b.status || '').toLowerCase() === 'open').length / openRepairs) : 0;
+    res.json({
+      ok: true,
+      kpis: {
+        totalRepairs: repairs.length,
+        openRepairs,
+        acceptedRepairs,
+        totalBids: bids.length,
+        openBids: bids.filter(b => String(b.status || '').toLowerCase() === 'open').length,
+        avgBidsPerOpen: Math.round(avgBidsPerOpen * 10) / 10,
+        totalInvites: invites.length
+      }
+    });
+  } catch (e) {
+    res.status(500).json({ error: 'Could not load ops data', detail: String(e?.message || e) });
+  }
+});
+
+app.get('/admin/ops', async (req, res) => {
+  if (req.query.token !== ADMIN_TOKEN) {
+    return res.status(401).send('<h2>Unauthorized</h2><p>Use /admin/ops?token=YOUR_TOKEN</p>');
+  }
+  res.send(`<!doctype html><html><head><meta charset='utf-8'><title>Ops Dashboard</title><style>
+  body{font-family:Arial;background:#0c0c0e;color:#f0ede8;padding:20px} .k{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}
+  .card{background:#131316;border:1px solid #2d2f3a;border-radius:12px;padding:12px}
+  .lbl{font-size:12px;color:#b8bbca} .val{font-size:28px;font-weight:700;margin-top:4px}
+  a{color:#ff9c7a}
+  </style></head><body><h1>ShopMyRepair Ops</h1><p><a href='/admin?token=${encodeURIComponent(String(req.query.token||''))}'>← Back to Signups Admin</a></p>
+  <div id='k' class='k'><div class='card'>Loading...</div></div>
+  <script>
+    fetch('/api/admin/ops?token=${encodeURIComponent(String(req.query.token||''))}').then(r=>r.json()).then(d=>{
+      const k=d.kpis||{};
+      const entries=[['Total Repairs',k.totalRepairs],['Open Repairs',k.openRepairs],['Accepted Repairs',k.acceptedRepairs],['Total Estimates',k.totalBids],['Open Estimates',k.openBids],['Avg Estimates / Open Repair',k.avgBidsPerOpen],['Dispatch Invites',k.totalInvites]];
+      document.getElementById('k').innerHTML=entries.map(([l,v])=>'<div class="card"><div class="lbl">'+l+'</div><div class="val">'+(v??0)+'</div></div>').join('');
+    }).catch(()=>{ document.getElementById('k').innerHTML='<div class="card">Could not load ops data.</div>'; });
+  </script></body></html>`);
+});
+
 app.get('/admin', async (req, res) => {
   if (req.query.token !== ADMIN_TOKEN) {
     return res.status(401).send('<h2>Unauthorized</h2><p>Use /admin?token=YOUR_TOKEN</p>');
@@ -613,7 +739,7 @@ app.get('/admin', async (req, res) => {
   table{width:100%;border-collapse:collapse}th,td{border:1px solid #333;padding:8px;font-size:12px}
   th{background:#131316}.k{display:flex;gap:12px;margin-bottom:10px}.b{background:#131316;padding:8px 12px;border-radius:10px}
   .panel{background:#131316;padding:12px;border-radius:12px;margin:12px 0}
-  </style></head><body><h1>ShopMyRepair Signups</h1><div class='k'>
+  </style></head><body><h1>ShopMyRepair Signups</h1><p><a style='color:#ff9c7a' href='/admin/ops?token=${encodeURIComponent(String(req.query.token||''))}'>Open Ops Dashboard →</a></p><div class='k'>
   <div class='b'>Total <b>${c.total}</b></div><div class='b'>Owners <b>${c.owners}</b></div><div class='b'>Mechanics <b>${c.mechanics}</b></div></div>
   <div class='panel'><h3 style='margin-top:0'>Demand by Borough</h3>${boroughBars || 'No data yet'}</div>
   <table><thead><tr><th>ID</th><th>Name</th><th>Email</th><th>Phone</th><th>ZIP</th><th>Service Address</th><th>Borough</th><th>Type</th><th>Experience</th><th>HasShop</th><th>Created</th></tr></thead><tbody>${rows}</tbody></table></body></html>`);

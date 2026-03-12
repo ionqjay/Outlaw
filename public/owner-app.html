@@ -161,6 +161,9 @@
     @keyframes shimmer { 100% { transform: translateX(100%); } }
 
     .mobile-cta { display:none; }
+    .compare-tray { position: sticky; bottom: 8px; margin-top: 12px; background:#101521; border:1px solid #34405a; border-radius:12px; padding:10px; }
+    .compare-items { display:flex; gap:8px; flex-wrap:wrap; margin-top:6px; }
+    .compare-pill { border:1px solid #465472; border-radius:999px; padding:4px 9px; font-size:12px; }
 
     .feedback-modal { position: fixed; inset: 0; display: grid; place-items: center; z-index: 120; }
     .feedback-modal.hidden { display: none; }
@@ -255,6 +258,11 @@
       <div id="ownerRequests" class="subtle">Loading...</div>
       <h3 style="margin-top:14px">Current Repair Estimates</h3>
       <div id="ownerBids" class="subtle">Loading...</div>
+      <div id="compareTray" class="compare-tray" style="display:none">
+        <div><strong>Compare Estimates</strong></div>
+        <div class="muted-xs">Pin up to 3 estimates, then compare side-by-side.</div>
+        <div id="compareItems" class="compare-items"></div>
+      </div>
     </section>
 
     <section id="view-quote" class="panel" style="display:none">
