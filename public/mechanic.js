@@ -185,6 +185,9 @@ async function boot() {
           return;
         }
 
+        const providerType = getProviderType(session.role);
+        const providerTypeLabel = getProviderTypeLabel(session.role);
+
         const requiredProfile = [
           savedProfile?.email,
           savedProfile?.phone,
@@ -196,8 +199,6 @@ async function boot() {
           fail('Complete profile first (name, email, phone, services) before submitting estimates.', true);
           return;
         }
-        const providerType = getProviderType(session.role);
-        const providerTypeLabel = getProviderTypeLabel(session.role);
         const displayName = providerType === 'shop'
           ? (savedProfile?.businessName || savedProfile?.name || session.name || session.email)
           : (savedProfile?.name || savedProfile?.businessName || session.name || session.email);
