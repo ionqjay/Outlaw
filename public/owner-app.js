@@ -143,6 +143,11 @@ function recordFeedback({ requestId, bidId, mechanicId, rating, text }) {
   else all.push(payload);
 
   saveFeedbacks(all);
+  return payload;
+}
+
+function getFeedbackForRequest(requestId) {
+  return getFeedbacks().find(x => String(x.requestId) === String(requestId)) || null;
 }
 
 function openFeedbackModal(payload) {
@@ -316,6 +321,7 @@ function renderBids() {
   const acceptedParsed = accepted ? parseBidNotes(accepted.notes) : null;
   const acceptedMeta = acceptedParsed?.meta || {};
   const acceptedRating = accepted ? getMechanicRating(accepted.mechanic_id) : { avg: null, count: 0 };
+  const existingFeedback = accepted ? getFeedbackForRequest(selected.id) : null;
   const acceptedProviderType = String(acceptedMeta.providerType || '').toLowerCase() === 'shop' ? 'shop' : 'mechanic';
   const acceptedProviderTypeLabel = acceptedMeta.providerTypeLabel || (acceptedProviderType === 'shop' ? 'Mechanic Shop' : 'Individual Mechanic');
   const acceptedInfo = accepted ? `<div class='estimate-card ${acceptedProviderType}' style='border-color:#2a9f60;box-shadow:0 0 0 1px rgba(42,159,96,.18) inset'>
@@ -338,7 +344,8 @@ function renderBids() {
       <span class='contact-pill'>⭐ ${acceptedRating.avg ? `${acceptedRating.avg}/5` : 'New'} (${acceptedRating.count} review${acceptedRating.count === 1 ? '' : 's'})</span>
     </div>
     <div class='muted-xs'>Notes: ${acceptedParsed?.notes ? acceptedParsed.notes : 'No additional notes provided.'}</div>
-    <button class='btn btn-dark' data-feedback='${accepted.id}' data-request='${selected.id}' data-mechanic='${accepted.mechanic_id}' style='margin-top:10px'>Leave Feedback</button>
+    ${existingFeedback ? `<div class='muted-xs'>✅ Your review was submitted: <b>${existingFeedback.rating}/5</b>${existingFeedback.text ? ` — ${existingFeedback.text}` : ''}</div>` : ''}
+    <button class='btn btn-dark' data-feedback='${accepted.id}' data-request='${selected.id}' data-mechanic='${accepted.mechanic_id}' style='margin-top:10px'>${existingFeedback ? 'Update Review' : 'Leave Feedback'}</button>
   </div>` : '';
 
   bidWrap.innerHTML = `${header}${acceptedInfo}${cards}`;
@@ -365,11 +372,18 @@ function renderBids() {
   }));
 
   document.querySelectorAll('[data-feedback]').forEach(btn => btn.addEventListener('click', () => {
+    const requestId = Number(btn.dataset.request);
+    const existing = getFeedbackForRequest(requestId);
     openFeedbackModal({
-      requestId: Number(btn.dataset.request),
+      requestId,
       bidId: Number(btn.dataset.feedback),
       mechanicId: btn.dataset.mechanic
     });
+    if (existing) {
+      pendingFeedbackStars = Number(existing.rating || 0);
+      document.getElementById('feedbackNote').value = existing.text || '';
+      document.querySelectorAll('[data-star]').forEach(s => s.classList.toggle('active', Number(s.dataset.star) <= pendingFeedbackStars));
+    }
   }));
 }
 
@@ -500,6 +514,7 @@ async function boot() {
     closeFeedbackModal();
     await loadDashboardData(window.__ownerSession);
     renderBids();
+    alert('Review submitted successfully ✅');
   });
 
   async function loadProfile() {
