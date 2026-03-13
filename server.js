@@ -16,6 +16,7 @@ const OWNER_REQUESTS_PATH = path.join(__dirname, 'owner_requests.json');
 const REPAIR_REQUESTS_PATH = path.join(__dirname, 'repair_requests.json');
 const BIDS_PATH = path.join(__dirname, 'bids.json');
 const REQUEST_INVITES_PATH = path.join(__dirname, 'request_invites.json');
+const FEEDBACKS_PATH = path.join(__dirname, 'feedbacks.json');
 
 const TURNSTILE_SECRET = process.env.TURNSTILE_SECRET || '';
 const TWILIO_ACCOUNT_SID = process.env.TWILIO_ACCOUNT_SID || '';
@@ -281,6 +282,65 @@ async function listBids({ requestId, mechanicId, status } = {}) {
   return data;
 }
 
+async function listFeedbacks({ requestId, mechanicId } = {}) {
+  if (USE_SUPABASE) {
+    try {
+      const q = ['select=*', 'order=created_at.desc'];
+      if (requestId) q.push(`request_id=eq.${encodeURIComponent(requestId)}`);
+      if (mechanicId) q.push(`mechanic_id=eq.${encodeURIComponent(mechanicId)}`);
+      return await supabaseRequest(`feedbacks?${q.join('&')}`);
+    } catch {
+      // fallback to file if table not present yet
+    }
+  }
+  let data = readJson(FEEDBACKS_PATH, []);
+  if (requestId) data = data.filter(x => String(x.request_id) === String(requestId));
+  if (mechanicId) data = data.filter(x => String(x.mechanic_id) === String(mechanicId));
+  return data;
+}
+
+async function upsertFeedback(row) {
+  if (USE_SUPABASE) {
+    try {
+      const found = await supabaseRequest(`feedbacks?select=*&request_id=eq.${encodeURIComponent(row.request_id)}&limit=1`);
+      if (found[0]) {
+        await supabaseRequest(`feedbacks?request_id=eq.${encodeURIComponent(row.request_id)}`, { method: 'PATCH', body: {
+          bid_id: row.bid_id,
+          mechanic_id: row.mechanic_id,
+          owner_id: row.owner_id,
+          rating: row.rating,
+          text: row.text,
+          updated_at: new Date().toISOString()
+        }});
+        const out = await supabaseRequest(`feedbacks?select=*&request_id=eq.${encodeURIComponent(row.request_id)}&limit=1`);
+        return out[0];
+      }
+      const out = await supabaseRequest('feedbacks', { method: 'POST', body: [{ ...row, created_at: new Date().toISOString(), updated_at: new Date().toISOString() }] });
+      return out[0];
+    } catch {
+      // fallback to file
+    }
+  }
+
+  const all = readJson(FEEDBACKS_PATH, []);
+  const idx = all.findIndex(x => Number(x.request_id) === Number(row.request_id));
+  const payload = {
+    id: idx >= 0 ? all[idx].id : ((all[0]?.id || 0) + 1),
+    request_id: Number(row.request_id),
+    bid_id: Number(row.bid_id),
+    mechanic_id: String(row.mechanic_id),
+    owner_id: String(row.owner_id || ''),
+    rating: Number(row.rating),
+    text: String(row.text || ''),
+    created_at: idx >= 0 ? all[idx].created_at : new Date().toISOString(),
+    updated_at: new Date().toISOString()
+  };
+  if (idx >= 0) all[idx] = payload;
+  else all.unshift(payload);
+  writeJson(FEEDBACKS_PATH, all);
+  return payload;
+}
+
 function counts(data) {
   const total = data.length;
   const owners = data.filter(x => (x.Type || x.type) === 'owner').length;
@@ -530,6 +590,32 @@ app.post('/api/repairs/:id/cancel', async (req, res) => {
   }
 });
 
+app.post('/api/repairs/:id/complete', async (req, res) => {
+  const repairId = Number(req.params.id);
+  if (!repairId) return res.status(400).json({ error: 'Invalid repair id.' });
+  try {
+    if (USE_SUPABASE) {
+      const found = await supabaseRequest(`repair_requests?select=*&id=eq.${repairId}&limit=1`);
+      if (!found[0]) return res.status(404).json({ error: 'Repair request not found.' });
+      const st = String(found[0].status || '').toLowerCase();
+      if (!['accepted', 'in_progress', 'completed'].includes(st)) return res.status(400).json({ error: 'Only accepted/in-progress jobs can be completed.' });
+      await supabaseRequest(`repair_requests?id=eq.${repairId}`, { method: 'PATCH', body: { status: 'completed' } });
+      return res.json({ ok: true });
+    }
+
+    const requests = readJson(REPAIR_REQUESTS_PATH, []);
+    const target = requests.find(r => Number(r.id) === repairId);
+    if (!target) return res.status(404).json({ error: 'Repair request not found.' });
+    const st = String(target.status || '').toLowerCase();
+    if (!['accepted', 'in_progress', 'completed'].includes(st)) return res.status(400).json({ error: 'Only accepted/in-progress jobs can be completed.' });
+    target.status = 'completed';
+    writeJson(REPAIR_REQUESTS_PATH, requests);
+    res.json({ ok: true });
+  } catch (e) {
+    res.status(500).json({ error: 'Could not complete request.', detail: String(e?.message || e) });
+  }
+});
+
 app.post('/api/bids', async (req, res) => {
   const { requestId, mechanicId, mechanicName, amount, etaHours, notes } = req.body || {};
   if (!requestId || !mechanicId || !mechanicName || !amount || !etaHours) {
@@ -655,6 +741,69 @@ app.post('/api/bids/:id/accept', async (req, res) => {
     res.json({ ok: true });
   } catch {
     res.status(500).json({ error: 'Could not accept bid.' });
+  }
+});
+
+app.get('/api/feedbacks', async (req, res) => {
+  try {
+    const requestId = req.query.requestId ? Number(req.query.requestId) : undefined;
+    const mechanicId = req.query.mechanicId ? String(req.query.mechanicId) : undefined;
+    const rows = await listFeedbacks({ requestId, mechanicId });
+    res.json({ ok: true, feedbacks: rows });
+  } catch (e) {
+    res.status(500).json({ error: 'Could not load feedbacks.', detail: String(e?.message || e) });
+  }
+});
+
+app.post('/api/feedbacks', async (req, res) => {
+  const { requestId, bidId, mechanicId, ownerId, rating, text } = req.body || {};
+  if (!requestId || !bidId || !mechanicId || !rating) return res.status(400).json({ error: 'Missing required fields.' });
+  const score = Number(rating);
+  if (!Number.isFinite(score) || score < 1 || score > 5) return res.status(400).json({ error: 'Rating must be between 1 and 5.' });
+
+  try {
+    const repair = (await listRepairRequests({})).find(r => Number(r.id) === Number(requestId));
+    const st = String(repair?.status || '').toLowerCase();
+    if (st !== 'completed') return res.status(400).json({ error: 'Reviews can only be submitted for completed jobs.' });
+
+    const saved = await upsertFeedback({
+      request_id: Number(requestId),
+      bid_id: Number(bidId),
+      mechanic_id: String(mechanicId),
+      owner_id: String(ownerId || ''),
+      rating: score,
+      text: String(text || '').trim()
+    });
+    res.json({ ok: true, feedback: saved });
+  } catch (e) {
+    res.status(500).json({ error: 'Could not save feedback.', detail: String(e?.message || e) });
+  }
+});
+
+app.get('/provider/:id', async (req, res) => {
+  const mechanicId = String(req.params.id || '').trim();
+  if (!mechanicId) return res.status(400).send('Invalid provider id');
+
+  try {
+    const bids = await listBids({ mechanicId });
+    const feedbacks = await listFeedbacks({ mechanicId });
+    const avg = feedbacks.length ? Math.round((feedbacks.reduce((s, f) => s + Number(f.rating || 0), 0) / feedbacks.length) * 10) / 10 : null;
+    const latest = bids.slice(0, 8).map(b => `<li>Request #${b.request_id} · $${b.amount} · ${String(b.status || '').toLowerCase()}</li>`).join('');
+    const fb = feedbacks.slice(0, 8).map(f => `<li>${Number(f.rating || 0)}/5${f.text ? ` — ${esc(f.text)}` : ''}</li>`).join('');
+
+    res.send(`<!doctype html><html><head><meta charset='utf-8'><meta name='viewport' content='width=device-width,initial-scale=1'><title>Provider Profile</title><style>
+      body{font-family:Inter,Arial,sans-serif;background:#0e1016;color:#eef2ff;padding:22px}
+      .wrap{max-width:820px;margin:0 auto}.card{background:#151b2a;border:1px solid #2d3550;border-radius:14px;padding:14px;margin-top:10px}
+      .k{color:#a9b4d2;font-size:12px}.v{font-size:28px;font-weight:800}
+      li{margin:6px 0}
+    </style></head><body><div class='wrap'>
+      <h1>Provider Profile</h1><div class='k'>ID: ${esc(mechanicId)}</div>
+      <div class='card'><div class='k'>Average Rating</div><div class='v'>${avg ?? 'N/A'}</div><div class='k'>${feedbacks.length} review(s)</div></div>
+      <div class='card'><h3>Recent Estimate Activity</h3><ul>${latest || '<li>No activity yet.</li>'}</ul></div>
+      <div class='card'><h3>Recent Reviews</h3><ul>${fb || '<li>No reviews yet.</li>'}</ul></div>
+    </div></body></html>`);
+  } catch (e) {
+    res.status(500).send(`Could not load provider profile: ${esc(String(e?.message || e))}`);
   }
 });
 app.get('/api/admin/ops', async (req, res) => {

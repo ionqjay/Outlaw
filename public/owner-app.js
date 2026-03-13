@@ -15,6 +15,7 @@ let bidsByRequest = new Map();
 let pendingFeedback = null;
 let pendingFeedbackStars = 0;
 let comparePinned = [];
+let feedbackCache = [];
 
 function api(base, path) {
   return `${base}${path}`;
@@ -111,11 +112,13 @@ function parseBidNotes(notesRaw) {
 }
 
 function getFeedbacks() {
+  if (Array.isArray(feedbackCache) && feedbackCache.length) return feedbackCache;
   return JSON.parse(localStorage.getItem('smr_feedback_v1') || '[]');
 }
 
 function saveFeedbacks(list) {
-  localStorage.setItem('smr_feedback_v1', JSON.stringify(list));
+  feedbackCache = Array.isArray(list) ? list : [];
+  localStorage.setItem('smr_feedback_v1', JSON.stringify(feedbackCache));
 }
 
 function getMechanicRating(mechanicId) {
@@ -127,23 +130,38 @@ function getMechanicRating(mechanicId) {
   return { avg, count: rows.length };
 }
 
-function recordFeedback({ requestId, bidId, mechanicId, rating, text }) {
-  const all = getFeedbacks();
-  const existingIdx = all.findIndex(x => String(x.requestId) === String(requestId));
+async function recordFeedback({ requestId, bidId, mechanicId, rating, text, ownerId }) {
   const payload = {
     requestId,
     bidId,
     mechanicId,
+    ownerId: ownerId || '',
     rating: Number(rating),
-    text: String(text || '').trim(),
-    createdAt: new Date().toISOString()
+    text: String(text || '').trim()
   };
 
-  if (existingIdx >= 0) all[existingIdx] = payload;
-  else all.push(payload);
+  const res = await fetchJson('/api/feedbacks', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload)
+  });
 
+  const row = res.feedback || {};
+  const normalized = {
+    requestId: Number(row.request_id || requestId),
+    bidId: Number(row.bid_id || bidId),
+    mechanicId: String(row.mechanic_id || mechanicId),
+    rating: Number(row.rating || rating),
+    text: String(row.text || text || ''),
+    createdAt: row.created_at || new Date().toISOString()
+  };
+
+  const all = getFeedbacks();
+  const idx = all.findIndex(x => String(x.requestId) === String(normalized.requestId));
+  if (idx >= 0) all[idx] = normalized;
+  else all.push(normalized);
   saveFeedbacks(all);
-  return payload;
+  return normalized;
 }
 
 function getFeedbackForRequest(requestId) {
@@ -311,6 +329,7 @@ function renderBids() {
         <span class='contact-pill'>⭐ ${rating} (${reviewCount})</span>
       </div>
       <div class='muted-xs'>Notes: ${parsed.notes ? parsed.notes : 'No additional notes provided.'}</div>
+      <div class='muted-xs'><a href='/provider/${encodeURIComponent(b.mechanic_id)}' target='_blank' style='color:#9fc1ff'>View Provider Public Profile ↗</a></div>
       <div style='display:flex;gap:8px;flex-wrap:wrap;margin-top:10px'>
         ${status === 'open' ? `<button class='btn btn-green' data-accept='${b.id}'>Accept Repair Estimate</button>` : ''}
         ${status === 'open' ? `<button class='btn btn-dark' data-pin='${b.id}'>${comparePinned.includes(Number(b.id)) ? 'Pinned' : 'Pin to Compare'}</button>` : ''}
@@ -324,6 +343,8 @@ function renderBids() {
   const existingFeedback = accepted ? getFeedbackForRequest(selected.id) : null;
   const acceptedProviderType = String(acceptedMeta.providerType || '').toLowerCase() === 'shop' ? 'shop' : 'mechanic';
   const acceptedProviderTypeLabel = acceptedMeta.providerTypeLabel || (acceptedProviderType === 'shop' ? 'Mechanic Shop' : 'Individual Mechanic');
+  const canComplete = String(selected.status || '').toLowerCase() === 'accepted' || String(selected.status || '').toLowerCase() === 'in_progress';
+  const isCompleted = String(selected.status || '').toLowerCase() === 'completed';
   const acceptedInfo = accepted ? `<div class='estimate-card ${acceptedProviderType}' style='border-color:#2a9f60;box-shadow:0 0 0 1px rgba(42,159,96,.18) inset'>
     <div class='estimate-top'>
       <div>
@@ -344,8 +365,12 @@ function renderBids() {
       <span class='contact-pill'>⭐ ${acceptedRating.avg ? `${acceptedRating.avg}/5` : 'New'} (${acceptedRating.count} review${acceptedRating.count === 1 ? '' : 's'})</span>
     </div>
     <div class='muted-xs'>Notes: ${acceptedParsed?.notes ? acceptedParsed.notes : 'No additional notes provided.'}</div>
+    <div class='muted-xs'><a href='/provider/${encodeURIComponent(accepted.mechanic_id)}' target='_blank' style='color:#9fc1ff'>View Provider Public Profile ↗</a></div>
     ${existingFeedback ? `<div class='muted-xs'>✅ Your review was submitted: <b>${existingFeedback.rating}/5</b>${existingFeedback.text ? ` — ${existingFeedback.text}` : ''}</div>` : ''}
-    <button class='btn btn-dark' data-feedback='${accepted.id}' data-request='${selected.id}' data-mechanic='${accepted.mechanic_id}' style='margin-top:10px'>${existingFeedback ? 'Update Review' : 'Leave Feedback'}</button>
+    <div style='display:flex;gap:8px;flex-wrap:wrap;margin-top:10px'>
+      ${canComplete ? `<button class='btn btn-green' data-complete='${selected.id}'>Mark Job Completed</button>` : ''}
+      ${isCompleted ? `<button class='btn btn-dark' data-feedback='${accepted.id}' data-request='${selected.id}' data-mechanic='${accepted.mechanic_id}'>${existingFeedback ? 'Update Review' : 'Leave Feedback'}</button>` : `<span class='muted-xs'>Review unlocks after job is marked completed.</span>`}
+    </div>
   </div>` : '';
 
   bidWrap.innerHTML = `${header}${acceptedInfo}${cards}`;
@@ -385,6 +410,18 @@ function renderBids() {
       document.querySelectorAll('[data-star]').forEach(s => s.classList.toggle('active', Number(s.dataset.star) <= pendingFeedbackStars));
     }
   }));
+
+  document.querySelectorAll('[data-complete]').forEach(btn => btn.addEventListener('click', async () => {
+    try {
+      await fetchJson(`/api/repairs/${btn.dataset.complete}/complete`, { method: 'POST' });
+      await loadDashboardData(window.__ownerSession);
+      renderRequests();
+      renderBids();
+      alert('Job marked as completed ✅ You can now leave a review.');
+    } catch (err) {
+      alert(err.message || 'Could not mark job completed.');
+    }
+  }));
 }
 
 async function loadDashboardData(session) {
@@ -407,6 +444,20 @@ async function loadDashboardData(session) {
     return [Number(rep.id), bd.bids || []];
   }));
   bidsByRequest = new Map(entries);
+
+  try {
+    const fb = await fetchJson('/api/feedbacks');
+    const normalized = (fb.feedbacks || []).map(x => ({
+      requestId: Number(x.request_id || x.requestId),
+      bidId: Number(x.bid_id || x.bidId),
+      mechanicId: String(x.mechanic_id || x.mechanicId || ''),
+      rating: Number(x.rating || 0),
+      text: String(x.text || ''),
+      createdAt: x.created_at || x.createdAt || ''
+    }));
+    saveFeedbacks(normalized);
+  } catch {}
+
 }
 
 function renderOwnerChecklist({ allBids = [] } = {}) {
@@ -503,18 +554,23 @@ async function boot() {
     }
     const text = document.getElementById('feedbackNote').value || '';
 
-    recordFeedback({
-      requestId: pendingFeedback.requestId,
-      bidId: pendingFeedback.bidId,
-      mechanicId: pendingFeedback.mechanicId,
-      rating: pendingFeedbackStars,
-      text
-    });
+    try {
+      await recordFeedback({
+        requestId: pendingFeedback.requestId,
+        bidId: pendingFeedback.bidId,
+        mechanicId: pendingFeedback.mechanicId,
+        ownerId: window.__ownerSession?.id || '',
+        rating: pendingFeedbackStars,
+        text
+      });
 
-    closeFeedbackModal();
-    await loadDashboardData(window.__ownerSession);
-    renderBids();
-    alert('Review submitted successfully ✅');
+      closeFeedbackModal();
+      await loadDashboardData(window.__ownerSession);
+      renderBids();
+      alert('Review submitted successfully ✅');
+    } catch (err) {
+      alert(err.message || 'Could not submit review.');
+    }
   });
 
   async function loadProfile() {

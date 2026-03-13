@@ -81,8 +81,25 @@ create index if not exists idx_bids_request_id on public.bids(request_id);
 create index if not exists idx_bids_mechanic_id on public.bids(mechanic_id);
 create index if not exists idx_bids_status on public.bids(status);
 
+create table if not exists public.feedbacks (
+  id bigint generated always as identity primary key,
+  request_id bigint not null,
+  bid_id bigint not null,
+  mechanic_id text not null,
+  owner_id text,
+  rating int not null check (rating between 1 and 5),
+  text text,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  unique(request_id)
+);
+
+create index if not exists idx_feedbacks_mechanic_id on public.feedbacks(mechanic_id);
+create index if not exists idx_feedbacks_request_id on public.feedbacks(request_id);
+
 -- service-role backend only for now; enable RLS later once auth is fully live
 alter table public.signups disable row level security;
 alter table public.owner_requests disable row level security;
 alter table public.repair_requests disable row level security;
 alter table public.bids disable row level security;
+alter table public.feedbacks disable row level security;
