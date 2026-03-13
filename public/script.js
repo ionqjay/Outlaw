@@ -38,8 +38,8 @@ const API_BASE = configuredApiBase.trim().replace(/\/$/, '');
 const api = (path) => `${API_BASE}${path}`;
 
 const variants = [
-  { h: 'Mechanics & Shops Compete. You Save.', s: 'Post your repair once and compare 3 guaranteed quotes in 24 hours. Always free for car owners.' },
-  { h: 'Get Better Price, Quality, and Experience.', s: 'We connect car owners with trusted mechanics and shop owners competing for your job.' }
+  { h: 'Car Repair Quotes, Simplified.', s: 'Post your repair once and compare clear estimates from trusted shops and independent mechanics.' },
+  { h: 'One Request. Multiple Trusted Estimates.', s: 'Review price, ETA, and provider details in one clean place before you choose who to hire.' }
 ];
 const variant = variants[Math.random() > 0.5 ? 1 : 0];
 document.getElementById('heroHeadline').textContent = variant.h;
