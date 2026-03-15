@@ -978,6 +978,66 @@ app.post('/api/billing/create-portal-session', async (req, res) => {
   }
 });
 
+app.get('/api/admin/billing', async (req, res) => {
+  if (req.query.token !== ADMIN_TOKEN) return res.status(401).json({ error: 'Unauthorized' });
+  try {
+    const rows = readBillingAccounts().sort((a, b) => new Date(b.updated_at || 0).getTime() - new Date(a.updated_at || 0).getTime());
+    const summary = {
+      total: rows.length,
+      active: rows.filter(r => isSubscriptionActive(r.subscription_status)).length,
+      cancelled: rows.filter(r => String(r.subscription_status || '').toLowerCase() === 'canceled').length,
+      pastDue: rows.filter(r => String(r.subscription_status || '').toLowerCase() === 'past_due').length
+    };
+    res.json({ ok: true, summary, billing: rows });
+  } catch (e) {
+    res.status(500).json({ error: 'Could not load billing accounts.', detail: String(e?.message || e) });
+  }
+});
+
+app.post('/api/admin/billing/:userId/cancel', async (req, res) => {
+  if (req.query.token !== ADMIN_TOKEN) return res.status(401).json({ error: 'Unauthorized' });
+  if (!stripe) return res.status(500).json({ error: 'Stripe not configured.' });
+  const userId = String(req.params.userId || '').trim();
+  if (!userId) return res.status(400).json({ error: 'userId required.' });
+
+  const billing = getBillingByUserId(userId);
+  if (!billing?.stripe_subscription_id) return res.status(404).json({ error: 'Subscription not found for this user.' });
+
+  try {
+    const sub = await stripe.subscriptions.update(billing.stripe_subscription_id, { cancel_at_period_end: true });
+    const updated = upsertBillingByUserId(userId, {
+      subscription_status: sub.status,
+      cancel_at_period_end: !!sub.cancel_at_period_end,
+      current_period_end: sub.current_period_end ? new Date(Number(sub.current_period_end) * 1000).toISOString() : null
+    });
+    res.json({ ok: true, billing: updated });
+  } catch (e) {
+    res.status(500).json({ error: 'Could not schedule cancellation.', detail: String(e?.message || e) });
+  }
+});
+
+app.post('/api/admin/billing/:userId/reactivate', async (req, res) => {
+  if (req.query.token !== ADMIN_TOKEN) return res.status(401).json({ error: 'Unauthorized' });
+  if (!stripe) return res.status(500).json({ error: 'Stripe not configured.' });
+  const userId = String(req.params.userId || '').trim();
+  if (!userId) return res.status(400).json({ error: 'userId required.' });
+
+  const billing = getBillingByUserId(userId);
+  if (!billing?.stripe_subscription_id) return res.status(404).json({ error: 'Subscription not found for this user.' });
+
+  try {
+    const sub = await stripe.subscriptions.update(billing.stripe_subscription_id, { cancel_at_period_end: false });
+    const updated = upsertBillingByUserId(userId, {
+      subscription_status: sub.status,
+      cancel_at_period_end: !!sub.cancel_at_period_end,
+      current_period_end: sub.current_period_end ? new Date(Number(sub.current_period_end) * 1000).toISOString() : null
+    });
+    res.json({ ok: true, billing: updated });
+  } catch (e) {
+    res.status(500).json({ error: 'Could not reactivate subscription.', detail: String(e?.message || e) });
+  }
+});
+
 app.get('/provider/:id', async (req, res) => {
   const mechanicId = String(req.params.id || '').trim();
   if (!mechanicId) return res.status(400).send('Invalid provider id');
@@ -1112,7 +1172,7 @@ app.get('/admin', async (req, res) => {
   .warn{border:1px solid #7b3b3b;background:#2a1414;color:#ffcbcb;border-radius:12px;padding:10px;margin-top:10px}
   @media(max-width:1000px){.grid{grid-template-columns:repeat(2,minmax(0,1fr))}.span2,.span3,.span6{grid-column:span 2}}
   </style></head><body><div class='wrap'>
-  <div class='top'><div><h1>ShopMyRepair Admin</h1><div style='color:var(--muted);margin-top:4px'>Business overview + lead quality + demand hotspots</div></div><div><a href='/admin/ops?token=${encodeURIComponent(String(req.query.token||''))}'>Open Ops Dashboard →</a></div></div>
+  <div class='top'><div><h1>ShopMyRepair Admin</h1><div style='color:var(--muted);margin-top:4px'>Business overview + lead quality + demand hotspots</div></div><div style='display:flex;gap:10px'><a href='/pricing.html' target='_blank'>Open Pricing Page ↗</a><a href='/admin/ops?token=${encodeURIComponent(String(req.query.token||''))}'>Open Ops Dashboard →</a></div></div>
 
   <div class='grid'>
     <div class='card'><div class='k'>Total Signups</div><div class='v'>${c.total}</div></div>
@@ -1128,7 +1188,81 @@ app.get('/admin', async (req, res) => {
     ${loadError ? `<div class='span6 warn'><h3 style='margin:0 0 6px 0'>Data source error</h3><div>${esc(loadError)}</div><div style='margin-top:6px'>Check SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY on deploy, or unset both for JSON fallback.</div></div>` : ''}
 
     <div class='card span6'><h3>Recent Signups (latest 50)</h3><div class='tbl' style='margin-top:8px'><table><thead><tr><th>ID</th><th>Name</th><th>Type</th><th>Borough</th><th>ZIP</th><th>Email</th><th>Created</th></tr></thead><tbody>${recentRows || '<tr><td colspan="7">No signups yet.</td></tr>'}</tbody></table></div></div>
+
+    <div class='card span6'>
+      <h3>Subscription Management</h3>
+      <div class='k' style='margin-top:6px'>Manage active/past-due/cancelled subscriptions for mechanic shops and individual mechanics.</div>
+      <div id='billingSummary' class='k' style='margin-top:8px'>Loading billing accounts...</div>
+      <div class='tbl' style='margin-top:8px'>
+        <table>
+          <thead><tr><th>User ID</th><th>Email</th><th>Role</th><th>Status</th><th>Period End</th><th>Cancel at Period End</th><th>Actions</th></tr></thead>
+          <tbody id='billingRows'><tr><td colspan='7'>Loading...</td></tr></tbody>
+        </table>
+      </div>
+    </div>
   </div>
+  <script>
+    const adminToken = '${encodeURIComponent(String(req.query.token||''))}';
+
+    async function loadBilling() {
+      const summaryEl = document.getElementById('billingSummary');
+      const rowsEl = document.getElementById('billingRows');
+      try {
+        const r = await fetch('/api/admin/billing?token=' + adminToken);
+        const d = await r.json();
+        if (!r.ok) throw new Error(d.error || 'Could not load billing');
+
+        const s = d.summary || {};
+        summaryEl.innerHTML = 'Total: <b>' + (s.total||0) + '</b> · Active: <b>' + (s.active||0) + '</b> · Past Due: <b>' + (s.pastDue||0) + '</b> · Cancelled: <b>' + (s.cancelled||0) + '</b>';
+
+        const rows = d.billing || [];
+        if (!rows.length) {
+          rowsEl.innerHTML = '<tr><td colspan="7">No billing accounts yet.</td></tr>';
+          return;
+        }
+
+        rowsEl.innerHTML = rows.map(x => {
+          const uid = String(x.user_id || '');
+          const status = String(x.subscription_status || 'none');
+          const actionBtns =
+            '<button onclick="cancelSub(\'' + uid + '\')" style="margin-right:6px">Cancel End of Term</button>' +
+            '<button onclick="reactivateSub(\'' + uid + '\')">Reactivate</button>';
+          return '<tr>' +
+            '<td>' + uid + '</td>' +
+            '<td>' + (x.email || '') + '</td>' +
+            '<td>' + (x.role || '') + '</td>' +
+            '<td>' + status + '</td>' +
+            '<td>' + (x.current_period_end || '-') + '</td>' +
+            '<td>' + (x.cancel_at_period_end ? 'yes' : 'no') + '</td>' +
+            '<td>' + actionBtns + '</td>' +
+          '</tr>';
+        }).join('');
+      } catch (e) {
+        summaryEl.textContent = e.message || 'Could not load billing accounts.';
+        rowsEl.innerHTML = '<tr><td colspan="7">Could not load billing accounts.</td></tr>';
+      }
+    }
+
+    async function cancelSub(userId) {
+      try {
+        const r = await fetch('/api/admin/billing/' + encodeURIComponent(userId) + '/cancel?token=' + adminToken, { method: 'POST' });
+        const d = await r.json();
+        if (!r.ok) throw new Error(d.error || 'Could not cancel subscription');
+        await loadBilling();
+      } catch (e) { alert(e.message || 'Failed to cancel'); }
+    }
+
+    async function reactivateSub(userId) {
+      try {
+        const r = await fetch('/api/admin/billing/' + encodeURIComponent(userId) + '/reactivate?token=' + adminToken, { method: 'POST' });
+        const d = await r.json();
+        if (!r.ok) throw new Error(d.error || 'Could not reactivate subscription');
+        await loadBilling();
+      } catch (e) { alert(e.message || 'Failed to reactivate'); }
+    }
+
+    loadBilling();
+  </script>
   </div></body></html>`);
 });
 
