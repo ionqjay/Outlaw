@@ -1578,8 +1578,8 @@ app.get('/admin', async (req, res) => {
         const canCancel = status === 'active' || status === 'trialing' || status === 'past_due';
         const canActivate = status !== 'active' || !!x.cancel_at_period_end;
         const actionBtns =
-          '<button class="btn cancel" ' + (canCancel ? '' : 'disabled') + ' onclick="cancelSub(\'' + uid + '\')">Cancel</button> ' +
-          '<button class="btn activate" ' + (canActivate ? '' : 'disabled') + ' onclick="reactivateSub(\'' + uid + '\')">Keep Active</button>';
+          '<button class="btn cancel" ' + (canCancel ? '' : 'disabled') + ' data-bill-act="cancel" data-user-id="' + encodeURIComponent(uid) + '">Cancel</button> ' +
+          '<button class="btn activate" ' + (canActivate ? '' : 'disabled') + ' data-bill-act="reactivate" data-user-id="' + encodeURIComponent(uid) + '">Keep Active</button>';
         return '<tr>' +
           '<td>' + uid + '</td>' +
           '<td>' + (x.email || '-') + '</td>' +
@@ -1656,6 +1656,15 @@ app.get('/admin', async (req, res) => {
       if (!email) return;
       if (act === 'ban') banAccount(email, category);
       if (act === 'unban') unbanAccount(email);
+    });
+    document.getElementById('billingRows').addEventListener('click', (ev) => {
+      const btn = ev.target.closest('button[data-bill-act]');
+      if (!btn) return;
+      const act = btn.getAttribute('data-bill-act');
+      const userId = decodeURIComponent(String(btn.getAttribute('data-user-id') || ''));
+      if (!userId) return;
+      if (act === 'cancel') cancelSub(userId);
+      if (act === 'reactivate') reactivateSub(userId);
     });
     loadAccounts();
     loadBilling();
