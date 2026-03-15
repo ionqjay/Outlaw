@@ -26,7 +26,7 @@ async function fetchJson(path, options = {}) {
       let data = {};
       try { data = text ? JSON.parse(text) : {}; } catch { data = { error: text || 'Unexpected response' }; }
 
-      if (!res.ok && res.status === 404 && /route not found|not found/i.test(String(data?.error || data?.message || text))) {
+      if (!res.ok && res.status === 404 && /route not found|not found|not_found|page could not be found/i.test(String(data?.error || data?.message || text))) {
         lastErr = new Error(`API route missing on ${base}`);
         continue;
       }
