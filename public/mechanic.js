@@ -97,6 +97,17 @@ function getProviderTypeLabel(role) {
   return getProviderType(role) === 'shop' ? 'Mechanic Shop' : 'Individual Mechanic';
 }
 
+function formatInviteCountdown(expiresAt) {
+  const ts = new Date(expiresAt || 0).getTime();
+  if (!Number.isFinite(ts)) return 'No timer available';
+  const ms = ts - Date.now();
+  if (ms <= 0) return 'Expired';
+  const mins = Math.floor(ms / 60000);
+  const h = Math.floor(mins / 60);
+  const m = mins % 60;
+  return h > 0 ? `${h}h ${m}m left` : `${m}m left`;
+}
+
 async function boot() {
   const session = await window.smrAuth.requireRole(['mechanic', 'shop']);
   if (!session) return;
@@ -237,6 +248,7 @@ async function boot() {
             <div class='small'>${rep.issue_category || ''} · ${rep.city || ''}, ${rep.state || ''} · ${rep.urgency || 'Standard'}</div>
             <div class='small'>${rep.vehicle_year || ''} ${rep.vehicle_make || ''} ${rep.vehicle_model || ''}</div>
             <div class='small'><b>Repair needed:</b> ${ownerMeta.cleanDetails || 'No description provided.'}</div>
+            <div class='small'><b>Estimate window:</b> ${formatInviteCountdown(rep.invite_expires_at)}</div>
             <div class='estimate-kpis'>
               <div class='kpi-pill'><div class='lbl'>Your estimate (USD)</div><input placeholder='e.g. 325' id='amount-${rep.id}' /></div>
               <div class='kpi-pill'><div class='lbl'>ETA (hours)</div><input placeholder='24' id='eta-${rep.id}' value='24' /></div>
@@ -496,6 +508,11 @@ async function boot() {
   await refreshBillingStatus();
   loadRepairs();
   loadDashboard();
+
+  setInterval(() => {
+    const repairsView = document.getElementById('view-repairs');
+    if (repairsView && repairsView.style.display !== 'none') loadRepairs();
+  }, 60000);
 }
 
 boot();

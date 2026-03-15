@@ -385,17 +385,17 @@ async function listRepairRequests({ ownerId, status, providerEmail } = {}) {
     if (providerEmail) {
       const now = Date.now();
       const invites = readInvites();
-      const allowed = new Set(
-        invites
-          .filter(i => String(i.provider_email) === String(providerEmail).toLowerCase())
-          .filter(i => String(i.status || 'pending') === 'pending')
-          .filter(i => {
-            const exp = new Date(i.expires_at || 0).getTime();
-            return Number.isFinite(exp) ? exp > now : true;
-          })
-          .map(i => Number(i.repair_id))
-      );
-      rows = rows.filter(r => allowed.has(Number(r.id)));
+      const activeInvites = invites
+        .filter(i => String(i.provider_email) === String(providerEmail).toLowerCase())
+        .filter(i => String(i.status || 'pending') === 'pending')
+        .filter(i => {
+          const exp = new Date(i.expires_at || 0).getTime();
+          return Number.isFinite(exp) ? exp > now : true;
+        });
+      const byRepair = new Map(activeInvites.map(i => [Number(i.repair_id), i]));
+      rows = rows
+        .filter(r => byRepair.has(Number(r.id)))
+        .map(r => ({ ...r, invite_expires_at: byRepair.get(Number(r.id))?.expires_at || null }));
     }
     return rows;
   }
@@ -406,17 +406,17 @@ async function listRepairRequests({ ownerId, status, providerEmail } = {}) {
   if (providerEmail) {
     const now = Date.now();
     const invites = readInvites();
-    const allowed = new Set(
-      invites
-        .filter(i => String(i.provider_email) === String(providerEmail).toLowerCase())
-        .filter(i => String(i.status || 'pending') === 'pending')
-        .filter(i => {
-          const exp = new Date(i.expires_at || 0).getTime();
-          return Number.isFinite(exp) ? exp > now : true;
-        })
-        .map(i => Number(i.repair_id))
-    );
-    data = data.filter(x => allowed.has(Number(x.id)));
+    const activeInvites = invites
+      .filter(i => String(i.provider_email) === String(providerEmail).toLowerCase())
+      .filter(i => String(i.status || 'pending') === 'pending')
+      .filter(i => {
+        const exp = new Date(i.expires_at || 0).getTime();
+        return Number.isFinite(exp) ? exp > now : true;
+      });
+    const byRepair = new Map(activeInvites.map(i => [Number(i.repair_id), i]));
+    data = data
+      .filter(x => byRepair.has(Number(x.id)))
+      .map(x => ({ ...x, invite_expires_at: byRepair.get(Number(x.id))?.expires_at || null }));
   }
   return data;
 }
