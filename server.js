@@ -19,6 +19,7 @@ const BIDS_PATH = path.join(__dirname, 'bids.json');
 const REQUEST_INVITES_PATH = path.join(__dirname, 'request_invites.json');
 const FEEDBACKS_PATH = path.join(__dirname, 'feedbacks.json');
 const BILLING_ACCOUNTS_PATH = path.join(__dirname, 'billing_accounts.json');
+const BANNED_ACCOUNTS_PATH = path.join(__dirname, 'banned_accounts.json');
 
 const TURNSTILE_SECRET = process.env.TURNSTILE_SECRET || '';
 const TWILIO_ACCOUNT_SID = process.env.TWILIO_ACCOUNT_SID || '';
@@ -102,6 +103,40 @@ function upsertBillingByUserId(userId, patch = {}) {
 
 function isSubscriptionActive(status) {
   return ['active', 'trialing', 'past_due'].includes(String(status || '').toLowerCase());
+}
+
+function readBannedAccounts() {
+  return readJson(BANNED_ACCOUNTS_PATH, []);
+}
+
+function writeBannedAccounts(rows) {
+  writeJson(BANNED_ACCOUNTS_PATH, rows);
+}
+
+function isBannedEmail(email) {
+  const e = String(email || '').trim().toLowerCase();
+  if (!e) return false;
+  return readBannedAccounts().some(x => String(x.email || '').toLowerCase() === e && x.active !== false);
+}
+
+function setBannedEmail(email, active, reason = '', category = '') {
+  const e = String(email || '').trim().toLowerCase();
+  if (!e) return null;
+  const rows = readBannedAccounts();
+  const idx = rows.findIndex(x => String(x.email || '').toLowerCase() === e);
+  const payload = idx >= 0 ? rows[idx] : { email: e, created_at: new Date().toISOString() };
+  const next = {
+    ...payload,
+    email: e,
+    active: !!active,
+    reason: String(reason || payload.reason || ''),
+    category: String(category || payload.category || ''),
+    updated_at: new Date().toISOString()
+  };
+  if (idx >= 0) rows[idx] = next;
+  else rows.unshift(next);
+  writeBannedAccounts(rows);
+  return next;
 }
 
 function resolvePriceForRole(role) {
@@ -514,6 +549,8 @@ app.post('/api/signup', async (req, res) => {
   if (!name || !email || !phone || !zip || !borough || !type) return res.status(400).json({ error: 'Missing required fields.' });
   if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return res.status(400).json({ error: 'Invalid email.' });
   if (!['owner', 'mechanic'].includes(type)) return res.status(400).json({ error: 'Invalid type.' });
+  const normalizedEmail = String(email).trim().toLowerCase();
+  if (isBannedEmail(normalizedEmail)) return res.status(403).json({ error: 'This account is restricted. Contact support.' });
 
   const cleanPhone = String(phone).replace(/\D/g, '');
   if (cleanPhone.length !== 10) return res.status(400).json({ error: 'Invalid phone.' });
@@ -568,6 +605,9 @@ app.post('/api/owner-request', async (req, res) => {
 
   if (!fullName || !email || !mobile || !vehicleYear || !vehicleMake || !vehicleModel || !issueCategory || !issueDetails || !serviceAddress || !city || !state || !zip) {
     return res.status(400).json({ error: 'Please complete all required owner request fields.' });
+  }
+  if (isBannedEmail(String(email).trim().toLowerCase())) {
+    return res.status(403).json({ error: 'This account is restricted. Contact support.' });
   }
 
   try {
@@ -746,6 +786,10 @@ app.post('/api/bids', async (req, res) => {
       }
     }
   } catch {}
+
+  if (providerEmail && isBannedEmail(providerEmail)) {
+    return res.status(403).json({ error: 'This account is restricted. Contact support.' });
+  }
 
   try {
     const existingAllForRequest = await listBids({ requestId: Number(requestId) });
@@ -1056,6 +1100,56 @@ app.post('/api/admin/billing/:userId/reactivate', async (req, res) => {
   }
 });
 
+app.get('/api/admin/accounts', async (req, res) => {
+  if (req.query.token !== ADMIN_TOKEN) return res.status(401).json({ error: 'Unauthorized' });
+  try {
+    const signups = await listSignups();
+    const bans = readBannedAccounts();
+    const banMap = new Map(bans.map(b => [String(b.email || '').toLowerCase(), b]));
+    const accounts = signups.map(s => {
+      const typeRaw = String(s.type || s.Type || '').toLowerCase();
+      const hasShop = String(s.has_shop || s.HasShop || '').toLowerCase();
+      const email = String(s.email || s.Email || '').trim().toLowerCase();
+      const category = typeRaw === 'owner'
+        ? 'owner'
+        : (hasShop === 'yes' || hasShop === 'true' || hasShop === 'shop') ? 'mechanic_shop' : 'individual_mechanic';
+      const ban = banMap.get(email);
+      return {
+        id: s.id || s.Id || null,
+        name: s.name || s.Name || '',
+        email,
+        category,
+        borough: s.borough || s.Borough || '',
+        zip: s.zip || s.ZIP || '',
+        created_at: s.created_at || s.CreatedDate || '',
+        banned: !!(ban && ban.active !== false),
+        ban_reason: ban?.reason || ''
+      };
+    });
+    res.json({ ok: true, accounts });
+  } catch (e) {
+    res.status(500).json({ error: 'Could not load accounts', detail: String(e?.message || e) });
+  }
+});
+
+app.post('/api/admin/accounts/:email/ban', async (req, res) => {
+  if (req.query.token !== ADMIN_TOKEN) return res.status(401).json({ error: 'Unauthorized' });
+  const email = String(req.params.email || '').trim().toLowerCase();
+  const reason = String(req.body?.reason || 'Admin action').trim();
+  const category = String(req.body?.category || '').trim();
+  if (!email) return res.status(400).json({ error: 'Email required.' });
+  const updated = setBannedEmail(email, true, reason, category);
+  res.json({ ok: true, ban: updated });
+});
+
+app.post('/api/admin/accounts/:email/unban', async (req, res) => {
+  if (req.query.token !== ADMIN_TOKEN) return res.status(401).json({ error: 'Unauthorized' });
+  const email = String(req.params.email || '').trim().toLowerCase();
+  if (!email) return res.status(400).json({ error: 'Email required.' });
+  const updated = setBannedEmail(email, false);
+  res.json({ ok: true, ban: updated });
+});
+
 app.get('/provider/:id', async (req, res) => {
   const mechanicId = String(req.params.id || '').trim();
   if (!mechanicId) return res.status(400).send('Invalid provider id');
@@ -1218,6 +1312,27 @@ app.get('/admin', async (req, res) => {
     <div class='card span6'><h3>Recent Signups (latest 50)</h3><div class='tbl'><table><thead><tr><th>ID</th><th>Name</th><th>Type</th><th>Borough</th><th>ZIP</th><th>Email</th><th>Created</th></tr></thead><tbody>${recentRows || '<tr><td colspan="7">No signups yet.</td></tr>'}</tbody></table></div></div>
 
     <div class='card span6'>
+      <h3>Account Management (Ban Controls)</h3>
+      <div class='k' style='margin-top:8px'>Filter by category and one-click ban/unban owners, individual mechanics, and mechanic shops.</div>
+      <div class='toolbar'>
+        <input id='accountSearch' class='search' placeholder='Search account email, name, category...' />
+        <select id='accountCategory' class='search' style='max-width:220px'>
+          <option value='all'>All categories</option>
+          <option value='owner'>Owner</option>
+          <option value='individual_mechanic'>Individual Mechanic</option>
+          <option value='mechanic_shop'>Mechanic Shop</option>
+        </select>
+        <button class='btn' onclick='loadAccounts()'>Refresh</button>
+      </div>
+      <div class='tbl'>
+        <table>
+          <thead><tr><th>Name</th><th>Email</th><th>Category</th><th>Borough</th><th>Status</th><th>Actions</th></tr></thead>
+          <tbody id='accountRows'><tr><td colspan='6'>Loading accounts...</td></tr></tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class='card span6'>
       <h3>Subscription Management</h3>
       <div id='billingSummary' class='k' style='margin-top:8px'>Loading billing accounts...</div>
       <div id='billingMode' class='notice'>Checking Stripe mode...</div>
@@ -1237,6 +1352,7 @@ app.get('/admin', async (req, res) => {
   <script>
     const adminToken = '${encodeURIComponent(String(req.query.token||''))}';
     let billingCache = [];
+    let accountCache = [];
 
     function statusClass(status) {
       const s = String(status || 'none').toLowerCase();
@@ -1252,6 +1368,81 @@ app.get('/admin', async (req, res) => {
       el.style.display = 'block';
       clearTimeout(window.__toastT);
       window.__toastT = setTimeout(() => { el.style.display = 'none'; }, 2200);
+    }
+
+    function normalizeCategory(cat) {
+      const c = String(cat || '').toLowerCase();
+      if (c === 'mechanic_shop') return 'Mechanic Shop';
+      if (c === 'individual_mechanic') return 'Individual Mechanic';
+      return 'Owner';
+    }
+
+    function renderAccountRows(rows) {
+      const rowsEl = document.getElementById('accountRows');
+      if (!rows.length) {
+        rowsEl.innerHTML = '<tr><td colspan="6">No matching accounts.</td></tr>';
+        return;
+      }
+      rowsEl.innerHTML = rows.map(x => {
+        const email = String(x.email || '');
+        const action = x.banned
+          ? '<button class="btn activate" onclick="unbanAccount(\'' + email + '\')">Unban</button>'
+          : '<button class="btn cancel" onclick="banAccount(\'' + email + '\', \'' + String(x.category || '') + '\')">Ban</button>';
+        return '<tr>' +
+          '<td>' + (x.name || '-') + '</td>' +
+          '<td>' + email + '</td>' +
+          '<td>' + normalizeCategory(x.category) + '</td>' +
+          '<td>' + (x.borough || '-') + '</td>' +
+          '<td><span class="badge ' + (x.banned ? 'st-canceled' : 'st-active') + '">' + (x.banned ? 'banned' : 'active') + '</span></td>' +
+          '<td>' + action + '</td>' +
+        '</tr>';
+      }).join('');
+    }
+
+    function applyAccountFilters() {
+      const q = String(document.getElementById('accountSearch').value || '').trim().toLowerCase();
+      const cat = String(document.getElementById('accountCategory').value || 'all');
+      let rows = accountCache.slice();
+      if (cat !== 'all') rows = rows.filter(x => String(x.category || '') === cat);
+      if (q) rows = rows.filter(x => [x.name, x.email, x.category, x.borough].map(v => String(v || '').toLowerCase()).join(' ').includes(q));
+      renderAccountRows(rows);
+    }
+
+    async function loadAccounts() {
+      try {
+        const r = await fetch('/api/admin/accounts?token=' + adminToken);
+        const d = await r.json();
+        if (!r.ok) throw new Error(d.error || 'Could not load accounts');
+        accountCache = d.accounts || [];
+        applyAccountFilters();
+      } catch (e) {
+        document.getElementById('accountRows').innerHTML = '<tr><td colspan="6">' + (e.message || 'Could not load accounts') + '</td></tr>';
+      }
+    }
+
+    async function banAccount(email, category) {
+      const reason = prompt('Reason for ban (optional):', 'Admin action') || 'Admin action';
+      try {
+        const r = await fetch('/api/admin/accounts/' + encodeURIComponent(email) + '/ban?token=' + adminToken, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ reason, category })
+        });
+        const d = await r.json();
+        if (!r.ok) throw new Error(d.error || 'Could not ban account');
+        toast('Account banned.');
+        await loadAccounts();
+      } catch (e) { toast(e.message || 'Failed to ban account'); }
+    }
+
+    async function unbanAccount(email) {
+      try {
+        const r = await fetch('/api/admin/accounts/' + encodeURIComponent(email) + '/unban?token=' + adminToken, { method: 'POST' });
+        const d = await r.json();
+        if (!r.ok) throw new Error(d.error || 'Could not unban account');
+        toast('Account unbanned.');
+        await loadAccounts();
+      } catch (e) { toast(e.message || 'Failed to unban account'); }
     }
 
     function renderBillingRows(rows) {
@@ -1333,6 +1524,9 @@ app.get('/admin', async (req, res) => {
     }
 
     document.getElementById('billingSearch').addEventListener('input', applySearch);
+    document.getElementById('accountSearch').addEventListener('input', applyAccountFilters);
+    document.getElementById('accountCategory').addEventListener('change', applyAccountFilters);
+    loadAccounts();
     loadBilling();
   </script>
   </div></body></html>`);
