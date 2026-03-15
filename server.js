@@ -109,6 +109,14 @@ function isSubscriptionActive(status) {
   return ['active', 'trialing', 'past_due'].includes(String(status || '').toLowerCase());
 }
 
+function canSubmitEstimatesFromBilling(billing) {
+  if (!billing) return false;
+  const override = String(billing.manual_access_override || '').toLowerCase();
+  if (override === 'disabled') return false;
+  if (override === 'active') return true;
+  return isSubscriptionActive(billing.subscription_status);
+}
+
 function readBannedAccounts() {
   return readJson(BANNED_ACCOUNTS_PATH, []);
 }
@@ -853,7 +861,7 @@ app.post('/api/bids', async (req, res) => {
   }
 
   const billing = getBillingByUserId(mechanicId);
-  if (!billing || !isSubscriptionActive(billing.subscription_status)) {
+  if (!billing || !canSubmitEstimatesFromBilling(billing)) {
     return res.status(402).json({ error: 'Active $99/month subscription required to submit estimates.' });
   }
 
@@ -1068,7 +1076,8 @@ app.get('/api/billing/status', async (req, res) => {
     ok: true,
     hasSubscription: true,
     status,
-    canSubmitEstimates: isSubscriptionActive(status),
+    manualAccessOverride: billing.manual_access_override || null,
+    canSubmitEstimates: canSubmitEstimatesFromBilling(billing),
     currentPeriodEnd: billing.current_period_end || null,
     amountLabel: '$99/month',
     refundPolicy: 'If you receive zero eligible opportunities to submit an estimate in a billing month, your $99 is refunded. Winning jobs is based on quote quality, speed, and reputation.'
@@ -1218,6 +1227,25 @@ app.post('/api/admin/billing/:userId/reactivate', async (req, res) => {
   } catch (e) {
     res.status(500).json({ error: 'Could not reactivate subscription.', detail: String(e?.message || e) });
   }
+});
+
+app.post('/api/admin/billing/:userId/manual-access', async (req, res) => {
+  if (req.query.token !== ADMIN_TOKEN) return res.status(401).json({ error: 'Unauthorized' });
+  const userId = String(req.params.userId || '').trim();
+  const mode = String(req.body?.mode || '').toLowerCase(); // active|disabled|clear
+  const reason = String(req.body?.reason || '').trim();
+  if (!userId) return res.status(400).json({ error: 'userId required.' });
+  if (!['active', 'disabled', 'clear'].includes(mode)) return res.status(400).json({ error: 'mode must be active, disabled, or clear.' });
+
+  const existing = getBillingByUserId(userId) || { user_id: userId };
+  const updated = upsertBillingByUserId(userId, {
+    email: existing.email || '',
+    role: existing.role || '',
+    manual_access_override: mode === 'clear' ? null : mode,
+    manual_access_reason: reason || existing.manual_access_reason || ''
+  });
+
+  res.json({ ok: true, billing: updated });
 });
 
 app.get('/api/admin/accounts', async (req, res) => {
@@ -1462,7 +1490,7 @@ app.get('/admin', async (req, res) => {
       </div>
       <div class='tbl'>
         <table>
-          <thead><tr><th>User ID</th><th>Email</th><th>Role</th><th>Status</th><th>Period End</th><th>Cancel at End</th><th>Actions</th></tr></thead>
+          <thead><tr><th>User ID</th><th>Email</th><th>Role</th><th>Status</th><th>Manual Override</th><th>Period End</th><th>Cancel at End</th><th>Actions</th></tr></thead>
           <tbody id='billingRows'><tr><td colspan='7'>Loading...</td></tr></tbody>
         </table>
       </div>
@@ -1569,7 +1597,7 @@ app.get('/admin', async (req, res) => {
     function renderBillingRows(rows) {
       const rowsEl = document.getElementById('billingRows');
       if (!rows.length) {
-        rowsEl.innerHTML = '<tr><td colspan="7">No matching billing accounts.</td></tr>';
+        rowsEl.innerHTML = '<tr><td colspan="8">No matching billing accounts.</td></tr>';
         return;
       }
       rowsEl.innerHTML = rows.map(x => {
@@ -1577,14 +1605,19 @@ app.get('/admin', async (req, res) => {
         const status = String(x.subscription_status || 'none');
         const canCancel = status === 'active' || status === 'trialing' || status === 'past_due';
         const canActivate = status !== 'active' || !!x.cancel_at_period_end;
+        const manual = String(x.manual_access_override || 'none');
         const actionBtns =
           '<button class="btn cancel" ' + (canCancel ? '' : 'disabled') + ' data-bill-act="cancel" data-user-id="' + encodeURIComponent(uid) + '">Cancel</button> ' +
-          '<button class="btn activate" ' + (canActivate ? '' : 'disabled') + ' data-bill-act="reactivate" data-user-id="' + encodeURIComponent(uid) + '">Keep Active</button>';
+          '<button class="btn activate" ' + (canActivate ? '' : 'disabled') + ' data-bill-act="reactivate" data-user-id="' + encodeURIComponent(uid) + '">Keep Active</button> ' +
+          '<button class="btn activate" data-bill-act="force-active" data-user-id="' + encodeURIComponent(uid) + '">Force Active</button> ' +
+          '<button class="btn cancel" data-bill-act="force-disable" data-user-id="' + encodeURIComponent(uid) + '">Disable Access</button> ' +
+          '<button class="btn" data-bill-act="clear-manual" data-user-id="' + encodeURIComponent(uid) + '">Auto Mode</button>';
         return '<tr>' +
           '<td>' + uid + '</td>' +
           '<td>' + (x.email || '-') + '</td>' +
           '<td>' + (x.role || '-') + '</td>' +
           '<td><span class="badge ' + statusClass(status) + '">' + status + '</span></td>' +
+          '<td>' + manual + '</td>' +
           '<td>' + (x.current_period_end || '-') + '</td>' +
           '<td>' + (x.cancel_at_period_end ? 'yes' : 'no') + '</td>' +
           '<td>' + actionBtns + '</td>' +
@@ -1620,7 +1653,7 @@ app.get('/admin', async (req, res) => {
         applySearch();
       } catch (e) {
         summaryEl.textContent = e.message || 'Could not load billing accounts.';
-        document.getElementById('billingRows').innerHTML = '<tr><td colspan="7">Could not load billing accounts.</td></tr>';
+        document.getElementById('billingRows').innerHTML = '<tr><td colspan="8">Could not load billing accounts.</td></tr>';
       }
     }
 
@@ -1644,6 +1677,21 @@ app.get('/admin', async (req, res) => {
       } catch (e) { toast(e.message || 'Failed to reactivate'); }
     }
 
+    async function setManualAccess(userId, mode) {
+      const reason = prompt('Manual override note (optional):', 'Admin manual override') || 'Admin manual override';
+      try {
+        const r = await fetch('/api/admin/billing/' + encodeURIComponent(userId) + '/manual-access?token=' + adminToken, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ mode, reason })
+        });
+        const d = await r.json();
+        if (!r.ok) throw new Error(d.error || 'Could not set manual access');
+        toast(mode === 'clear' ? 'Manual override cleared.' : 'Manual override updated.');
+        await loadBilling();
+      } catch (e) { toast(e.message || 'Failed to set manual access'); }
+    }
+
     document.getElementById('billingSearch').addEventListener('input', applySearch);
     document.getElementById('accountSearch').addEventListener('input', applyAccountFilters);
     document.getElementById('accountCategory').addEventListener('change', applyAccountFilters);
@@ -1665,6 +1713,9 @@ app.get('/admin', async (req, res) => {
       if (!userId) return;
       if (act === 'cancel') cancelSub(userId);
       if (act === 'reactivate') reactivateSub(userId);
+      if (act === 'force-active') setManualAccess(userId, 'active');
+      if (act === 'force-disable') setManualAccess(userId, 'disabled');
+      if (act === 'clear-manual') setManualAccess(userId, 'clear');
     });
     loadAccounts();
     loadBilling();
