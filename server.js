@@ -38,6 +38,10 @@ const STRIPE_PRICE_SHOP_MONTHLY = process.env.STRIPE_PRICE_SHOP_MONTHLY || '';
 const STRIPE_PRICE_MECHANIC_MONTHLY = process.env.STRIPE_PRICE_MECHANIC_MONTHLY || '';
 const APP_URL = process.env.APP_URL || 'http://localhost:3000';
 const stripe = STRIPE_SECRET_KEY ? new Stripe(STRIPE_SECRET_KEY) : null;
+
+const STANDARD_INVITE_WINDOW_MS = 2 * 60 * 60 * 1000; // 2h
+const URGENT_INVITE_WINDOW_MS = 45 * 60 * 1000; // 45m
+const MAX_REQUEST_AGE_MS = 24 * 60 * 60 * 1000; // 24h
 const CORS_ORIGINS = (process.env.CORS_ORIGINS || 'https://shopmyrepair.vercel.app,https://beta.shopmyrepair.com,https://shopmyrepair.com,http://localhost:3000')
   .split(',')
   .map(s => s.trim())
@@ -259,6 +263,17 @@ function normalizeProviderType(v) {
   return s === 'shop' ? 'shop' : 'mechanic';
 }
 
+function getInviteWindowMs(urgency = '') {
+  const s = String(urgency || '').toLowerCase();
+  return s.includes('urgent') ? URGENT_INVITE_WINDOW_MS : STANDARD_INVITE_WINDOW_MS;
+}
+
+function requestIsExpiredForNewInvites(repair) {
+  const created = new Date(repair?.created_at || repair?.CreatedDate || 0).getTime();
+  if (!Number.isFinite(created)) return false;
+  return Date.now() - created > MAX_REQUEST_AGE_MS;
+}
+
 function readInvites() {
   return readJson(REQUEST_INVITES_PATH, []);
 }
@@ -267,9 +282,9 @@ function writeInvites(rows) {
   writeJson(REQUEST_INVITES_PATH, rows);
 }
 
-async function createDispatchSnapshot(repair) {
+async function listProviderPool() {
   const allSignups = await listSignups();
-  const mechanics = allSignups
+  return allSignups
     .filter(x => String(x.type || x.Type || '').toLowerCase() === 'mechanic')
     .map(x => {
       const email = String(x.email || x.Email || '').trim().toLowerCase();
@@ -278,6 +293,10 @@ async function createDispatchSnapshot(repair) {
       return { email, providerType };
     })
     .filter(x => x.email);
+}
+
+async function createDispatchSnapshot(repair) {
+  const mechanics = await listProviderPool();
 
   const shops = mechanics.filter(x => x.providerType === 'shop').slice(0, 3);
   const inds = mechanics.filter(x => x.providerType === 'mechanic').slice(0, 2);
@@ -295,14 +314,65 @@ async function createDispatchSnapshot(repair) {
   }
 
   const rows = readInvites();
-  const now = new Date().toISOString();
+  const now = Date.now();
+  const windowMs = getInviteWindowMs(repair?.urgency);
   const additions = invited.map(p => ({
     repair_id: Number(repair.id || repair.Id),
     provider_email: p.email,
     provider_type: p.providerType,
-    created_at: now
+    status: 'pending',
+    created_at: new Date(now).toISOString(),
+    expires_at: new Date(now + windowMs).toISOString(),
+    submitted_at: null
   }));
   writeInvites([...rows.filter(r => Number(r.repair_id) !== Number(repair.id || repair.Id)), ...additions]);
+}
+
+async function processInviteExpirations(repairs = []) {
+  if (!Array.isArray(repairs) || !repairs.length) return;
+  const rows = readInvites();
+  const pool = await listProviderPool();
+  const now = Date.now();
+  let changed = false;
+
+  for (const repair of repairs) {
+    const repairId = Number(repair.id || repair.Id);
+    if (!repairId) continue;
+    if (String(repair.status || '').toLowerCase() !== 'open') continue;
+
+    const rInvites = rows.filter(r => Number(r.repair_id) === repairId);
+    for (const inv of rInvites) {
+      if (String(inv.status || 'pending') !== 'pending') continue;
+      const exp = new Date(inv.expires_at || 0).getTime();
+      if (!Number.isFinite(exp) || exp > now) continue;
+
+      inv.status = 'expired';
+      inv.expired_at = new Date(now).toISOString();
+      changed = true;
+
+      if (requestIsExpiredForNewInvites(repair)) continue;
+
+      const type = normalizeProviderType(inv.provider_type);
+      const used = new Set(rInvites.map(x => `${String(x.provider_email || '').toLowerCase()}:${normalizeProviderType(x.provider_type)}`));
+      const next = pool.find(p => p.providerType === type && !used.has(`${p.email}:${p.providerType}`));
+      if (!next) continue;
+
+      const windowMs = getInviteWindowMs(repair?.urgency);
+      rows.push({
+        repair_id: repairId,
+        provider_email: next.email,
+        provider_type: next.providerType,
+        status: 'pending',
+        created_at: new Date(now).toISOString(),
+        expires_at: new Date(now + windowMs).toISOString(),
+        submitted_at: null,
+        replaced_from: String(inv.provider_email || '').toLowerCase()
+      });
+      changed = true;
+    }
+  }
+
+  if (changed) writeInvites(rows);
 }
 
 async function listRepairRequests({ ownerId, status, providerEmail } = {}) {
@@ -311,20 +381,42 @@ async function listRepairRequests({ ownerId, status, providerEmail } = {}) {
     if (ownerId) q.push(`owner_id=eq.${encodeURIComponent(ownerId)}`);
     if (status) q.push(`status=eq.${encodeURIComponent(status)}`);
     let rows = await supabaseRequest(`repair_requests?${q.join('&')}`);
+    try { await processInviteExpirations(rows); } catch {}
     if (providerEmail) {
+      const now = Date.now();
       const invites = readInvites();
-      const allowed = new Set(invites.filter(i => String(i.provider_email) === String(providerEmail).toLowerCase()).map(i => Number(i.repair_id)));
-      if (allowed.size) rows = rows.filter(r => allowed.has(Number(r.id)));
+      const allowed = new Set(
+        invites
+          .filter(i => String(i.provider_email) === String(providerEmail).toLowerCase())
+          .filter(i => String(i.status || 'pending') === 'pending')
+          .filter(i => {
+            const exp = new Date(i.expires_at || 0).getTime();
+            return Number.isFinite(exp) ? exp > now : true;
+          })
+          .map(i => Number(i.repair_id))
+      );
+      rows = rows.filter(r => allowed.has(Number(r.id)));
     }
     return rows;
   }
   let data = readJson(REPAIR_REQUESTS_PATH, []);
   if (ownerId) data = data.filter(x => String(x.owner_id) === String(ownerId));
   if (status) data = data.filter(x => String(x.status) === String(status));
+  try { await processInviteExpirations(data); } catch {}
   if (providerEmail) {
+    const now = Date.now();
     const invites = readInvites();
-    const allowed = new Set(invites.filter(i => String(i.provider_email) === String(providerEmail).toLowerCase()).map(i => Number(i.repair_id)));
-    if (allowed.size) data = data.filter(x => allowed.has(Number(x.id)));
+    const allowed = new Set(
+      invites
+        .filter(i => String(i.provider_email) === String(providerEmail).toLowerCase())
+        .filter(i => String(i.status || 'pending') === 'pending')
+        .filter(i => {
+          const exp = new Date(i.expires_at || 0).getTime();
+          return Number.isFinite(exp) ? exp > now : true;
+        })
+        .map(i => Number(i.repair_id))
+    );
+    data = data.filter(x => allowed.has(Number(x.id)));
   }
   return data;
 }
@@ -792,16 +884,30 @@ app.post('/api/bids', async (req, res) => {
   }
 
   try {
+    const repairs = await listRepairRequests({});
+    const targetRepair = repairs.find(r => Number(r.id) === Number(requestId));
+    if (!targetRepair) return res.status(404).json({ error: 'Repair request not found.' });
+    if (requestIsExpiredForNewInvites(targetRepair)) {
+      return res.status(400).json({ error: 'This repair request is closed for new estimates.' });
+    }
+
     const existingAllForRequest = await listBids({ requestId: Number(requestId) });
     if (existingAllForRequest.some(b => String(b.mechanic_id) === String(mechanicId) && String(b.status || '').toLowerCase() !== 'declined')) {
       return res.status(400).json({ error: 'You already submitted an estimate for this request.' });
     }
 
-    const invites = readInvites().filter(i => Number(i.repair_id) === Number(requestId));
+    const inviteRows = readInvites();
+    const invites = inviteRows.filter(i => Number(i.repair_id) === Number(requestId));
+    let matchedInvite = null;
     if (invites.length && providerEmail) {
-      const invited = invites.some(i => String(i.provider_email) === providerEmail && normalizeProviderType(i.provider_type) === providerType);
-      if (!invited) {
+      matchedInvite = invites.find(i => String(i.provider_email) === providerEmail && normalizeProviderType(i.provider_type) === providerType);
+      if (!matchedInvite) {
         return res.status(400).json({ error: 'This request was not dispatched to your profile type.' });
+      }
+      const exp = new Date(matchedInvite.expires_at || 0).getTime();
+      const isExpired = Number.isFinite(exp) ? exp <= Date.now() : false;
+      if (String(matchedInvite.status || 'pending') !== 'pending' || isExpired) {
+        return res.status(400).json({ error: 'Your estimate window expired for this request.' });
       }
     }
 
@@ -838,6 +944,20 @@ app.post('/api/bids', async (req, res) => {
       status: 'open',
       created_at: new Date().toISOString()
     });
+
+    if (providerEmail) {
+      const rows = readInvites();
+      const idx = rows.findIndex(i => Number(i.repair_id) === Number(requestId) && String(i.provider_email) === providerEmail && normalizeProviderType(i.provider_type) === providerType && String(i.status || 'pending') === 'pending');
+      if (idx >= 0) {
+        rows[idx] = {
+          ...rows[idx],
+          status: 'submitted',
+          submitted_at: new Date().toISOString()
+        };
+        writeInvites(rows);
+      }
+    }
+
     res.json({ ok: true, bid: created });
   } catch {
     res.status(500).json({ error: 'Could not create bid.' });
