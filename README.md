@@ -32,6 +32,11 @@ Open: `http://localhost:3000`
 - `SUPABASE_URL`
 - `SUPABASE_SERVICE_ROLE_KEY`
 - `CORS_ORIGINS`
+- `APP_URL` (e.g. `https://shopmyrepair.com`)
+- `STRIPE_SECRET_KEY`
+- `STRIPE_WEBHOOK_SECRET`
+- `STRIPE_PRICE_MECHANIC_MONTHLY`
+- `STRIPE_PRICE_SHOP_MONTHLY`
 
 ## Frontend config
 Set `public/config.js`:

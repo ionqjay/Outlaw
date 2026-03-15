@@ -7,6 +7,7 @@ const API_BASES = [
 ].filter(Boolean).filter((v, i, a) => a.indexOf(v) === i);
 
 let workingApiBase = configuredApiBase || location.origin;
+let billingState = { canSubmitEstimates: false, status: 'none' };
 
 function api(base, path) {
   return `${base}${path}`;
@@ -101,6 +102,12 @@ async function boot() {
   if (!session) return;
 
   document.getElementById('logoutBtn').addEventListener('click', () => window.smrAuth.logoutToLogin());
+  document.getElementById('startSubscriptionBtn')?.addEventListener('click', startSubscription);
+  document.getElementById('manageBillingBtn')?.addEventListener('click', openBillingPortal);
+
+  const billingParam = new URLSearchParams(window.location.search).get('billing');
+  if (billingParam === 'success') setStatus('Subscription checkout completed. Refreshing billing status...', 'ok');
+  if (billingParam === 'cancel') setStatus('Checkout canceled. You can start subscription anytime.', 'err');
 
   const providerType = getProviderType(session.role);
   const providerTypeLabel = getProviderTypeLabel(session.role);
@@ -124,6 +131,71 @@ async function boot() {
   }
   const individualOnlyFields = document.getElementById('individualOnlyFields');
   if (individualOnlyFields) individualOnlyFields.style.display = isShop ? 'none' : 'block';
+
+  async function refreshBillingStatus() {
+    const el = document.getElementById('billingStatus');
+    if (el) el.textContent = 'Checking subscription status...';
+    try {
+      const data = await fetchJson(`/api/billing/status?userId=${encodeURIComponent(session.id)}`);
+      billingState = {
+        canSubmitEstimates: !!data.canSubmitEstimates,
+        status: String(data.status || 'none')
+      };
+      if (el) {
+        if (billingState.canSubmitEstimates) {
+          el.textContent = `Subscription active (${billingState.status}). You can submit estimates.`;
+          el.classList.remove('err');
+          el.classList.add('ok');
+        } else {
+          el.textContent = 'No active subscription yet. Start the $99/month package to unlock estimate submissions.';
+          el.classList.remove('ok');
+          el.classList.add('err');
+        }
+      }
+    } catch (err) {
+      if (el) {
+        el.textContent = err.message || 'Could not load billing status.';
+        el.classList.remove('ok');
+        el.classList.add('err');
+      }
+    }
+  }
+
+  async function startSubscription() {
+    const btn = document.getElementById('startSubscriptionBtn');
+    if (btn) { btn.disabled = true; btn.textContent = 'Redirecting...'; }
+    try {
+      const data = await fetchJson('/api/billing/create-checkout-session', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId: session.id, email: session.email, role: session.role })
+      });
+      if (!data?.url) throw new Error('Checkout URL missing.');
+      window.location.href = data.url;
+    } catch (err) {
+      setStatus(err.message || 'Could not start Stripe checkout.', 'err');
+    } finally {
+      if (btn) { btn.disabled = false; btn.textContent = 'Start $99 Subscription'; }
+    }
+  }
+
+  async function openBillingPortal() {
+    const btn = document.getElementById('manageBillingBtn');
+    if (btn) { btn.disabled = true; btn.textContent = 'Opening...'; }
+    try {
+      const data = await fetchJson('/api/billing/create-portal-session', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId: session.id })
+      });
+      if (!data?.url) throw new Error('Portal URL missing.');
+      window.location.href = data.url;
+    } catch (err) {
+      setStatus(err.message || 'Could not open billing portal.', 'err');
+    } finally {
+      if (btn) { btn.disabled = false; btn.textContent = 'Manage Billing'; }
+    }
+  }
 
   async function loadProfile() {
     const profile = await window.smrAuth.getMechanicProfile();
@@ -183,6 +255,11 @@ async function boot() {
           setInlineAlert(msg);
           if (goProfile) setView('profile');
         };
+
+        if (!billingState.canSubmitEstimates) {
+          fail('Active $99/month subscription required before submitting estimates.', true);
+          return;
+        }
 
         const amount = Number(document.getElementById(`amount-${id}`)?.value);
         const etaRaw = Number(document.getElementById(`eta-${id}`)?.value);
@@ -416,6 +493,7 @@ async function boot() {
   }
 
   await loadProfile();
+  await refreshBillingStatus();
   loadRepairs();
   loadDashboard();
 }

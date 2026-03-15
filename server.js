@@ -4,6 +4,7 @@ import { fileURLToPath } from 'url';
 import fs from 'fs';
 import axios from 'axios';
 import cors from 'cors';
+import Stripe from 'stripe';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -17,6 +18,7 @@ const REPAIR_REQUESTS_PATH = path.join(__dirname, 'repair_requests.json');
 const BIDS_PATH = path.join(__dirname, 'bids.json');
 const REQUEST_INVITES_PATH = path.join(__dirname, 'request_invites.json');
 const FEEDBACKS_PATH = path.join(__dirname, 'feedbacks.json');
+const BILLING_ACCOUNTS_PATH = path.join(__dirname, 'billing_accounts.json');
 
 const TURNSTILE_SECRET = process.env.TURNSTILE_SECRET || '';
 const TWILIO_ACCOUNT_SID = process.env.TWILIO_ACCOUNT_SID || '';
@@ -28,6 +30,13 @@ const MAILCHIMP_SERVER_PREFIX = process.env.MAILCHIMP_SERVER_PREFIX || '';
 const SUPABASE_URL = process.env.SUPABASE_URL || '';
 const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || '';
 const USE_SUPABASE = !!(SUPABASE_URL && SUPABASE_SERVICE_ROLE_KEY);
+
+const STRIPE_SECRET_KEY = process.env.STRIPE_SECRET_KEY || '';
+const STRIPE_WEBHOOK_SECRET = process.env.STRIPE_WEBHOOK_SECRET || '';
+const STRIPE_PRICE_SHOP_MONTHLY = process.env.STRIPE_PRICE_SHOP_MONTHLY || '';
+const STRIPE_PRICE_MECHANIC_MONTHLY = process.env.STRIPE_PRICE_MECHANIC_MONTHLY || '';
+const APP_URL = process.env.APP_URL || 'http://localhost:3000';
+const stripe = STRIPE_SECRET_KEY ? new Stripe(STRIPE_SECRET_KEY) : null;
 const CORS_ORIGINS = (process.env.CORS_ORIGINS || 'https://shopmyrepair.vercel.app,https://beta.shopmyrepair.com,https://shopmyrepair.com,http://localhost:3000')
   .split(',')
   .map(s => s.trim())
@@ -59,6 +68,46 @@ function readDb() {
 }
 function writeDb(data) {
   writeJson(DB_PATH, data);
+}
+
+function readBillingAccounts() {
+  return readJson(BILLING_ACCOUNTS_PATH, []);
+}
+
+function writeBillingAccounts(rows) {
+  writeJson(BILLING_ACCOUNTS_PATH, rows);
+}
+
+function getBillingByUserId(userId) {
+  if (!userId) return null;
+  const rows = readBillingAccounts();
+  return rows.find(r => String(r.user_id) === String(userId)) || null;
+}
+
+function upsertBillingByUserId(userId, patch = {}) {
+  const rows = readBillingAccounts();
+  const idx = rows.findIndex(r => String(r.user_id) === String(userId));
+  const base = idx >= 0 ? rows[idx] : { user_id: String(userId), created_at: new Date().toISOString() };
+  const next = {
+    ...base,
+    ...patch,
+    user_id: String(userId),
+    updated_at: new Date().toISOString()
+  };
+  if (idx >= 0) rows[idx] = next;
+  else rows.unshift(next);
+  writeBillingAccounts(rows);
+  return next;
+}
+
+function isSubscriptionActive(status) {
+  return ['active', 'trialing', 'past_due'].includes(String(status || '').toLowerCase());
+}
+
+function resolvePriceForRole(role) {
+  const normalized = String(role || '').toLowerCase();
+  if (normalized === 'shop') return STRIPE_PRICE_SHOP_MONTHLY || STRIPE_PRICE_MECHANIC_MONTHLY;
+  return STRIPE_PRICE_MECHANIC_MONTHLY || STRIPE_PRICE_SHOP_MONTHLY;
 }
 
 async function supabaseRequest(pathname, { method = 'GET', body } = {}) {
@@ -395,6 +444,55 @@ app.use(cors({
     return cb(new Error('Not allowed by CORS'));
   }
 }));
+
+app.post('/api/stripe/webhook', express.raw({ type: 'application/json' }), (req, res) => {
+  if (!stripe || !STRIPE_WEBHOOK_SECRET) return res.status(400).send('Stripe webhook not configured.');
+
+  let event;
+  try {
+    const sig = req.headers['stripe-signature'];
+    event = stripe.webhooks.constructEvent(req.body, sig, STRIPE_WEBHOOK_SECRET);
+  } catch (err) {
+    return res.status(400).send(`Webhook Error: ${err.message}`);
+  }
+
+  try {
+    if (event.type === 'checkout.session.completed') {
+      const sessionObj = event.data.object;
+      const userId = sessionObj?.metadata?.userId;
+      if (userId) {
+        upsertBillingByUserId(userId, {
+          email: sessionObj?.customer_details?.email || '',
+          role: sessionObj?.metadata?.role || 'mechanic',
+          stripe_customer_id: sessionObj?.customer || '',
+          stripe_subscription_id: sessionObj?.subscription || '',
+          subscription_status: 'active'
+        });
+      }
+    }
+
+    if (event.type === 'customer.subscription.updated' || event.type === 'customer.subscription.deleted') {
+      const sub = event.data.object;
+      const rows = readBillingAccounts();
+      const idx = rows.findIndex(r => String(r.stripe_subscription_id || '') === String(sub.id || ''));
+      if (idx >= 0) {
+        rows[idx] = {
+          ...rows[idx],
+          subscription_status: String(sub.status || ''),
+          current_period_end: sub.current_period_end ? new Date(Number(sub.current_period_end) * 1000).toISOString() : null,
+          cancel_at_period_end: !!sub.cancel_at_period_end,
+          updated_at: new Date().toISOString()
+        };
+        writeBillingAccounts(rows);
+      }
+    }
+
+    res.json({ received: true });
+  } catch {
+    res.status(500).send('Webhook processing failed');
+  }
+});
+
 app.use(express.json());
 app.use(express.static(path.join(__dirname, 'public')));
 
@@ -622,6 +720,11 @@ app.post('/api/bids', async (req, res) => {
     return res.status(400).json({ error: 'Missing required fields.' });
   }
 
+  const billing = getBillingByUserId(mechanicId);
+  if (!billing || !isSubscriptionActive(billing.subscription_status)) {
+    return res.status(402).json({ error: 'Active $99/month subscription required to submit estimates.' });
+  }
+
   const cleanNotes = String(notes || '').trim();
   if (cleanNotes.replace(/\[META\][\s\S]*?\[\/META\]/g, '').trim().length < 15) {
     return res.status(400).json({ error: 'Please include at least 15 characters in estimate notes.' });
@@ -777,6 +880,101 @@ app.post('/api/feedbacks', async (req, res) => {
     res.json({ ok: true, feedback: saved });
   } catch (e) {
     res.status(500).json({ error: 'Could not save feedback.', detail: String(e?.message || e) });
+  }
+});
+
+app.get('/api/billing/status', async (req, res) => {
+  const userId = String(req.query.userId || '').trim();
+  if (!userId) return res.status(400).json({ error: 'userId is required.' });
+
+  const billing = getBillingByUserId(userId);
+  if (!billing) {
+    return res.json({
+      ok: true,
+      hasSubscription: false,
+      status: 'none',
+      canSubmitEstimates: false,
+      amountLabel: '$99/month',
+      refundPolicy: 'If you receive zero eligible opportunities to submit an estimate in a billing month, your $99 is refunded. Winning jobs is based on quote quality, speed, and reputation.'
+    });
+  }
+
+  const status = String(billing.subscription_status || 'none');
+  return res.json({
+    ok: true,
+    hasSubscription: true,
+    status,
+    canSubmitEstimates: isSubscriptionActive(status),
+    currentPeriodEnd: billing.current_period_end || null,
+    amountLabel: '$99/month',
+    refundPolicy: 'If you receive zero eligible opportunities to submit an estimate in a billing month, your $99 is refunded. Winning jobs is based on quote quality, speed, and reputation.'
+  });
+});
+
+app.post('/api/billing/create-checkout-session', async (req, res) => {
+  if (!stripe) return res.status(500).json({ error: 'Stripe is not configured on the server.' });
+
+  const { userId, email, role } = req.body || {};
+  if (!userId || !email) return res.status(400).json({ error: 'userId and email are required.' });
+
+  const price = resolvePriceForRole(role);
+  if (!price) return res.status(500).json({ error: 'No Stripe price is configured for this package.' });
+
+  try {
+    const existing = getBillingByUserId(userId);
+    let customerId = existing?.stripe_customer_id || '';
+
+    if (!customerId) {
+      const customer = await stripe.customers.create({
+        email: String(email).trim().toLowerCase(),
+        metadata: { userId: String(userId), role: String(role || 'mechanic') }
+      });
+      customerId = customer.id;
+    }
+
+    const checkout = await stripe.checkout.sessions.create({
+      mode: 'subscription',
+      customer: customerId,
+      line_items: [{ price, quantity: 1 }],
+      success_url: `${APP_URL}/mechanic.html?billing=success`,
+      cancel_url: `${APP_URL}/mechanic.html?billing=cancel`,
+      allow_promotion_codes: true,
+      metadata: {
+        userId: String(userId),
+        role: String(role || 'mechanic')
+      }
+    });
+
+    upsertBillingByUserId(userId, {
+      email: String(email).trim().toLowerCase(),
+      role: String(role || 'mechanic'),
+      stripe_customer_id: customerId,
+      stripe_checkout_session_id: checkout.id
+    });
+
+    res.json({ ok: true, url: checkout.url });
+  } catch (e) {
+    res.status(500).json({ error: 'Could not start checkout.', detail: String(e?.message || e) });
+  }
+});
+
+app.post('/api/billing/create-portal-session', async (req, res) => {
+  if (!stripe) return res.status(500).json({ error: 'Stripe is not configured on the server.' });
+
+  const { userId } = req.body || {};
+  if (!userId) return res.status(400).json({ error: 'userId is required.' });
+
+  const billing = getBillingByUserId(userId);
+  if (!billing?.stripe_customer_id) return res.status(400).json({ error: 'No Stripe customer found for this account yet.' });
+
+  try {
+    const portal = await stripe.billingPortal.sessions.create({
+      customer: billing.stripe_customer_id,
+      return_url: `${APP_URL}/mechanic.html`
+    });
+    res.json({ ok: true, url: portal.url });
+  } catch (e) {
+    res.status(500).json({ error: 'Could not open billing portal.', detail: String(e?.message || e) });
   }
 });
 

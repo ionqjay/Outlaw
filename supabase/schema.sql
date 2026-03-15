@@ -97,9 +97,26 @@ create table if not exists public.feedbacks (
 create index if not exists idx_feedbacks_mechanic_id on public.feedbacks(mechanic_id);
 create index if not exists idx_feedbacks_request_id on public.feedbacks(request_id);
 
+create table if not exists public.billing_accounts (
+  id bigint generated always as identity primary key,
+  user_id text not null unique,
+  email text,
+  role text,
+  stripe_customer_id text,
+  stripe_subscription_id text,
+  subscription_status text,
+  current_period_end timestamptz,
+  cancel_at_period_end boolean default false,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
+create index if not exists idx_billing_accounts_subscription_status on public.billing_accounts(subscription_status);
+
 -- service-role backend only for now; enable RLS later once auth is fully live
 alter table public.signups disable row level security;
 alter table public.owner_requests disable row level security;
 alter table public.repair_requests disable row level security;
 alter table public.bids disable row level security;
 alter table public.feedbacks disable row level security;
+alter table public.billing_accounts disable row level security;
