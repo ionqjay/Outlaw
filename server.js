@@ -988,7 +988,7 @@ app.get('/api/admin/billing', async (req, res) => {
       cancelled: rows.filter(r => String(r.subscription_status || '').toLowerCase() === 'canceled').length,
       pastDue: rows.filter(r => String(r.subscription_status || '').toLowerCase() === 'past_due').length
     };
-    res.json({ ok: true, summary, billing: rows });
+    res.json({ ok: true, summary, stripeConfigured: !!stripe, billing: rows });
   } catch (e) {
     res.status(500).json({ error: 'Could not load billing accounts.', detail: String(e?.message || e) });
   }
@@ -996,12 +996,21 @@ app.get('/api/admin/billing', async (req, res) => {
 
 app.post('/api/admin/billing/:userId/cancel', async (req, res) => {
   if (req.query.token !== ADMIN_TOKEN) return res.status(401).json({ error: 'Unauthorized' });
-  if (!stripe) return res.status(500).json({ error: 'Stripe not configured.' });
   const userId = String(req.params.userId || '').trim();
   if (!userId) return res.status(400).json({ error: 'userId required.' });
 
   const billing = getBillingByUserId(userId);
-  if (!billing?.stripe_subscription_id) return res.status(404).json({ error: 'Subscription not found for this user.' });
+  if (!billing) return res.status(404).json({ error: 'Billing account not found for this user.' });
+
+  if (!stripe) {
+    const updated = upsertBillingByUserId(userId, {
+      subscription_status: 'canceled',
+      cancel_at_period_end: true
+    });
+    return res.json({ ok: true, mockMode: true, billing: updated });
+  }
+
+  if (!billing?.stripe_subscription_id) return res.status(404).json({ error: 'Stripe subscription id not found for this user.' });
 
   try {
     const sub = await stripe.subscriptions.update(billing.stripe_subscription_id, { cancel_at_period_end: true });
@@ -1018,12 +1027,21 @@ app.post('/api/admin/billing/:userId/cancel', async (req, res) => {
 
 app.post('/api/admin/billing/:userId/reactivate', async (req, res) => {
   if (req.query.token !== ADMIN_TOKEN) return res.status(401).json({ error: 'Unauthorized' });
-  if (!stripe) return res.status(500).json({ error: 'Stripe not configured.' });
   const userId = String(req.params.userId || '').trim();
   if (!userId) return res.status(400).json({ error: 'userId required.' });
 
   const billing = getBillingByUserId(userId);
-  if (!billing?.stripe_subscription_id) return res.status(404).json({ error: 'Subscription not found for this user.' });
+  if (!billing) return res.status(404).json({ error: 'Billing account not found for this user.' });
+
+  if (!stripe) {
+    const updated = upsertBillingByUserId(userId, {
+      subscription_status: 'active',
+      cancel_at_period_end: false
+    });
+    return res.json({ ok: true, mockMode: true, billing: updated });
+  }
+
+  if (!billing?.stripe_subscription_id) return res.status(404).json({ error: 'Stripe subscription id not found for this user.' });
 
   try {
     const sub = await stripe.subscriptions.update(billing.stripe_subscription_id, { cancel_at_period_end: false });
@@ -1161,52 +1179,120 @@ app.get('/admin', async (req, res) => {
   const recentRows = data.slice(0, 50).map(r => `<tr><td>${r.Id || r.id || ''}</td><td>${esc(r.Name || r.name || '')}</td><td>${esc(r.Type || r.type || '')}</td><td>${esc(r.Borough || r.borough || '')}</td><td>${esc(r.ZIP || r.zip || '')}</td><td>${esc(r.Email || r.email || '')}</td><td>${r.CreatedDate || r.created_at || ''}</td></tr>`).join('');
 
   res.send(`<!doctype html><html><head><meta charset='utf-8'><title>ShopMyRepair Admin</title><meta name='viewport' content='width=device-width,initial-scale=1'><style>
-  :root{--bg:#0b0d12;--card:#131722;--stroke:#293043;--text:#f2f4fb;--muted:#aeb7cc;--orange:#e8441a}
-  *{box-sizing:border-box} body{font-family:Inter,Arial,sans-serif;background:radial-gradient(900px 300px at 0 -120px,rgba(232,68,26,.16),transparent 60%),var(--bg);color:var(--text);margin:0;padding:22px}
-  h1,h2,h3{margin:0} .wrap{max-width:1200px;margin:0 auto} .top{display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:12px}
-  a{color:#ffb194;text-decoration:none} .grid{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:10px} .card{background:var(--card);border:1px solid var(--stroke);border-radius:14px;padding:12px}
-  .k{font-size:12px;color:var(--muted)} .v{font-size:28px;font-weight:800;margin-top:4px} .span2{grid-column:span 2} .span3{grid-column:span 3} .span6{grid-column:span 6}
-  .pill{display:inline-block;border:1px solid #38415a;background:#151c2d;color:#dbe5ff;border-radius:999px;padding:4px 9px;font-size:11px}
-  table{width:100%;border-collapse:collapse} th,td{padding:8px;border-bottom:1px solid #252c3e;font-size:12px;text-align:left} th{color:#c7d0e5;background:#111625;position:sticky;top:0}
-  .tbl{max-height:420px;overflow:auto;border:1px solid var(--stroke);border-radius:12px}
-  .warn{border:1px solid #7b3b3b;background:#2a1414;color:#ffcbcb;border-radius:12px;padding:10px;margin-top:10px}
-  @media(max-width:1000px){.grid{grid-template-columns:repeat(2,minmax(0,1fr))}.span2,.span3,.span6{grid-column:span 2}}
+  :root{--bg:#090c12;--card:#121a29;--card2:#0f1623;--stroke:#2a3752;--text:#eef3ff;--muted:#aab6d3;--orange:#ff7a45;--green:#22c55e;--red:#ef4444;--blue:#60a5fa}
+  *{box-sizing:border-box} body{font-family:Inter,Segoe UI,Arial,sans-serif;background:radial-gradient(1200px 420px at 0 -20%,rgba(255,122,69,.14),transparent 62%),radial-gradient(1000px 400px at 100% -10%,rgba(96,165,250,.12),transparent 60%),var(--bg);color:var(--text);margin:0;padding:22px}
+  h1,h2,h3{margin:0}.wrap{max-width:1280px;margin:0 auto}.top{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:14px}
+  .actions{display:flex;gap:8px;flex-wrap:wrap}.btnLink{border:1px solid var(--stroke);background:var(--card2);color:#dce7ff;padding:8px 12px;border-radius:10px;text-decoration:none;font-size:13px}
+  .btnLink:hover{border-color:#3b4a70}.grid{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:10px}.card{background:linear-gradient(180deg,var(--card),var(--card2));border:1px solid var(--stroke);border-radius:14px;padding:12px}
+  .k{font-size:12px;color:var(--muted)}.v{font-size:30px;font-weight:800;margin-top:4px}.span2{grid-column:span 2}.span3{grid-column:span 3}.span6{grid-column:span 6}
+  .pill{display:inline-block;border:1px solid #3b4a70;background:#101c30;color:#d3e4ff;border-radius:999px;padding:4px 9px;font-size:11px}
+  .subline{margin-top:5px;color:var(--muted);font-size:12px}
+  .toolbar{display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap;margin-top:10px}
+  .search{max-width:360px;width:100%;padding:9px 11px;border-radius:10px;border:1px solid #354563;background:#0a1220;color:#fff}
+  .tbl{max-height:460px;overflow:auto;border:1px solid var(--stroke);border-radius:12px;margin-top:8px}
+  table{width:100%;border-collapse:collapse}th,td{padding:9px;border-bottom:1px solid #23314c;font-size:12px;text-align:left;vertical-align:middle}th{color:#c8d7fb;background:#0f1728;position:sticky;top:0;z-index:1}
+  .badge{display:inline-block;padding:4px 8px;border-radius:999px;border:1px solid #3a4a70;font-size:11px;text-transform:capitalize}
+  .st-active,.st-trialing{border-color:#14532d;background:#052e1d;color:#bbf7d0}.st-past_due{border-color:#854d0e;background:#2b1603;color:#fde68a}.st-canceled,.st-none{border-color:#7f1d1d;background:#2a1111;color:#fecaca}
+  .btn{border:1px solid #3a4a70;background:#102038;color:#e7efff;border-radius:9px;padding:6px 9px;font-size:11px;cursor:pointer}
+  .btn:hover{filter:brightness(1.1)}.btn.cancel{border-color:#7f1d1d;background:#2a1010}.btn.activate{border-color:#14532d;background:#052117}
+  .warn{border:1px solid #7f1d1d;background:#2a1414;color:#ffcbcb;border-radius:12px;padding:10px;margin-top:10px}
+  .notice{border:1px solid #4b5563;background:#111827;color:#c7d2fe;border-radius:10px;padding:8px 10px;font-size:12px;margin-top:8px}
+  #toast{position:fixed;right:16px;bottom:16px;background:#0b1528;border:1px solid #334155;color:#dbeafe;padding:10px 12px;border-radius:10px;display:none;z-index:40}
+  @media(max-width:1100px){.grid{grid-template-columns:repeat(2,minmax(0,1fr))}.span2,.span3,.span6{grid-column:span 2}}
   </style></head><body><div class='wrap'>
-  <div class='top'><div><h1>ShopMyRepair Admin</h1><div style='color:var(--muted);margin-top:4px'>Business overview + lead quality + demand hotspots</div></div><div style='display:flex;gap:10px'><a href='/pricing.html' target='_blank'>Open Pricing Page ↗</a><a href='/admin/ops?token=${encodeURIComponent(String(req.query.token||''))}'>Open Ops Dashboard →</a></div></div>
+  <div class='top'><div><h1>ShopMyRepair Admin</h1><div class='subline'>Business overview, subscriptions, and controls</div></div><div class='actions'><a class='btnLink' href='/pricing.html' target='_blank'>Pricing page ↗</a><a class='btnLink' href='/admin/ops?token=${encodeURIComponent(String(req.query.token||''))}'>Ops dashboard</a></div></div>
 
   <div class='grid'>
     <div class='card'><div class='k'>Total Signups</div><div class='v'>${c.total}</div></div>
-    <div class='card'><div class='k'>Owners</div><div class='v'>${c.owners}</div><div class='k'>${ownerPct}% of total</div></div>
-    <div class='card'><div class='k'>Mechanics (All)</div><div class='v'>${c.mechanics}</div><div class='k'>${mechPct}% of total</div></div>
+    <div class='card'><div class='k'>Owners</div><div class='v'>${c.owners}</div><div class='k'>${ownerPct}%</div></div>
+    <div class='card'><div class='k'>Mechanics (All)</div><div class='v'>${c.mechanics}</div><div class='k'>${mechPct}%</div></div>
     <div class='card'><div class='k'>Mechanic Shops</div><div class='v'>${shopCount}</div></div>
     <div class='card'><div class='k'>Individual Mechanics</div><div class='v'>${indyMech}</div></div>
     <div class='card'><div class='k'>New Last 7 Days</div><div class='v'>${last7}</div></div>
 
     <div class='card span3'><h3>Demand by Borough</h3><div style='margin-top:8px'>${boroughBars || '<div class="k">No borough data yet</div>'}</div></div>
-    <div class='card span3'><h3>Quick Signals</h3><div style='margin-top:8px' class='k'>Top ZIP: <b>${esc(byZip[0]?.[0] || 'N/A')}</b> (${byZip[0]?.[1] || 0})</div><div class='k' style='margin-top:6px'>Top Borough: <b>${esc(byBorough[0]?.[0] || 'N/A')}</b> (${byBorough[0]?.[1] || 0})</div><div class='k' style='margin-top:10px'>Use this to focus ad spend + mechanic recruitment in top demand zones.</div><div style='margin-top:10px'><span class='pill'>Leads</span> <span class='pill'>Supply Mix</span> <span class='pill'>Geo Demand</span></div></div>
+    <div class='card span3'><h3>Quick Signals</h3><div class='k' style='margin-top:8px'>Top ZIP: <b>${esc(byZip[0]?.[0] || 'N/A')}</b> (${byZip[0]?.[1] || 0})</div><div class='k' style='margin-top:6px'>Top Borough: <b>${esc(byBorough[0]?.[0] || 'N/A')}</b> (${byBorough[0]?.[1] || 0})</div><div class='k' style='margin-top:10px'>Use these to focus recruitment and demand campaigns.</div><div style='margin-top:10px'><span class='pill'>Leads</span> <span class='pill'>Supply Mix</span> <span class='pill'>Geo Demand</span></div></div>
 
     ${loadError ? `<div class='span6 warn'><h3 style='margin:0 0 6px 0'>Data source error</h3><div>${esc(loadError)}</div><div style='margin-top:6px'>Check SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY on deploy, or unset both for JSON fallback.</div></div>` : ''}
 
-    <div class='card span6'><h3>Recent Signups (latest 50)</h3><div class='tbl' style='margin-top:8px'><table><thead><tr><th>ID</th><th>Name</th><th>Type</th><th>Borough</th><th>ZIP</th><th>Email</th><th>Created</th></tr></thead><tbody>${recentRows || '<tr><td colspan="7">No signups yet.</td></tr>'}</tbody></table></div></div>
+    <div class='card span6'><h3>Recent Signups (latest 50)</h3><div class='tbl'><table><thead><tr><th>ID</th><th>Name</th><th>Type</th><th>Borough</th><th>ZIP</th><th>Email</th><th>Created</th></tr></thead><tbody>${recentRows || '<tr><td colspan="7">No signups yet.</td></tr>'}</tbody></table></div></div>
 
     <div class='card span6'>
       <h3>Subscription Management</h3>
-      <div class='k' style='margin-top:6px'>Manage active/past-due/cancelled subscriptions for mechanic shops and individual mechanics.</div>
       <div id='billingSummary' class='k' style='margin-top:8px'>Loading billing accounts...</div>
-      <div class='tbl' style='margin-top:8px'>
+      <div id='billingMode' class='notice'>Checking Stripe mode...</div>
+      <div class='toolbar'>
+        <input id='billingSearch' class='search' placeholder='Search by email, user ID, role, status...' />
+        <button class='btn' onclick='loadBilling()'>Refresh</button>
+      </div>
+      <div class='tbl'>
         <table>
-          <thead><tr><th>User ID</th><th>Email</th><th>Role</th><th>Status</th><th>Period End</th><th>Cancel at Period End</th><th>Actions</th></tr></thead>
+          <thead><tr><th>User ID</th><th>Email</th><th>Role</th><th>Status</th><th>Period End</th><th>Cancel at End</th><th>Actions</th></tr></thead>
           <tbody id='billingRows'><tr><td colspan='7'>Loading...</td></tr></tbody>
         </table>
       </div>
     </div>
   </div>
+  <div id='toast'></div>
   <script>
     const adminToken = '${encodeURIComponent(String(req.query.token||''))}';
+    let billingCache = [];
+
+    function statusClass(status) {
+      const s = String(status || 'none').toLowerCase();
+      if (s === 'active' || s === 'trialing') return 'st-active';
+      if (s === 'past_due') return 'st-past_due';
+      if (s === 'canceled') return 'st-canceled';
+      return 'st-none';
+    }
+
+    function toast(msg) {
+      const el = document.getElementById('toast');
+      el.textContent = msg;
+      el.style.display = 'block';
+      clearTimeout(window.__toastT);
+      window.__toastT = setTimeout(() => { el.style.display = 'none'; }, 2200);
+    }
+
+    function renderBillingRows(rows) {
+      const rowsEl = document.getElementById('billingRows');
+      if (!rows.length) {
+        rowsEl.innerHTML = '<tr><td colspan="7">No matching billing accounts.</td></tr>';
+        return;
+      }
+      rowsEl.innerHTML = rows.map(x => {
+        const uid = String(x.user_id || '');
+        const status = String(x.subscription_status || 'none');
+        const canCancel = status === 'active' || status === 'trialing' || status === 'past_due';
+        const canActivate = status !== 'active' || !!x.cancel_at_period_end;
+        const actionBtns =
+          '<button class="btn cancel" ' + (canCancel ? '' : 'disabled') + ' onclick="cancelSub(\'' + uid + '\')">Cancel</button> ' +
+          '<button class="btn activate" ' + (canActivate ? '' : 'disabled') + ' onclick="reactivateSub(\'' + uid + '\')">Keep Active</button>';
+        return '<tr>' +
+          '<td>' + uid + '</td>' +
+          '<td>' + (x.email || '-') + '</td>' +
+          '<td>' + (x.role || '-') + '</td>' +
+          '<td><span class="badge ' + statusClass(status) + '">' + status + '</span></td>' +
+          '<td>' + (x.current_period_end || '-') + '</td>' +
+          '<td>' + (x.cancel_at_period_end ? 'yes' : 'no') + '</td>' +
+          '<td>' + actionBtns + '</td>' +
+        '</tr>';
+      }).join('');
+    }
+
+    function applySearch() {
+      const q = String(document.getElementById('billingSearch').value || '').trim().toLowerCase();
+      if (!q) return renderBillingRows(billingCache);
+      const filtered = billingCache.filter(x => {
+        const row = [x.user_id, x.email, x.role, x.subscription_status].map(v => String(v || '').toLowerCase()).join(' ');
+        return row.includes(q);
+      });
+      renderBillingRows(filtered);
+    }
 
     async function loadBilling() {
       const summaryEl = document.getElementById('billingSummary');
-      const rowsEl = document.getElementById('billingRows');
+      const modeEl = document.getElementById('billingMode');
       try {
         const r = await fetch('/api/admin/billing?token=' + adminToken);
         const d = await r.json();
@@ -1214,32 +1300,15 @@ app.get('/admin', async (req, res) => {
 
         const s = d.summary || {};
         summaryEl.innerHTML = 'Total: <b>' + (s.total||0) + '</b> · Active: <b>' + (s.active||0) + '</b> · Past Due: <b>' + (s.pastDue||0) + '</b> · Cancelled: <b>' + (s.cancelled||0) + '</b>';
+        modeEl.textContent = d.stripeConfigured
+          ? 'Stripe Live Mode: button actions call real Stripe subscriptions.'
+          : 'Stripe Setup Mode: button actions update local subscription status so you can test UI before keys are added.';
 
-        const rows = d.billing || [];
-        if (!rows.length) {
-          rowsEl.innerHTML = '<tr><td colspan="7">No billing accounts yet.</td></tr>';
-          return;
-        }
-
-        rowsEl.innerHTML = rows.map(x => {
-          const uid = String(x.user_id || '');
-          const status = String(x.subscription_status || 'none');
-          const actionBtns =
-            '<button onclick="cancelSub(\'' + uid + '\')" style="margin-right:6px">Cancel End of Term</button>' +
-            '<button onclick="reactivateSub(\'' + uid + '\')">Reactivate</button>';
-          return '<tr>' +
-            '<td>' + uid + '</td>' +
-            '<td>' + (x.email || '') + '</td>' +
-            '<td>' + (x.role || '') + '</td>' +
-            '<td>' + status + '</td>' +
-            '<td>' + (x.current_period_end || '-') + '</td>' +
-            '<td>' + (x.cancel_at_period_end ? 'yes' : 'no') + '</td>' +
-            '<td>' + actionBtns + '</td>' +
-          '</tr>';
-        }).join('');
+        billingCache = d.billing || [];
+        applySearch();
       } catch (e) {
         summaryEl.textContent = e.message || 'Could not load billing accounts.';
-        rowsEl.innerHTML = '<tr><td colspan="7">Could not load billing accounts.</td></tr>';
+        document.getElementById('billingRows').innerHTML = '<tr><td colspan="7">Could not load billing accounts.</td></tr>';
       }
     }
 
@@ -1248,8 +1317,9 @@ app.get('/admin', async (req, res) => {
         const r = await fetch('/api/admin/billing/' + encodeURIComponent(userId) + '/cancel?token=' + adminToken, { method: 'POST' });
         const d = await r.json();
         if (!r.ok) throw new Error(d.error || 'Could not cancel subscription');
+        toast(d.mockMode ? 'Updated in setup mode (no Stripe keys yet).' : 'Subscription set to cancel.');
         await loadBilling();
-      } catch (e) { alert(e.message || 'Failed to cancel'); }
+      } catch (e) { toast(e.message || 'Failed to cancel'); }
     }
 
     async function reactivateSub(userId) {
@@ -1257,10 +1327,12 @@ app.get('/admin', async (req, res) => {
         const r = await fetch('/api/admin/billing/' + encodeURIComponent(userId) + '/reactivate?token=' + adminToken, { method: 'POST' });
         const d = await r.json();
         if (!r.ok) throw new Error(d.error || 'Could not reactivate subscription');
+        toast(d.mockMode ? 'Updated in setup mode (no Stripe keys yet).' : 'Subscription kept active.');
         await loadBilling();
-      } catch (e) { alert(e.message || 'Failed to reactivate'); }
+      } catch (e) { toast(e.message || 'Failed to reactivate'); }
     }
 
+    document.getElementById('billingSearch').addEventListener('input', applySearch);
     loadBilling();
   </script>
   </div></body></html>`);

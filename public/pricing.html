@@ -3,56 +3,87 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Pricing & Refund Policy — ShopMyRepair</title>
+  <title>Pricing & Policy — ShopMyRepair</title>
+  <meta name="description" content="Transparent pricing for mechanic shops and independent mechanics. $99/month marketplace access with an opportunity guarantee." />
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700;800&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="/styles.css" />
   <style>
-    .wrap{max-width:920px;margin:24px auto;padding:0 16px}
-    .card{background:#15151a;border:1px solid #2a2a31;border-radius:14px;padding:18px;margin-top:12px}
-    .muted{color:#b7b9c2}
-    ul{margin:8px 0 0 18px}
+    :root{--bg:#0b0f18;--card:#111827;--card2:#0f172a;--stroke:#2b3a56;--text:#eef3ff;--muted:#a7b4cf;--orange:#ff7a45;--green:#22c55e;--blue:#60a5fa}
+    body{font-family:Inter,Segoe UI,Arial,sans-serif;background:radial-gradient(1100px 360px at 0 -20%,rgba(255,122,69,.18),transparent 62%),radial-gradient(1000px 360px at 100% -10%,rgba(96,165,250,.14),transparent 60%),var(--bg);color:var(--text)}
+    .wrap{max-width:1040px;margin:22px auto 48px;padding:0 16px}
+    .hero{background:linear-gradient(180deg,var(--card),var(--card2));border:1px solid var(--stroke);border-radius:18px;padding:24px}
+    .eyebrow{display:inline-block;font-size:12px;color:#cfe2ff;border:1px solid #33507f;background:#0f1e36;padding:5px 9px;border-radius:999px}
+    h1{margin:10px 0 8px;font-size:clamp(30px,5vw,50px);line-height:1.04}
+    .sub{color:var(--muted);max-width:760px}
+    .grid{display:grid;grid-template-columns:1.1fr .9fr;gap:12px;margin-top:12px}
+    .card{background:linear-gradient(180deg,var(--card),var(--card2));border:1px solid var(--stroke);border-radius:16px;padding:18px}
+    .price{font-size:54px;font-weight:800;letter-spacing:-1px}.price small{font-size:16px;color:var(--muted);font-weight:600}
+    .muted{color:var(--muted)}
+    ul{margin:10px 0 0 18px}.li{margin:6px 0}
+    .ok{color:#bbf7d0}.warn{color:#fde68a}.bad{color:#fecaca}
+    .sectionTitle{font-size:20px;margin-bottom:8px}
+    .table{width:100%;border-collapse:collapse;margin-top:8px}
+    .table th,.table td{border-bottom:1px solid #23314c;padding:9px;text-align:left;font-size:13px}
+    .table th{color:#cde0ff}
+    .cta{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px}
+    .btnPro{display:inline-flex;align-items:center;justify-content:center;padding:10px 14px;border-radius:10px;text-decoration:none;font-weight:700}
+    .btnPrimary{background:var(--orange);color:#130c08}
+    .btnGhost{border:1px solid var(--stroke);background:#0e182b;color:#d9e7ff}
+    @media(max-width:920px){.grid{grid-template-columns:1fr}}
   </style>
 </head>
 <body>
   <nav class="nav">
     <div class="logo"><span>SHOPMY</span><span class="orange">REPAIR</span></div>
-    <a class="btn btn-dark" href="/" style="text-decoration:none">← Back Home</a>
+    <div style="display:flex;gap:8px">
+      <a class="btn btn-dark" href="/" style="text-decoration:none">Home</a>
+      <a class="btn btn-dark" href="/login.html" style="text-decoration:none">Login</a>
+    </div>
   </nav>
 
   <main class="wrap">
-    <h1>Pricing & Refund Policy</h1>
-    <p class="muted">For mechanic shops and individual mechanics.</p>
-
-    <section class="card">
-      <h2>Marketplace Access — $99/month</h2>
-      <p>Subscription includes access to local repair requests, estimate submission tools, and profile visibility in the ShopMyRepair marketplace.</p>
-      <ul>
-        <li>Each request is capped at <b>3 mechanic shops + 2 individual mechanics</b>.</li>
-        <li>You control pricing and whether to submit an estimate.</li>
-        <li>Winning jobs depends on estimate quality, response speed, and reputation.</li>
-      </ul>
+    <section class="hero">
+      <span class="eyebrow">Mechanic Shops + Independent Mechanics</span>
+      <h1>Simple pricing. Clear rules. No hidden fees.</h1>
+      <p class="sub">Access local repair opportunities for one flat monthly price. You compete on speed, quality, and trust — not on who can buy the most lead credits.</p>
     </section>
 
-    <section class="card">
-      <h2>Opportunity Guarantee (Refund)</h2>
-      <p>If, during a billing month, your account receives <b>zero eligible opportunities</b> to submit an estimate, we refund that month’s $99 subscription fee.</p>
-      <h3>Eligible opportunity means all of the following:</h3>
-      <ul>
-        <li>The request is within your selected service area.</li>
-        <li>The request matches services enabled in your provider profile.</li>
-        <li>The request includes the minimum details required to submit an estimate.</li>
-      </ul>
-      <h3 style="margin-top:10px">What is not refundable under this guarantee:</h3>
-      <ul>
-        <li>Opportunities existed, but no estimate was submitted by your account.</li>
-        <li>Missed quote windows, ignored alerts, or incomplete profile setup.</li>
-        <li>Not winning a job after submitting estimates.</li>
-      </ul>
+    <section class="grid">
+      <article class="card">
+        <div class="sectionTitle">Marketplace Access</div>
+        <div class="price">$99 <small>/ month</small></div>
+        <p class="muted">Applies to both individual mechanics and mechanic shops.</p>
+        <ul>
+          <li class="li">Local request feed + estimate submission tools</li>
+          <li class="li">Structured quote workflow (price, ETA, notes)</li>
+          <li class="li">Profile visibility + reputation growth via owner reviews</li>
+          <li class="li">Dispatch cap per request: <b>3 shops + 2 independents</b></li>
+        </ul>
+      </article>
+
+      <article class="card">
+        <div class="sectionTitle">Opportunity Guarantee</div>
+        <p>If your account gets <b>zero eligible opportunities</b> to submit an estimate during a billing month, we refund that month’s $99 fee.</p>
+        <table class="table">
+          <thead><tr><th>Refund applies when</th><th>Refund does not apply when</th></tr></thead>
+          <tbody>
+            <tr><td class="ok">No eligible opportunities were available</td><td class="bad">Opportunities existed but no estimate was submitted</td></tr>
+            <tr><td class="ok">Opportunity matched your area + services</td><td class="warn">Quote windows were missed or profile was incomplete</td></tr>
+            <tr><td class="ok">Request had enough details to quote</td><td class="bad">You submitted quotes but did not win jobs</td></tr>
+          </tbody>
+        </table>
+      </article>
     </section>
 
-    <section class="card">
-      <h2>Subscription Management</h2>
-      <p>You can manage billing, payment method, and cancellations in the billing portal from your dashboard profile tab.</p>
-      <p class="muted">This page is a plain-language policy summary and may be updated as the platform evolves.</p>
+    <section class="card" style="margin-top:12px">
+      <div class="sectionTitle">Plain-language policy summary</div>
+      <p class="muted">ShopMyRepair sells access to quote opportunities — not guaranteed job wins. Winning depends on your estimate quality, response speed, and reputation.</p>
+      <div class="cta">
+        <a class="btnPro btnPrimary" href="/login.html">Start Provider Onboarding</a>
+        <a class="btnPro btnGhost" href="/">Back to homepage</a>
+      </div>
     </section>
   </main>
 </body>
