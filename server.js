@@ -178,6 +178,25 @@ async function supabaseRequest(pathname, { method = 'GET', body } = {}) {
   return res.json();
 }
 
+async function listAuthUsers() {
+  if (!USE_SUPABASE) return [];
+  try {
+    const url = `${SUPABASE_URL}/auth/v1/admin/users?page=1&per_page=1000`;
+    const res = await fetch(url, {
+      method: 'GET',
+      headers: {
+        apikey: SUPABASE_SERVICE_ROLE_KEY,
+        Authorization: `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`
+      }
+    });
+    if (!res.ok) return [];
+    const data = await res.json();
+    return Array.isArray(data?.users) ? data.users : [];
+  } catch {
+    return [];
+  }
+}
+
 async function listSignups() {
   if (USE_SUPABASE) {
     return supabaseRequest('signups?select=*&order=created_at.desc');
@@ -1251,29 +1270,83 @@ app.post('/api/admin/billing/:userId/manual-access', async (req, res) => {
 app.get('/api/admin/accounts', async (req, res) => {
   if (req.query.token !== ADMIN_TOKEN) return res.status(401).json({ error: 'Unauthorized' });
   try {
-    const signups = await listSignups();
+    const [signups, authUsers] = await Promise.all([listSignups(), listAuthUsers()]);
+    const billing = readBillingAccounts();
     const bans = readBannedAccounts();
+
     const banMap = new Map(bans.map(b => [String(b.email || '').toLowerCase(), b]));
-    const accounts = signups.map(s => {
+    const accountMap = new Map();
+
+    const upsertAccount = (email, patch = {}) => {
+      const e = String(email || '').trim().toLowerCase();
+      if (!e) return;
+      const prev = accountMap.get(e) || {
+        id: null,
+        name: '',
+        email: e,
+        category: 'owner',
+        borough: '',
+        zip: '',
+        created_at: ''
+      };
+      accountMap.set(e, { ...prev, ...patch, email: e });
+    };
+
+    for (const s of signups) {
       const typeRaw = String(s.type || s.Type || '').toLowerCase();
       const hasShop = String(s.has_shop || s.HasShop || '').toLowerCase();
       const email = String(s.email || s.Email || '').trim().toLowerCase();
       const category = typeRaw === 'owner'
         ? 'owner'
         : (hasShop === 'yes' || hasShop === 'true' || hasShop === 'shop') ? 'mechanic_shop' : 'individual_mechanic';
-      const ban = banMap.get(email);
-      return {
+      upsertAccount(email, {
         id: s.id || s.Id || null,
         name: s.name || s.Name || '',
-        email,
         category,
         borough: s.borough || s.Borough || '',
         zip: s.zip || s.ZIP || '',
-        created_at: s.created_at || s.CreatedDate || '',
+        created_at: s.created_at || s.CreatedDate || ''
+      });
+    }
+
+    for (const u of authUsers) {
+      const meta = u?.user_metadata || {};
+      const email = String(u?.email || '').trim().toLowerCase();
+      const role = String(meta.role || '').toLowerCase();
+      let category = 'owner';
+      if (role === 'shop') category = 'mechanic_shop';
+      else if (role === 'mechanic') category = 'individual_mechanic';
+      upsertAccount(email, {
+        id: u?.id || null,
+        name: String(meta.name || '').trim(),
+        category,
+        created_at: u?.created_at || ''
+      });
+    }
+
+    for (const b of billing) {
+      const email = String(b.email || '').trim().toLowerCase();
+      const role = String(b.role || '').toLowerCase();
+      if (!email) continue;
+      const category = role === 'shop' ? 'mechanic_shop' : role === 'mechanic' ? 'individual_mechanic' : 'owner';
+      upsertAccount(email, {
+        category
+      });
+    }
+
+    const accounts = Array.from(accountMap.values()).map(a => {
+      const ban = banMap.get(String(a.email || '').toLowerCase());
+      return {
+        ...a,
         banned: !!(ban && ban.active !== false),
         ban_reason: ban?.reason || ''
       };
+    }).sort((a, b) => {
+      const ta = new Date(a.created_at || 0).getTime() || 0;
+      const tb = new Date(b.created_at || 0).getTime() || 0;
+      return tb - ta;
     });
+
     res.json({ ok: true, accounts });
   } catch (e) {
     res.status(500).json({ error: 'Could not load accounts', detail: String(e?.message || e) });
