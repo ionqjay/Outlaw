@@ -1385,13 +1385,14 @@ app.get('/admin', async (req, res) => {
       }
       rowsEl.innerHTML = rows.map(x => {
         const email = String(x.email || '');
+        const category = String(x.category || '');
         const action = x.banned
-          ? '<button class="btn activate" onclick="unbanAccount(\'' + email + '\')">Unban</button>'
-          : '<button class="btn cancel" onclick="banAccount(\'' + email + '\', \'' + String(x.category || '') + '\')">Ban</button>';
+          ? '<button class="btn activate" data-act="unban" data-email="' + encodeURIComponent(email) + '">Unban</button>'
+          : '<button class="btn cancel" data-act="ban" data-email="' + encodeURIComponent(email) + '" data-category="' + encodeURIComponent(category) + '">Ban</button>';
         return '<tr>' +
           '<td>' + (x.name || '-') + '</td>' +
           '<td>' + email + '</td>' +
-          '<td>' + normalizeCategory(x.category) + '</td>' +
+          '<td>' + normalizeCategory(category) + '</td>' +
           '<td>' + (x.borough || '-') + '</td>' +
           '<td><span class="badge ' + (x.banned ? 'st-canceled' : 'st-active') + '">' + (x.banned ? 'banned' : 'active') + '</span></td>' +
           '<td>' + action + '</td>' +
@@ -1526,6 +1527,16 @@ app.get('/admin', async (req, res) => {
     document.getElementById('billingSearch').addEventListener('input', applySearch);
     document.getElementById('accountSearch').addEventListener('input', applyAccountFilters);
     document.getElementById('accountCategory').addEventListener('change', applyAccountFilters);
+    document.getElementById('accountRows').addEventListener('click', (ev) => {
+      const btn = ev.target.closest('button[data-act]');
+      if (!btn) return;
+      const act = btn.getAttribute('data-act');
+      const email = decodeURIComponent(String(btn.getAttribute('data-email') || ''));
+      const category = decodeURIComponent(String(btn.getAttribute('data-category') || ''));
+      if (!email) return;
+      if (act === 'ban') banAccount(email, category);
+      if (act === 'unban') unbanAccount(email);
+    });
     loadAccounts();
     loadBilling();
   </script>
