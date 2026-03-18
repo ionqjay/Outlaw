@@ -1539,6 +1539,7 @@ app.get('/admin', async (req, res) => {
   .search{max-width:360px;width:100%;padding:9px 11px;border-radius:10px;border:1px solid #354563;background:#0a1220;color:#fff}
   .tbl{max-height:460px;overflow:auto;border:1px solid var(--stroke);border-radius:12px;margin-top:8px}
   table{width:100%;border-collapse:collapse}th,td{padding:9px;border-bottom:1px solid #23314c;font-size:12px;text-align:left;vertical-align:middle}th{color:#c8d7fb;background:#0f1728;position:sticky;top:0;z-index:1}
+  .actions-cell{display:flex;gap:6px;flex-wrap:wrap;align-items:center}
   .badge{display:inline-block;padding:4px 8px;border-radius:999px;border:1px solid #3a4a70;font-size:11px;text-transform:capitalize}
   .st-active,.st-trialing{border-color:#14532d;background:#052e1d;color:#bbf7d0}.st-past_due{border-color:#854d0e;background:#2b1603;color:#fde68a}.st-canceled,.st-none{border-color:#7f1d1d;background:#2a1111;color:#fecaca}.st-blocked{border-color:#9a3412;background:#2b1205;color:#fed7aa}
   .btn{border:1px solid #3a4a70;background:#102038;color:#e7efff;border-radius:9px;padding:6px 9px;font-size:11px;cursor:pointer}
@@ -1547,6 +1548,18 @@ app.get('/admin', async (req, res) => {
   .notice{border:1px solid #4b5563;background:#111827;color:#c7d2fe;border-radius:10px;padding:8px 10px;font-size:12px;margin-top:8px}
   #toast{position:fixed;right:16px;bottom:16px;background:#0b1528;border:1px solid #334155;color:#dbeafe;padding:10px 12px;border-radius:10px;display:none;z-index:40}
   @media(max-width:1100px){.grid{grid-template-columns:repeat(2,minmax(0,1fr))}.span2,.span3,.span6{grid-column:span 2}}
+  @media(max-width:760px){
+    body{padding:12px}
+    .top{align-items:flex-start}
+    .actions{width:100%}
+    .btnLink{flex:1;text-align:center}
+    .toolbar{position:sticky;top:0;background:linear-gradient(180deg,#0f1623,#0f1623f2);padding:8px;border:1px solid #2a3752;border-radius:10px;z-index:2}
+    .search{max-width:100%}
+    .tbl{max-height:58vh}
+    th,td{padding:8px 6px;font-size:11px}
+    .btn{padding:6px 8px;font-size:10px}
+    .actions-cell{min-width:180px}
+  }
   </style></head><body><div class='wrap'>
   <div class='top'><div><h1>ShopMyRepair Admin</h1><div class='subline'>Business overview, subscriptions, and controls</div></div><div class='actions'><a class='btnLink' href='/pricing.html' target='_blank'>Pricing page ↗</a><a class='btnLink' href='/admin/ops?token=${encodeURIComponent(String(req.query.token||''))}'>Ops dashboard</a></div></div>
 
@@ -1650,7 +1663,7 @@ app.get('/admin', async (req, res) => {
           '<td>' + (x.borough || '-') + '</td>' +
           '<td><span class="badge ' + (x.banned ? 'st-canceled' : 'st-active') + '">' + (x.banned ? 'banned' : 'active') + '</span></td>' +
           '<td>' + (x.banned ? (x.ban_reason || '-') : '-') + '</td>' +
-          '<td>' + action + '</td>' +
+          '<td class="actions-cell">' + action + '</td>' +
         '</tr>';
       }).join('');
     }
@@ -1732,7 +1745,7 @@ app.get('/admin', async (req, res) => {
           '<td>' + manual + '</td>' +
           '<td>' + (x.current_period_end || '-') + '</td>' +
           '<td>' + (x.cancel_at_period_end ? 'yes' : 'no') + '</td>' +
-          '<td>' + actionBtns + '</td>' +
+          '<td class="actions-cell">' + actionBtns + '</td>' +
         '</tr>';
       }).join('');
     }
