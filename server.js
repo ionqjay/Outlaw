@@ -11,7 +11,34 @@ const __dirname = path.dirname(__filename);
 
 const app = express();
 const PORT = process.env.PORT || 3000;
-const ADMIN_TOKEN = process.env.ADMIN_TOKEN || 'change-me';
+const ADMIN_TOKEN = process.env.ADMIN_TOKEN || '';
+
+function getAdminTokenFromRequest(req) {
+  const auth = String(req.headers.authorization || '');
+  if (auth.toLowerCase().startsWith('bearer ')) return auth.slice(7).trim();
+  const headerToken = String(req.headers['x-admin-token'] || '').trim();
+  if (headerToken) return headerToken;
+  return String(req.query.token || '').trim();
+}
+
+function isAdminConfigValid() {
+  return !!ADMIN_TOKEN && ADMIN_TOKEN !== 'change-me';
+}
+
+function isAuthorizedAdminRequest(req) {
+  if (!isAdminConfigValid()) return false;
+  return getAdminTokenFromRequest(req) === ADMIN_TOKEN;
+}
+
+function guardAdminApi(req, res) {
+  if (!isAdminConfigValid()) {
+    return res.status(503).json({ error: 'Admin API disabled: set a strong ADMIN_TOKEN environment variable.' });
+  }
+  if (!isAuthorizedAdminRequest(req)) {
+    return res.status(401).json({ error: 'Unauthorized' });
+  }
+  return null;
+}
 const DB_PATH = path.join(__dirname, 'signups.json');
 const OWNER_REQUESTS_PATH = path.join(__dirname, 'owner_requests.json');
 const REPAIR_REQUESTS_PATH = path.join(__dirname, 'repair_requests.json');
@@ -1171,7 +1198,7 @@ app.post('/api/billing/create-portal-session', async (req, res) => {
 });
 
 app.get('/api/admin/billing', async (req, res) => {
-  if (req.query.token !== ADMIN_TOKEN) return res.status(401).json({ error: 'Unauthorized' });
+  { const blocked = guardAdminApi(req, res); if (blocked) return; }
   try {
     const rows = readBillingAccounts().sort((a, b) => new Date(b.updated_at || 0).getTime() - new Date(a.updated_at || 0).getTime());
     const summary = {
@@ -1187,7 +1214,7 @@ app.get('/api/admin/billing', async (req, res) => {
 });
 
 app.post('/api/admin/billing/:userId/cancel', async (req, res) => {
-  if (req.query.token !== ADMIN_TOKEN) return res.status(401).json({ error: 'Unauthorized' });
+  { const blocked = guardAdminApi(req, res); if (blocked) return; }
   const userId = String(req.params.userId || '').trim();
   if (!userId) return res.status(400).json({ error: 'userId required.' });
 
@@ -1218,7 +1245,7 @@ app.post('/api/admin/billing/:userId/cancel', async (req, res) => {
 });
 
 app.post('/api/admin/billing/:userId/reactivate', async (req, res) => {
-  if (req.query.token !== ADMIN_TOKEN) return res.status(401).json({ error: 'Unauthorized' });
+  { const blocked = guardAdminApi(req, res); if (blocked) return; }
   const userId = String(req.params.userId || '').trim();
   if (!userId) return res.status(400).json({ error: 'userId required.' });
 
@@ -1249,7 +1276,7 @@ app.post('/api/admin/billing/:userId/reactivate', async (req, res) => {
 });
 
 app.post('/api/admin/billing/:userId/manual-access', async (req, res) => {
-  if (req.query.token !== ADMIN_TOKEN) return res.status(401).json({ error: 'Unauthorized' });
+  { const blocked = guardAdminApi(req, res); if (blocked) return; }
   const userId = String(req.params.userId || '').trim();
   const mode = String(req.body?.mode || '').toLowerCase(); // active|disabled|clear
   const reason = String(req.body?.reason || '').trim();
@@ -1268,7 +1295,7 @@ app.post('/api/admin/billing/:userId/manual-access', async (req, res) => {
 });
 
 app.get('/api/admin/accounts', async (req, res) => {
-  if (req.query.token !== ADMIN_TOKEN) return res.status(401).json({ error: 'Unauthorized' });
+  { const blocked = guardAdminApi(req, res); if (blocked) return; }
   try {
     const [signups, authUsers] = await Promise.all([listSignups(), listAuthUsers()]);
     const billing = readBillingAccounts();
@@ -1354,7 +1381,7 @@ app.get('/api/admin/accounts', async (req, res) => {
 });
 
 app.post('/api/admin/accounts/:email/ban', async (req, res) => {
-  if (req.query.token !== ADMIN_TOKEN) return res.status(401).json({ error: 'Unauthorized' });
+  { const blocked = guardAdminApi(req, res); if (blocked) return; }
   const email = String(req.params.email || '').trim().toLowerCase();
   const reason = String(req.body?.reason || 'Admin action').trim();
   const category = String(req.body?.category || '').trim();
@@ -1364,7 +1391,7 @@ app.post('/api/admin/accounts/:email/ban', async (req, res) => {
 });
 
 app.post('/api/admin/accounts/:email/unban', async (req, res) => {
-  if (req.query.token !== ADMIN_TOKEN) return res.status(401).json({ error: 'Unauthorized' });
+  { const blocked = guardAdminApi(req, res); if (blocked) return; }
   const email = String(req.params.email || '').trim().toLowerCase();
   if (!email) return res.status(400).json({ error: 'Email required.' });
   const updated = setBannedEmail(email, false);
@@ -1398,7 +1425,7 @@ app.get('/provider/:id', async (req, res) => {
   }
 });
 app.get('/api/admin/ops', async (req, res) => {
-  if (req.query.token !== ADMIN_TOKEN) return res.status(401).json({ error: 'Unauthorized' });
+  { const blocked = guardAdminApi(req, res); if (blocked) return; }
   try {
     const repairs = await listRepairRequests({});
     const bids = await listBids({});
@@ -1424,8 +1451,11 @@ app.get('/api/admin/ops', async (req, res) => {
 });
 
 app.get('/admin/ops', async (req, res) => {
-  if (req.query.token !== ADMIN_TOKEN) {
-    return res.status(401).send('<h2>Unauthorized</h2><p>Use /admin/ops?token=YOUR_TOKEN</p>');
+  if (!isAdminConfigValid()) {
+    return res.status(503).send('<h2>Admin disabled</h2><p>Set a strong ADMIN_TOKEN environment variable.</p>');
+  }
+  if (!isAuthorizedAdminRequest(req)) {
+    return res.status(401).send('<h2>Unauthorized</h2><p>Use /admin/ops?token=YOUR_TOKEN or send x-admin-token header.</p>');
   }
   res.send(`<!doctype html><html><head><meta charset='utf-8'><title>Ops Dashboard</title><meta name='viewport' content='width=device-width,initial-scale=1'><style>
   :root{--bg:#0b0d12;--card:#131722;--stroke:#293043;--text:#f2f4fb;--muted:#aeb7cc}
@@ -1455,8 +1485,11 @@ app.get('/admin/ops', async (req, res) => {
 });
 
 app.get('/admin', async (req, res) => {
-  if (req.query.token !== ADMIN_TOKEN) {
-    return res.status(401).send('<h2>Unauthorized</h2><p>Use /admin?token=YOUR_TOKEN</p>');
+  if (!isAdminConfigValid()) {
+    return res.status(503).send('<h2>Admin disabled</h2><p>Set a strong ADMIN_TOKEN environment variable.</p>');
+  }
+  if (!isAuthorizedAdminRequest(req)) {
+    return res.status(401).send('<h2>Unauthorized</h2><p>Use /admin?token=YOUR_TOKEN or send x-admin-token header.</p>');
   }
   let data = [];
   let loadError = '';
@@ -1796,4 +1829,10 @@ app.get('/admin', async (req, res) => {
   </div></body></html>`);
 });
 
-app.listen(PORT, () => console.log(`Live: http://localhost:${PORT}`));
+app.listen(PORT, () => {
+  if (!isAdminConfigValid()) {
+    console.warn('⚠️ Admin routes disabled: set ADMIN_TOKEN to a strong non-default value.');
+  }
+  console.log(`Live: http://localhost:${PORT}`);
+});
+
