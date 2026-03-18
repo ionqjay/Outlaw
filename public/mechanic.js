@@ -108,6 +108,13 @@ function formatInviteCountdown(expiresAt) {
   return h > 0 ? `${h}h ${m}m left` : `${m}m left`;
 }
 
+function labelForStatus(status) {
+  const s = String(status || 'open').toLowerCase();
+  if (s === 'in_progress') return 'In Progress';
+  if (s === 'past_due') return 'Past Due';
+  return s.replace('_', ' ').replace(/\b\w/g, c => c.toUpperCase());
+}
+
 async function boot() {
   const session = await window.smrAuth.requireRole(['mechanic', 'shop']);
   if (!session) return;
@@ -418,12 +425,12 @@ async function boot() {
               ${isWon ? `<div class='won-title'>🏆 Won Job</div>` : ''}
               <strong>${rep?.title ? rep.title : `Request #${b.request_id}`}</strong>
             </div>
-            <span class='pill ${status}'>${status}</span>
+            <span class='pill ${status}'>${labelForStatus(status)}</span>
           </div>
 
           <div class='estimate-kpis'>
             <div class='kpi-pill'><div class='lbl'>Your estimate</div><div class='val'>$${b.amount}</div></div>
-            <div class='kpi-pill'><div class='lbl'>Request status</div><div class='val' style='font-size:16px;text-transform:capitalize'>${repStatus.replace('_',' ')}</div></div>
+            <div class='kpi-pill'><div class='lbl'>Request status</div><div class='val' style='font-size:16px'>${labelForStatus(repStatus)}</div></div>
           </div>
 
           <div class='small'>${rep?.city || ''}${rep?.city ? ', ' : ''}${rep?.state || ''} · ${rep?.urgency || 'Standard'}</div>

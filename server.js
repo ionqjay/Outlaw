@@ -1629,6 +1629,12 @@ app.get('/admin', async (req, res) => {
       return 'st-none';
     }
 
+    function labelStatus(status) {
+      const s = String(status || 'none').toLowerCase();
+      if (s === 'past_due') return 'past due';
+      return s.replace('_', ' ');
+    }
+
     function toast(msg) {
       const el = document.getElementById('toast');
       el.textContent = msg;
@@ -1740,9 +1746,9 @@ app.get('/admin', async (req, res) => {
           '<td>' + uid + '</td>' +
           '<td>' + (x.email || '-') + '</td>' +
           '<td>' + (x.role || '-') + '</td>' +
-          '<td><span class="badge ' + statusClass(status) + '">' + status + '</span></td>' +
-          '<td><span class="badge ' + accessClass + '">' + access + '</span></td>' +
-          '<td>' + manual + '</td>' +
+          '<td><span class="badge ' + statusClass(status) + '">' + labelStatus(status) + '</span></td>' +
+          '<td><span class="badge ' + accessClass + '">' + labelStatus(access) + '</span></td>' +
+          '<td>' + labelStatus(manual) + '</td>' +
           '<td>' + (x.current_period_end || '-') + '</td>' +
           '<td>' + (x.cancel_at_period_end ? 'yes' : 'no') + '</td>' +
           '<td class="actions-cell">' + actionBtns + '</td>' +

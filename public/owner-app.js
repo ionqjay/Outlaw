@@ -368,7 +368,7 @@ function renderBids() {
         <div class='estimate-name'>${acceptedMeta.businessName || accepted.mechanic_name}</div>
         <div class='provider-chip ${acceptedProviderType}'>${acceptedProviderType === 'shop' ? '🏪' : '🧰'} ${acceptedProviderTypeLabel}</div>
       </div>
-      <span class='pill accepted'>accepted</span>
+      <span class='pill accepted'>Accepted</span>
     </div>
 
     <div class='winner-kpi-grid'>
