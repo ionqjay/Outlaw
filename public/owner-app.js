@@ -309,6 +309,9 @@ function renderBids() {
     if (status === 'open' && topRatedOpen && Number(topRatedOpen.id) === Number(b.id) && (getMechanicRating(b.mechanic_id).avg || 0) > 0) tags.push("<span class='tag rated'>⭐ Top Rated</span>");
     if (status === 'open' && bestValueBid && Number(bestValueBid.id) === Number(b.id)) tags.push("<span class='tag rated'>🏆 Best Value</span>");
 
+    const deltaVsBestPrice = cheapestOpen !== null ? Math.max(0, Number(b.amount || 0) - Number(cheapestOpen)) : 0;
+    const deltaVsFastest = fastestOpen !== null ? Math.max(0, Number(b.eta_hours || 24) - Number(fastestOpen)) : 0;
+
     return `<div class='estimate-card ${providerType}'>
       <div class='estimate-top'>
         <div>
@@ -322,6 +325,7 @@ function renderBids() {
         <div class='kpi-pill'><div class='lbl'>ETA</div><div class='val small'>${Number(b.eta_hours || 24)}h</div></div>
       </div>
       <div class='badge-row'>${tags.join('')}</div>
+      ${status === 'open' ? `<div class='muted-xs'>${deltaVsBestPrice === 0 ? 'Cheapest current estimate.' : `$${deltaVsBestPrice} above cheapest`} · ${deltaVsFastest === 0 ? 'Fastest ETA currently.' : `${deltaVsFastest}h slower than fastest`}</div>` : ''}
       <div class='muted-xs'>📍 ${meta.businessAddress || 'Address not provided'} ${meta.businessZip || ''}</div>
       <div class='contact-row'>
         <span class='contact-pill'>📞 ${meta.businessPhone || 'No phone'}</span>

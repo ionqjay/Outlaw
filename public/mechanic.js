@@ -410,19 +410,27 @@ async function boot() {
         const rep = repairsById.get(Number(b.request_id));
         const repStatus = String(rep?.status || 'open').toLowerCase();
         const ownerMeta = parseOwnerMeta(rep?.issue_details || '');
+        const isWon = status === 'accepted';
 
-        return `<div class='estimate-card'>
+        return `<div class='estimate-card ${isWon ? 'won-job' : ''}'>
           <div class='estimate-top'>
-            <strong>${rep?.title ? rep.title : `Request #${b.request_id}`}</strong>
+            <div>
+              ${isWon ? `<div class='won-title'>🏆 Won Job</div>` : ''}
+              <strong>${rep?.title ? rep.title : `Request #${b.request_id}`}</strong>
+            </div>
             <span class='pill ${status}'>${status}</span>
           </div>
+
           <div class='estimate-kpis'>
             <div class='kpi-pill'><div class='lbl'>Your estimate</div><div class='val'>$${b.amount}</div></div>
             <div class='kpi-pill'><div class='lbl'>Request status</div><div class='val' style='font-size:16px;text-transform:capitalize'>${repStatus.replace('_',' ')}</div></div>
           </div>
+
           <div class='small'>${rep?.city || ''}${rep?.city ? ', ' : ''}${rep?.state || ''} · ${rep?.urgency || 'Standard'}</div>
           <div class='small'><b>Repair needed:</b> ${ownerMeta.cleanDetails || 'Request details unavailable.'}</div>
-          ${status === 'accepted' ? `<span class='contact-pill'>📞 ${ownerMeta.ownerPhone || 'No phone'}</span> <span class='contact-pill'>✉️ ${ownerMeta.ownerEmail || 'No email'}</span>` : ''}
+
+          ${isWon ? `<div class='won-timeline'><span class='done'>Estimate Sent</span><span class='done'>Accepted</span><span class='${repStatus === 'completed' ? 'done' : 'current'}'>${repStatus === 'completed' ? 'Completed' : 'Service Active'}</span></div>` : ''}
+          ${isWon ? `<div class='contact-row'><span class='contact-pill'>📞 ${ownerMeta.ownerPhone || 'No phone'}</span><span class='contact-pill'>✉️ ${ownerMeta.ownerEmail || 'No email'}</span></div>` : ''}
         </div>`;
       };
 
