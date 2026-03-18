@@ -3,3 +3,28 @@ shopmyrepair.db
 signups.json
 tmp_doc/
 tmp_doc.zip
+
+# OpenClaw/local assistant workspace artifacts
+.openclaw/
+.pi/
+memory/
+AGENTS.md
+SOUL.md
+USER.md
+TOOLS.md
+IDENTITY.md
+HEARTBEAT.md
+BOOTSTRAP.md
+
+# Scratch/temp artifacts
+temp_*.js
+temp_*.html
+tmp*.csv
+tmp_*.js
+*.xml
+*.csv
+cal.html
+ec.html
+.tmp_*.js
+_mkt.*
+_rss.mjs
