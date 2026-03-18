@@ -345,29 +345,54 @@ function renderBids() {
   const acceptedProviderTypeLabel = acceptedMeta.providerTypeLabel || (acceptedProviderType === 'shop' ? 'Mechanic Shop' : 'Individual Mechanic');
   const canComplete = String(selected.status || '').toLowerCase() === 'accepted' || String(selected.status || '').toLowerCase() === 'in_progress';
   const isCompleted = String(selected.status || '').toLowerCase() === 'completed';
-  const acceptedInfo = accepted ? `<div class='estimate-card ${acceptedProviderType}' style='border-color:#2a9f60;box-shadow:0 0 0 1px rgba(42,159,96,.18) inset'>
-    <div class='estimate-top'>
+  const acceptedAmount = accepted ? Number(accepted.amount || 0) : 0;
+  const highestBid = bids.length ? Math.max(...bids.map(b => Number(b.amount || 0))) : acceptedAmount;
+  const savings = Math.max(0, highestBid - acceptedAmount);
+  const reason = accepted
+    ? (bestValueBid && Number(bestValueBid.id) === Number(accepted.id)
+      ? 'Best Value'
+      : (fastestOpen !== null && Number(accepted.eta_hours || 999999) === Number(fastestOpen)
+        ? 'Fastest ETA'
+        : (topRatedOpen && Number(topRatedOpen.id) === Number(accepted.id)
+          ? 'Top Rated'
+          : 'Selected by you')))
+    : '';
+  const acceptedInfo = accepted ? `<div class='winner-shell estimate-card ${acceptedProviderType}' style='border-color:#2a9f60;box-shadow:0 0 0 1px rgba(42,159,96,.18) inset'>
+    <div class='winner-hero'>
       <div>
+        <div class='winner-title'>✅ Selected Estimate</div>
         <div class='estimate-name'>${acceptedMeta.businessName || accepted.mechanic_name}</div>
         <div class='provider-chip ${acceptedProviderType}'>${acceptedProviderType === 'shop' ? '🏪' : '🧰'} ${acceptedProviderTypeLabel}</div>
       </div>
       <span class='pill accepted'>accepted</span>
     </div>
-    <div class='estimate-kpis'>
-      <div class='kpi-pill'><div class='lbl'>Accepted Estimate</div><div class='val'>$${accepted.amount}</div></div>
+
+    <div class='winner-kpi-grid'>
+      <div class='kpi-pill'><div class='lbl'>Final Price</div><div class='val'>$${accepted.amount}</div></div>
       <div class='kpi-pill'><div class='lbl'>ETA</div><div class='val small'>${Number(accepted.eta_hours || 24)}h</div></div>
+      <div class='kpi-pill'><div class='lbl'>Why Selected</div><div class='val small'>${reason}</div></div>
+      <div class='kpi-pill'><div class='lbl'>Savings vs Highest</div><div class='val small'>$${savings}</div></div>
     </div>
-    <div class='badge-row'><span class='tag rated'>✅ Selected Provider</span></div>
+
+    <div class='winner-timeline'>
+      <span class='done'>Requested</span>
+      <span class='done'>Estimates</span>
+      <span class='done'>Accepted</span>
+      <span class='${isCompleted ? 'done' : 'current'}'>${isCompleted ? 'Completed' : 'In Progress'}</span>
+    </div>
+
+    <div class='badge-row'><span class='tag rated'>✅ Selected Provider</span><span class='tag best'>${reason}</span></div>
     <div class='muted-xs'>📍 ${acceptedMeta.businessAddress || 'Address not provided'} ${acceptedMeta.businessZip || ''}</div>
     <div class='contact-row'>
       <span class='contact-pill'>📞 ${acceptedMeta.businessPhone || 'No phone'}</span>
       <span class='contact-pill'>✉️ ${acceptedMeta.businessEmail || 'No email'}</span>
       <span class='contact-pill'>⭐ ${acceptedRating.avg ? `${acceptedRating.avg}/5` : 'New'} (${acceptedRating.count} review${acceptedRating.count === 1 ? '' : 's'})</span>
     </div>
-    <div class='muted-xs'>Notes: ${acceptedParsed?.notes ? acceptedParsed.notes : 'No additional notes provided.'}</div>
+    <div class='muted-xs'>Scope: ${acceptedParsed?.notes ? acceptedParsed.notes : 'No additional scope notes provided.'}</div>
     <div class='muted-xs'><a href='/provider/${encodeURIComponent(accepted.mechanic_id)}' target='_blank' style='color:#9fc1ff'>View Provider Public Profile ↗</a></div>
     ${existingFeedback ? `<div class='muted-xs'>✅ Your review was submitted: <b>${existingFeedback.rating}/5</b>${existingFeedback.text ? ` — ${existingFeedback.text}` : ''}</div>` : ''}
-    <div style='display:flex;gap:8px;flex-wrap:wrap;margin-top:10px'>
+
+    <div class='winner-actions'>
       ${canComplete ? `<button class='btn btn-green' data-complete='${selected.id}'>Mark Job Completed</button>` : ''}
       ${isCompleted ? `<button class='btn btn-dark' data-feedback='${accepted.id}' data-request='${selected.id}' data-mechanic='${accepted.mechanic_id}'>${existingFeedback ? 'Update Review' : 'Leave Feedback'}</button>` : `<span class='muted-xs'>Review unlocks after job is marked completed.</span>`}
     </div>
