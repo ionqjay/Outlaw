@@ -1540,9 +1540,9 @@ app.get('/admin', async (req, res) => {
   .tbl{max-height:460px;overflow:auto;border:1px solid var(--stroke);border-radius:12px;margin-top:8px}
   table{width:100%;border-collapse:collapse}th,td{padding:9px;border-bottom:1px solid #23314c;font-size:12px;text-align:left;vertical-align:middle}th{color:#c8d7fb;background:#0f1728;position:sticky;top:0;z-index:1}
   .badge{display:inline-block;padding:4px 8px;border-radius:999px;border:1px solid #3a4a70;font-size:11px;text-transform:capitalize}
-  .st-active,.st-trialing{border-color:#14532d;background:#052e1d;color:#bbf7d0}.st-past_due{border-color:#854d0e;background:#2b1603;color:#fde68a}.st-canceled,.st-none{border-color:#7f1d1d;background:#2a1111;color:#fecaca}
+  .st-active,.st-trialing{border-color:#14532d;background:#052e1d;color:#bbf7d0}.st-past_due{border-color:#854d0e;background:#2b1603;color:#fde68a}.st-canceled,.st-none{border-color:#7f1d1d;background:#2a1111;color:#fecaca}.st-blocked{border-color:#9a3412;background:#2b1205;color:#fed7aa}
   .btn{border:1px solid #3a4a70;background:#102038;color:#e7efff;border-radius:9px;padding:6px 9px;font-size:11px;cursor:pointer}
-  .btn:hover{filter:brightness(1.1)}.btn.cancel{border-color:#7f1d1d;background:#2a1010}.btn.activate{border-color:#14532d;background:#052117}
+  .btn:hover{filter:brightness(1.1)}.btn.cancel{border-color:#7f1d1d;background:#2a1010}.btn.activate{border-color:#14532d;background:#052117}.btn:disabled{opacity:.55;cursor:not-allowed;filter:none}
   .warn{border:1px solid #7f1d1d;background:#2a1414;color:#ffcbcb;border-radius:12px;padding:10px;margin-top:10px}
   .notice{border:1px solid #4b5563;background:#111827;color:#c7d2fe;border-radius:10px;padding:8px 10px;font-size:12px;margin-top:8px}
   #toast{position:fixed;right:16px;bottom:16px;background:#0b1528;border:1px solid #334155;color:#dbeafe;padding:10px 12px;border-radius:10px;display:none;z-index:40}
@@ -1580,8 +1580,8 @@ app.get('/admin', async (req, res) => {
       </div>
       <div class='tbl'>
         <table>
-          <thead><tr><th>Name</th><th>Email</th><th>Category</th><th>Borough</th><th>Status</th><th>Actions</th></tr></thead>
-          <tbody id='accountRows'><tr><td colspan='6'>Loading accounts...</td></tr></tbody>
+          <thead><tr><th>Name</th><th>Email</th><th>Category</th><th>Borough</th><th>Status</th><th>Reason</th><th>Actions</th></tr></thead>
+          <tbody id='accountRows'><tr><td colspan='7'>Loading accounts...</td></tr></tbody>
         </table>
       </div>
     </div>
@@ -1596,8 +1596,8 @@ app.get('/admin', async (req, res) => {
       </div>
       <div class='tbl'>
         <table>
-          <thead><tr><th>User ID</th><th>Email</th><th>Role</th><th>Status</th><th>Manual Override</th><th>Period End</th><th>Cancel at End</th><th>Actions</th></tr></thead>
-          <tbody id='billingRows'><tr><td colspan='7'>Loading...</td></tr></tbody>
+          <thead><tr><th>User ID</th><th>Email</th><th>Role</th><th>Status</th><th>Access</th><th>Manual Override</th><th>Period End</th><th>Cancel at End</th><th>Actions</th></tr></thead>
+          <tbody id='billingRows'><tr><td colspan='9'>Loading...</td></tr></tbody>
         </table>
       </div>
     </div>
@@ -1634,7 +1634,7 @@ app.get('/admin', async (req, res) => {
     function renderAccountRows(rows) {
       const rowsEl = document.getElementById('accountRows');
       if (!rows.length) {
-        rowsEl.innerHTML = '<tr><td colspan="6">No matching accounts.</td></tr>';
+        rowsEl.innerHTML = '<tr><td colspan="7">No matching accounts.</td></tr>';
         return;
       }
       rowsEl.innerHTML = rows.map(x => {
@@ -1649,6 +1649,7 @@ app.get('/admin', async (req, res) => {
           '<td>' + normalizeCategory(category) + '</td>' +
           '<td>' + (x.borough || '-') + '</td>' +
           '<td><span class="badge ' + (x.banned ? 'st-canceled' : 'st-active') + '">' + (x.banned ? 'banned' : 'active') + '</span></td>' +
+          '<td>' + (x.banned ? (x.ban_reason || '-') : '-') + '</td>' +
           '<td>' + action + '</td>' +
         '</tr>';
       }).join('');
@@ -1671,11 +1672,12 @@ app.get('/admin', async (req, res) => {
         accountCache = d.accounts || [];
         applyAccountFilters();
       } catch (e) {
-        document.getElementById('accountRows').innerHTML = '<tr><td colspan="6">' + (e.message || 'Could not load accounts') + '</td></tr>';
+        document.getElementById('accountRows').innerHTML = '<tr><td colspan="7">' + (e.message || 'Could not load accounts') + '</td></tr>';
       }
     }
 
     async function banAccount(email, category) {
+      if (!confirm('Ban ' + email + '? They will lose access immediately.')) return;
       const reason = prompt('Reason for ban (optional):', 'Admin action') || 'Admin action';
       try {
         const r = await fetch('/api/admin/accounts/' + encodeURIComponent(email) + '/ban?token=' + adminToken, {
@@ -1691,6 +1693,7 @@ app.get('/admin', async (req, res) => {
     }
 
     async function unbanAccount(email) {
+      if (!confirm('Unban ' + email + '? This restores account access.')) return;
       try {
         const r = await fetch('/api/admin/accounts/' + encodeURIComponent(email) + '/unban?token=' + adminToken, { method: 'POST' });
         const d = await r.json();
@@ -1703,7 +1706,7 @@ app.get('/admin', async (req, res) => {
     function renderBillingRows(rows) {
       const rowsEl = document.getElementById('billingRows');
       if (!rows.length) {
-        rowsEl.innerHTML = '<tr><td colspan="8">No matching billing accounts.</td></tr>';
+        rowsEl.innerHTML = '<tr><td colspan="9">No matching billing accounts.</td></tr>';
         return;
       }
       rowsEl.innerHTML = rows.map(x => {
@@ -1712,8 +1715,10 @@ app.get('/admin', async (req, res) => {
         const canCancel = status === 'active' || status === 'trialing' || status === 'past_due';
         const canActivate = status !== 'active' || !!x.cancel_at_period_end;
         const manual = String(x.manual_access_override || 'none');
+        const access = manual === 'disabled' ? 'blocked' : ((manual === 'active' || ['active','trialing','past_due'].includes(status)) ? 'enabled' : 'restricted');
+        const accessClass = access === 'enabled' ? 'st-active' : (access === 'blocked' ? 'st-blocked' : 'st-none');
         const actionBtns =
-          '<button class="btn cancel" ' + (canCancel ? '' : 'disabled') + ' data-bill-act="cancel" data-user-id="' + encodeURIComponent(uid) + '">Cancel</button> ' +
+          '<button class="btn cancel" ' + (canCancel ? '' : 'disabled') + ' data-bill-act="cancel" data-user-id="' + encodeURIComponent(uid) + '">Cancel End</button> ' +
           '<button class="btn activate" ' + (canActivate ? '' : 'disabled') + ' data-bill-act="reactivate" data-user-id="' + encodeURIComponent(uid) + '">Keep Active</button> ' +
           '<button class="btn activate" data-bill-act="force-active" data-user-id="' + encodeURIComponent(uid) + '">Force Active</button> ' +
           '<button class="btn cancel" data-bill-act="force-disable" data-user-id="' + encodeURIComponent(uid) + '">Disable Access</button> ' +
@@ -1723,6 +1728,7 @@ app.get('/admin', async (req, res) => {
           '<td>' + (x.email || '-') + '</td>' +
           '<td>' + (x.role || '-') + '</td>' +
           '<td><span class="badge ' + statusClass(status) + '">' + status + '</span></td>' +
+          '<td><span class="badge ' + accessClass + '">' + access + '</span></td>' +
           '<td>' + manual + '</td>' +
           '<td>' + (x.current_period_end || '-') + '</td>' +
           '<td>' + (x.cancel_at_period_end ? 'yes' : 'no') + '</td>' +
@@ -1759,11 +1765,12 @@ app.get('/admin', async (req, res) => {
         applySearch();
       } catch (e) {
         summaryEl.textContent = e.message || 'Could not load billing accounts.';
-        document.getElementById('billingRows').innerHTML = '<tr><td colspan="8">Could not load billing accounts.</td></tr>';
+        document.getElementById('billingRows').innerHTML = '<tr><td colspan="9">Could not load billing accounts.</td></tr>';
       }
     }
 
     async function cancelSub(userId) {
+      if (!confirm('Cancel subscription at period end for user ' + userId + '?')) return;
       try {
         const r = await fetch('/api/admin/billing/' + encodeURIComponent(userId) + '/cancel?token=' + adminToken, { method: 'POST' });
         const d = await r.json();
@@ -1774,6 +1781,7 @@ app.get('/admin', async (req, res) => {
     }
 
     async function reactivateSub(userId) {
+      if (!confirm('Keep subscription active for user ' + userId + '?')) return;
       try {
         const r = await fetch('/api/admin/billing/' + encodeURIComponent(userId) + '/reactivate?token=' + adminToken, { method: 'POST' });
         const d = await r.json();
@@ -1784,6 +1792,8 @@ app.get('/admin', async (req, res) => {
     }
 
     async function setManualAccess(userId, mode) {
+      const msg = mode === 'active' ? 'Force ACTIVE access for user ' + userId + '?' : (mode === 'disabled' ? 'Disable access for user ' + userId + '?' : 'Clear manual override for user ' + userId + '?');
+      if (!confirm(msg)) return;
       const reason = prompt('Manual override note (optional):', 'Admin manual override') || 'Admin manual override';
       try {
         const r = await fetch('/api/admin/billing/' + encodeURIComponent(userId) + '/manual-access?token=' + adminToken, {
