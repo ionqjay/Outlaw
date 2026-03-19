@@ -111,6 +111,53 @@ function parseBidNotes(notesRaw) {
   }
 }
 
+const MODELS_BY_MAKE = {
+  Toyota: ['Camry', 'Corolla', 'RAV4', 'Highlander', 'Prius', 'Tacoma'],
+  Honda: ['Civic', 'Accord', 'CR-V', 'Pilot', 'HR-V'],
+  Ford: ['F-150', 'Escape', 'Explorer', 'Mustang', 'Edge'],
+  Chevrolet: ['Silverado', 'Equinox', 'Malibu', 'Tahoe'],
+  Nissan: ['Altima', 'Sentra', 'Rogue', 'Pathfinder'],
+  BMW: ['3 Series', '4 Series', '5 Series', 'X3', 'X5'],
+  'Mercedes-Benz': ['C-Class', 'E-Class', 'GLC', 'GLE'],
+  Audi: ['A3', 'A4', 'Q5', 'Q7'],
+  Lexus: ['ES', 'RX', 'NX', 'IS'],
+  Hyundai: ['Elantra', 'Sonata', 'Tucson', 'Santa Fe'],
+  Kia: ['Forte', 'K5', 'Sportage', 'Telluride'],
+  Jeep: ['Wrangler', 'Grand Cherokee', 'Compass'],
+  Dodge: ['Charger', 'Challenger', 'Durango'],
+  Subaru: ['Outback', 'Forester', 'Crosstrek', 'Impreza'],
+  Mazda: ['Mazda3', 'Mazda6', 'CX-5', 'CX-9']
+};
+
+function initVehicleSelectors() {
+  const makeEl = document.getElementById('vehicleMake');
+  const modelEl = document.getElementById('vehicleModel');
+  if (!makeEl || !modelEl) return;
+
+  const rebuildModels = () => {
+    const make = String(makeEl.value || '').trim();
+    const models = MODELS_BY_MAKE[make] || [];
+    modelEl.innerHTML = '<option value="">Select model</option>';
+    if (!models.length) {
+      modelEl.innerHTML += '<option value="Other">Other</option>';
+      return;
+    }
+    models.forEach(m => {
+      const opt = document.createElement('option');
+      opt.value = m;
+      opt.textContent = m;
+      modelEl.appendChild(opt);
+    });
+    const other = document.createElement('option');
+    other.value = 'Other';
+    other.textContent = 'Other';
+    modelEl.appendChild(other);
+  };
+
+  makeEl.addEventListener('change', rebuildModels);
+  rebuildModels();
+}
+
 function getFeedbacks() {
   if (Array.isArray(feedbackCache) && feedbackCache.length) return feedbackCache;
   return JSON.parse(localStorage.getItem('smr_feedback_v1') || '[]');
@@ -575,6 +622,7 @@ function renderHomeSummary() {
 async function boot() {
   const session = await window.smrAuth.requireRole('owner');
   if (!session) return;
+  initVehicleSelectors();
 
   document.getElementById('logoutBtn').addEventListener('click', () => window.smrAuth.logoutToLogin());
 

@@ -331,6 +331,19 @@ function providerSupportsRepair(provider, repair) {
   return set.has(category) || set.has('other');
 }
 
+function toPreviewRepair(r) {
+  return {
+    ...r,
+    title: String(r?.title || 'Open Repair Request'),
+    issue_details: 'Repair details are unlocked after invitation/subscription.',
+    city: String(r?.city || ''),
+    state: String(r?.state || ''),
+    zip: String(r?.zip || '').slice(0, 3) + 'xx',
+    vehicle_model: 'Hidden model',
+    __preview_locked: true
+  };
+}
+
 function getInviteWindowMs(urgency = '') {
   const s = String(urgency || '').toLowerCase();
   return s.includes('urgent') ? URGENT_INVITE_WINDOW_MS : STANDARD_INVITE_WINDOW_MS;
@@ -511,7 +524,7 @@ async function ensureProviderInvitesForOpenRequests(providerEmail, repairs = [],
   if (changed) writeInvites(rows);
 }
 
-async function listRepairRequests({ ownerId, status, providerEmail, providerType, providerServices } = {}) {
+async function listRepairRequests({ ownerId, status, providerEmail, providerType, providerServices, previewLeads } = {}) {
   if (USE_SUPABASE) {
     const q = ['select=*', 'order=created_at.desc'];
     if (ownerId) q.push(`owner_id=eq.${encodeURIComponent(ownerId)}`);
@@ -530,9 +543,21 @@ async function listRepairRequests({ ownerId, status, providerEmail, providerType
           return Number.isFinite(exp) ? exp > now : true;
         });
       const byRepair = new Map(activeInvites.map(i => [Number(i.repair_id), i]));
-      rows = rows
+      const invitedRows = rows
         .filter(r => byRepair.has(Number(r.id)))
         .map(r => ({ ...r, invite_expires_at: byRepair.get(Number(r.id))?.expires_at || null }));
+
+      if (previewLeads) {
+        const invitedIds = new Set(invitedRows.map(x => Number(x.id)));
+        const previewRows = rows
+          .filter(r => String(r.status || '').toLowerCase() === 'open')
+          .filter(r => !invitedIds.has(Number(r.id)))
+          .slice(0, 12)
+          .map(toPreviewRepair);
+        rows = [...invitedRows, ...previewRows];
+      } else {
+        rows = invitedRows;
+      }
     }
     return rows;
   }
@@ -552,9 +577,21 @@ async function listRepairRequests({ ownerId, status, providerEmail, providerType
         return Number.isFinite(exp) ? exp > now : true;
       });
     const byRepair = new Map(activeInvites.map(i => [Number(i.repair_id), i]));
-    data = data
+    const invitedRows = data
       .filter(x => byRepair.has(Number(x.id)))
       .map(x => ({ ...x, invite_expires_at: byRepair.get(Number(x.id))?.expires_at || null }));
+
+    if (previewLeads) {
+      const invitedIds = new Set(invitedRows.map(x => Number(x.id)));
+      const previewRows = data
+        .filter(x => String(x.status || '').toLowerCase() === 'open')
+        .filter(x => !invitedIds.has(Number(x.id)))
+        .slice(0, 12)
+        .map(toPreviewRepair);
+      data = [...invitedRows, ...previewRows];
+    } else {
+      data = invitedRows;
+    }
   }
   return data;
 }
@@ -914,7 +951,8 @@ app.get('/api/repairs', async (req, res) => {
     const providerEmail = req.query.providerEmail ? String(req.query.providerEmail).toLowerCase() : undefined;
     const providerType = req.query.providerType ? String(req.query.providerType).toLowerCase() : undefined;
     const providerServices = req.query.providerServices ? String(req.query.providerServices) : undefined;
-    const rows = await listRepairRequests({ ownerId, status, providerEmail, providerType, providerServices });
+    const previewLeads = String(req.query.previewLeads || '').toLowerCase() === 'true';
+    const rows = await listRepairRequests({ ownerId, status, providerEmail, providerType, providerServices, previewLeads });
     res.json({ ok: true, repairs: rows });
   } catch (e) {
     res.status(500).json({ error: 'Could not load repairs.', detail: String(e?.message || e) });

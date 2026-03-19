@@ -289,15 +289,18 @@ async function boot() {
       const providerEmail = encodeURIComponent(String(profile?.email || session.email || '').trim().toLowerCase());
       const providerType = encodeURIComponent(getProviderType(session.role));
       const providerServices = encodeURIComponent(String(profile?.services || ''));
-      const data = await fetchJson(`/api/repairs?status=open&providerEmail=${providerEmail}&providerType=${providerType}&providerServices=${providerServices}`);
+      const data = await fetchJson(`/api/repairs?status=open&providerEmail=${providerEmail}&providerType=${providerType}&providerServices=${providerServices}&previewLeads=true`);
       const repairs = data.repairs || [];
       const serviceKeys = new Set(parseProfileServices(profile?.services || ''));
-      const filteredRepairs = serviceKeys.size
-        ? repairs.filter(r => {
+      const invitedRepairs = repairs.filter(r => !r.__preview_locked);
+      const previewRepairs = repairs.filter(r => !!r.__preview_locked);
+      const invitedFiltered = serviceKeys.size
+        ? invitedRepairs.filter(r => {
             const key = categoryToServiceKey(r.issue_category || '');
             return serviceKeys.has(key) || serviceKeys.has('other');
           })
-        : repairs;
+        : invitedRepairs;
+      const filteredRepairs = [...invitedFiltered, ...previewRepairs];
 
       if (!serviceKeys.size) {
         setInlineAlert('Tip: Select your specialties in Profile (brakes, engine, etc.) so matching prioritizes the right requests.');
@@ -306,28 +309,32 @@ async function boot() {
       wrap.innerHTML = filteredRepairs.length
         ? filteredRepairs.map(rep => {
             const ownerMeta = parseOwnerMeta(rep.issue_details);
+            const locked = !!rep.__preview_locked;
             return `
-          <div class='estimate-card'>
+          <div class='estimate-card ${locked ? 'preview-locked' : ''}'>
             <div class='estimate-top'>
               <strong>#${rep.id} · ${rep.title}</strong>
-              <span class='pill open'>open</span>
+              <span class='pill open'>${locked ? 'preview' : 'open'}</span>
             </div>
             <div class='small'>${rep.issue_category || ''} · ${rep.city || ''}, ${rep.state || ''} · ${rep.urgency || 'Standard'}</div>
             <div class='small'>${rep.vehicle_year || ''} ${rep.vehicle_make || ''} ${rep.vehicle_model || ''}</div>
             <div class='small'><b>Repair needed:</b> ${ownerMeta.cleanDetails || 'No description provided.'}</div>
-            <div class='small'><b>Estimate window:</b> ${formatInviteCountdown(rep.invite_expires_at)}</div>
+            ${locked ? "<div class='small'><b>Preview:</b> This is market activity preview. Unlock full lead access by invitation + active subscription.</div>" : `<div class='small'><b>Estimate window:</b> ${formatInviteCountdown(rep.invite_expires_at)}</div>`}
+            ${locked ? "<button class='btn btn-dark' data-view='profile' style='margin-top:10px'>Unlock Lead Access</button>" : `
             <div class='estimate-kpis'>
               <div class='kpi-pill'><div class='lbl'>Your estimate (USD)</div><input placeholder='e.g. 325' id='amount-${rep.id}' /></div>
               <div class='kpi-pill'><div class='lbl'>ETA (hours)</div><input placeholder='24' id='eta-${rep.id}' value='24' /></div>
             </div>
             <textarea id='notes-${rep.id}' placeholder='Notes for owner (minimum 15 characters)' style='margin-top:8px'></textarea>
-            <button class='btn btn-orange' data-bid='${rep.id}' style='margin-top:10px'>Submit Estimate</button>
+            <button class='btn btn-orange' data-bid='${rep.id}' style='margin-top:10px'>Submit Estimate</button>`}
           </div>
         `;
           }).join('')
         : (serviceKeys.size
             ? "<div class='list-card'><strong>No open repairs right now.</strong><div class='small'>You’ll only see requests you are invited to quote on (based on location/service fit and invite window).</div><div class='small'>Note: subscription is required to <b>submit</b> estimates, not to view invited requests.</div><div class='small'>Check back shortly — new owner demand comes in throughout the day.</div></div>"
             : "<div class='list-card'><strong>Add your service specialties first.</strong><div class='small'>Go to Profile and select what you work on (brakes, engine, transmission, etc.).</div><div class='small'>We use this to match you with relevant repair requests.</div></div>");
+
+      document.querySelectorAll('#repairFeed [data-view]').forEach(btn => btn.addEventListener('click', () => setView(btn.dataset.view)));
 
       document.querySelectorAll('[data-bid]').forEach(btn => btn.addEventListener('click', async () => {
         const id = btn.dataset.bid;
