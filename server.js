@@ -69,6 +69,9 @@ const stripe = STRIPE_SECRET_KEY ? new Stripe(STRIPE_SECRET_KEY) : null;
 const STANDARD_INVITE_WINDOW_MS = 2 * 60 * 60 * 1000; // 2h
 const URGENT_INVITE_WINDOW_MS = 45 * 60 * 1000; // 45m
 const MAX_REQUEST_AGE_MS = 24 * 60 * 60 * 1000; // 24h
+const ESCALATION_WAVE_2_MS = 90 * 60 * 1000; // 90m
+const ESCALATION_WAVE_3_MS = 180 * 60 * 1000; // 180m
+const ESCALATION_MIN_BIDS = 2;
 const CORS_ORIGINS = (process.env.CORS_ORIGINS || 'https://shopmyrepair.vercel.app,https://beta.shopmyrepair.com,https://shopmyrepair.com,http://localhost:3000')
   .split(',')
   .map(s => s.trim())
@@ -504,6 +507,77 @@ async function processInviteExpirations(repairs = []) {
   if (changed) writeInvites(rows);
 }
 
+async function processInviteEscalations(repairs = []) {
+  if (!Array.isArray(repairs) || !repairs.length) return;
+
+  const rows = readInvites();
+  const pool = await listProviderPool();
+  const now = Date.now();
+  let changed = false;
+
+  async function addWave(repair, wave, additionalCount) {
+    const repairId = Number(repair?.id || repair?.Id);
+    if (!repairId) return;
+
+    const alreadyWave = rows.some(r => Number(r.repair_id) === repairId && Number(r.escalation_wave || 0) === wave);
+    if (alreadyWave) return;
+
+    const used = new Set(rows
+      .filter(r => Number(r.repair_id) === repairId)
+      .map(r => `${String(r.provider_email || '').toLowerCase()}:${normalizeProviderType(r.provider_type)}`));
+
+    const eligible = pool
+      .filter(p => providerEligibleForInvites(p))
+      .filter(p => providerSupportsRepair(p, repair))
+      .filter(p => !used.has(`${p.email}:${p.providerType}`));
+
+    if (!eligible.length) return;
+
+    const picks = eligible.slice(0, additionalCount);
+    const windowMs = getInviteWindowMs(repair?.urgency);
+    for (const p of picks) {
+      rows.push({
+        repair_id: repairId,
+        provider_email: p.email,
+        provider_type: p.providerType,
+        status: 'pending',
+        created_at: new Date(now).toISOString(),
+        expires_at: new Date(now + windowMs).toISOString(),
+        submitted_at: null,
+        escalation_wave: wave
+      });
+      changed = true;
+    }
+  }
+
+  for (const repair of repairs) {
+    const repairId = Number(repair?.id || repair?.Id);
+    if (!repairId) continue;
+    if (String(repair?.status || '').toLowerCase() !== 'open') continue;
+    if (requestIsExpiredForNewInvites(repair)) continue;
+
+    const created = new Date(repair?.created_at || repair?.CreatedDate || 0).getTime();
+    if (!Number.isFinite(created)) continue;
+    const ageMs = now - created;
+
+    const bids = await listBids({ requestId: repairId });
+    const openOrAccepted = (bids || []).filter(b => {
+      const s = String(b?.status || 'open').toLowerCase();
+      return s === 'open' || s === 'accepted';
+    }).length;
+
+    if (openOrAccepted >= ESCALATION_MIN_BIDS) continue;
+
+    if (ageMs >= ESCALATION_WAVE_3_MS) {
+      await addWave(repair, 3, 8);
+    } else if (ageMs >= ESCALATION_WAVE_2_MS) {
+      await addWave(repair, 2, 5);
+    }
+  }
+
+  if (changed) writeInvites(rows);
+}
+
 async function ensureProviderInvitesForOpenRequests(providerEmail, repairs = [], providerTypeHint = 'mechanic', providerServicesHint = '') {
   const email = String(providerEmail || '').trim().toLowerCase();
   if (!email) return;
@@ -556,6 +630,7 @@ async function listRepairRequests({ ownerId, status, providerEmail, providerType
     if (status) q.push(`status=eq.${encodeURIComponent(status)}`);
     let rows = await supabaseRequest(`repair_requests?${q.join('&')}`);
     try { await processInviteExpirations(rows); } catch {}
+    try { await processInviteEscalations(rows); } catch {}
     if (providerEmail) {
       try { await ensureProviderInvitesForOpenRequests(providerEmail, rows, providerType, providerServices); } catch {}
       const pool = await listProviderPool();
@@ -595,6 +670,7 @@ async function listRepairRequests({ ownerId, status, providerEmail, providerType
   if (ownerId) data = data.filter(x => String(x.owner_id) === String(ownerId));
   if (status) data = data.filter(x => String(x.status) === String(status));
   try { await processInviteExpirations(data); } catch {}
+  try { await processInviteEscalations(data); } catch {}
   if (providerEmail) {
     try { await ensureProviderInvitesForOpenRequests(providerEmail, data, providerType, providerServices); } catch {}
     const pool = await listProviderPool();
