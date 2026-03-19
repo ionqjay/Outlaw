@@ -15,20 +15,25 @@ const statusEl = document.getElementById('authStatus');
 const signInBtn = document.getElementById('signInBtn');
 const signUpBtn = document.getElementById('signUpBtn');
 
+function selectedSignupServices() {
+  return Array.from(document.querySelectorAll('[data-signup-service]:checked')).map(x => String(x.value || '').trim()).filter(Boolean);
+}
+
 function values() {
   return {
     name: document.getElementById('name').value.trim(),
     email: document.getElementById('email').value.trim().toLowerCase(),
     password: document.getElementById('password').value,
-    role: document.getElementById('role').value
+    role: document.getElementById('role').value,
+    services: selectedSignupServices()
   };
 }
 
-async function signUpSupabase({ name, email, password, role }) {
+async function signUpSupabase({ name, email, password, role, services }) {
   const { data, error } = await window.smrSupabase.auth.signUp({
     email,
     password,
-    options: { data: { role, name } }
+    options: { data: { role, name, services: (services || []).join(', ') } }
   });
   if (error) throw error;
   const user = data?.user;
@@ -50,16 +55,19 @@ async function signInSupabase({ email, password }) {
 }
 
 signUpBtn.addEventListener('click', async () => {
-  const { name, email, password, role } = values();
+  const { name, email, password, role, services } = values();
   if (!name || !email || !password) return statusEl.textContent = 'Name, email, and password are required.';
+  if ((role === 'mechanic' || role === 'shop') && (!services || !services.length)) {
+    return statusEl.textContent = 'Please select at least one specialty.';
+  }
   statusEl.textContent = 'Creating account...';
 
   try {
-    if (window.smrSupabaseReady) return await signUpSupabase({ name, email, password, role });
+    if (window.smrSupabaseReady) return await signUpSupabase({ name, email, password, role, services });
 
     const users = getUsers();
     if (users.some(u => u.email === email)) return statusEl.textContent = 'Account already exists. Sign in instead.';
-    users.push({ name, email, password, role });
+    users.push({ name, email, password, role, services: (services || []).join(', ') });
     saveUsers(users);
     setLocalSession({ name, email, role });
     go(role);
@@ -85,6 +93,16 @@ signInBtn.addEventListener('click', async () => {
     statusEl.textContent = e.message || 'Sign in failed.';
   }
 });
+
+const roleEl = document.getElementById('role');
+const specialtiesWrap = document.getElementById('specialtiesWrap');
+function syncSpecialtiesVisibility() {
+  const role = String(roleEl?.value || '').toLowerCase();
+  if (!specialtiesWrap) return;
+  specialtiesWrap.style.display = (role === 'mechanic' || role === 'shop') ? 'block' : 'none';
+}
+roleEl?.addEventListener('change', syncSpecialtiesVisibility);
+syncSpecialtiesVisibility();
 
 if (!window.smrSupabaseReady) {
   statusEl.textContent = 'Supabase Auth not configured yet. Using local dev auth mode.';

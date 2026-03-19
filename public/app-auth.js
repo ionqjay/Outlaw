@@ -10,7 +10,8 @@ async function getActiveSession() {
     const state = s.user.user_metadata?.state || '';
     const zip = s.user.user_metadata?.zip || '';
     const contactEmail = s.user.user_metadata?.email || '';
-    return { id: s.user.id, email: s.user.email || '', contactEmail, role, name, phone, city, state, zip };
+    const services = s.user.user_metadata?.services || '';
+    return { id: s.user.id, email: s.user.email || '', contactEmail, role, name, phone, city, state, zip, services };
   }
   const local = JSON.parse(localStorage.getItem('smr_session') || 'null');
   return local;
@@ -115,7 +116,7 @@ async function getMechanicProfile() {
     city: local.city || session.city || '',
     state: local.state || session.state || 'NY',
     zip: local.zip || session.zip || '',
-    services: local.services || '',
+    services: local.services || session.services || '',
     serviceRadiusMiles: local.serviceRadiusMiles || '',
     certifications: local.certifications || ''
   };

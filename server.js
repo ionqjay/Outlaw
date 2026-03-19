@@ -318,7 +318,21 @@ function normalizeProviderType(v) {
 }
 
 function normalizeServiceKey(v) {
-  return String(v || '').trim().toLowerCase().replace(/\s+/g, '_');
+  const raw = String(v || '').trim().toLowerCase();
+  const key = raw.replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '');
+  const aliases = {
+    ac_heating: 'ac',
+    a_c_heating: 'ac',
+    tire_replacement: 'tire_replacement',
+    tires: 'tire_replacement',
+    tire: 'tire_replacement',
+    battery_starter_alternator: 'battery',
+    battery: 'battery',
+    starter: 'battery',
+    alternator: 'battery',
+    oil_change_maintenance: 'oil_change'
+  };
+  return aliases[key] || key;
 }
 
 function providerSupportsRepair(provider, repair) {

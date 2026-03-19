@@ -10,6 +10,9 @@
     .card{background:#15151a;border:1px solid #2a2a31;border-radius:14px;padding:18px}
     .grid{display:grid;gap:10px}
     input,select{padding:11px;border-radius:10px;border:1px solid #333;background:#0f0f13;color:#fff}
+    .svc-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
+    .svc-pill{display:flex;align-items:center;gap:8px;border:1px solid #333;border-radius:10px;padding:8px 10px;background:#0f0f13;font-size:13px;color:#ddd}
+    .svc-pill input{width:auto}
   </style>
 </head>
 <body>
@@ -21,6 +24,22 @@
       <input id="name" placeholder="Full name (for sign up)" />
       <input id="email" type="email" placeholder="Email" />
       <input id="password" type="password" placeholder="Password" />
+      <div id="specialtiesWrap" style="display:none">
+        <div style="font-size:13px;color:#b7b7c5">Required for mechanic/shop: select your specialties</div>
+        <div class="svc-grid" style="margin-top:6px">
+          <label class="svc-pill"><input type="checkbox" value="brakes" data-signup-service /> Brakes</label>
+          <label class="svc-pill"><input type="checkbox" value="engine" data-signup-service /> Engine</label>
+          <label class="svc-pill"><input type="checkbox" value="tire_replacement" data-signup-service /> Tire Replacement</label>
+          <label class="svc-pill"><input type="checkbox" value="transmission" data-signup-service /> Transmission</label>
+          <label class="svc-pill"><input type="checkbox" value="electrical" data-signup-service /> Electrical</label>
+          <label class="svc-pill"><input type="checkbox" value="diagnostics" data-signup-service /> Diagnostics</label>
+          <label class="svc-pill"><input type="checkbox" value="suspension" data-signup-service /> Suspension</label>
+          <label class="svc-pill"><input type="checkbox" value="ac" data-signup-service /> A/C & Heating</label>
+          <label class="svc-pill"><input type="checkbox" value="oil_change" data-signup-service /> Oil Change / Maintenance</label>
+          <label class="svc-pill"><input type="checkbox" value="battery" data-signup-service /> Battery/Starter/Alternator</label>
+          <label class="svc-pill"><input type="checkbox" value="other" data-signup-service /> Other</label>
+        </div>
+      </div>
       <div style="display:flex;gap:8px">
         <button class="btn btn-dark" id="signInBtn" type="button">Sign In</button>
         <button class="btn btn-orange" id="signUpBtn" type="button">Sign Up</button>

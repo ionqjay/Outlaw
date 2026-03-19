@@ -110,6 +110,13 @@ const SERVICE_LABEL_TO_KEY = {
   'oil change / maintenance': 'oil_change',
   'oil change': 'oil_change',
   maintenance: 'oil_change',
+  'tire replacement': 'tire_replacement',
+  tires: 'tire_replacement',
+  tire: 'tire_replacement',
+  'battery / starter / alternator': 'battery',
+  battery: 'battery',
+  starter: 'battery',
+  alternator: 'battery',
   other: 'other'
 };
 
