@@ -297,7 +297,11 @@ async function boot() {
             const key = categoryToServiceKey(r.issue_category || '');
             return serviceKeys.has(key) || serviceKeys.has('other');
           })
-        : [];
+        : repairs;
+
+      if (!serviceKeys.size) {
+        setInlineAlert('Tip: Select your specialties in Profile (brakes, engine, etc.) so matching prioritizes the right requests.');
+      }
 
       wrap.innerHTML = filteredRepairs.length
         ? filteredRepairs.map(rep => {
