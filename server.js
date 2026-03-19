@@ -227,6 +227,13 @@ async function listAuthUsers() {
   }
 }
 
+async function getAuthUserById(userId) {
+  const id = String(userId || '').trim();
+  if (!id || !USE_SUPABASE) return null;
+  const users = await listAuthUsers();
+  return users.find(u => String(u?.id || '') === id) || null;
+}
+
 async function listSignups() {
   if (USE_SUPABASE) {
     return supabaseRequest('signups?select=*&order=created_at.desc');
@@ -944,6 +951,34 @@ app.post('/api/stripe/webhook', express.raw({ type: 'application/json' }), (req,
 });
 
 app.use(express.json());
+
+const RATE_LIMIT_RULES = [
+  { prefix: '/api/repairs', windowMs: 60_000, max: 60 },
+  { prefix: '/api/bids', windowMs: 60_000, max: 40 },
+  { prefix: '/api/signup', windowMs: 60_000, max: 20 },
+  { prefix: '/api/send-otp', windowMs: 60_000, max: 10 }
+];
+const __rateHits = new Map();
+app.use((req, res, next) => {
+  const rule = RATE_LIMIT_RULES.find(r => req.path.startsWith(r.prefix));
+  if (!rule) return next();
+  const ip = String(req.headers['x-forwarded-for'] || req.socket?.remoteAddress || 'unknown').split(',')[0].trim();
+  const key = `${rule.prefix}:${ip}`;
+  const now = Date.now();
+  const hit = __rateHits.get(key) || { count: 0, resetAt: now + rule.windowMs };
+  if (now > hit.resetAt) {
+    hit.count = 0;
+    hit.resetAt = now + rule.windowMs;
+  }
+  hit.count += 1;
+  __rateHits.set(key, hit);
+  if (hit.count > rule.max) {
+    res.setHeader('Retry-After', String(Math.ceil((hit.resetAt - now) / 1000)));
+    return res.status(429).json({ error: 'Too many requests. Please try again shortly.' });
+  }
+  return next();
+});
+
 app.use(express.static(path.join(__dirname, 'public')));
 
 app.get('/api/stats', async (req, res) => {
@@ -952,6 +987,14 @@ app.get('/api/stats', async (req, res) => {
     res.json(counts(data));
   } catch (e) {
     res.status(500).json({ error: 'Could not load stats' });
+  }
+});
+
+app.get('/api/health', async (req, res) => {
+  try {
+    res.json({ ok: true, uptimeSec: Math.round(process.uptime()), stripeConfigured: !!stripe, supabaseConfigured: USE_SUPABASE, ts: new Date().toISOString() });
+  } catch {
+    res.status(500).json({ ok: false });
   }
 });
 
@@ -1070,6 +1113,12 @@ app.post('/api/repairs', async (req, res) => {
   }
 
   try {
+    if (USE_SUPABASE) {
+      const owner = await getAuthUserById(ownerId);
+      const ownerRole = String(owner?.user_metadata?.role || '').toLowerCase();
+      if (!owner || ownerRole !== 'owner') return res.status(403).json({ error: 'Owner authorization failed.' });
+    }
+
     const created = await createRepairRequest({
       owner_id: String(ownerId).trim(),
       title: String(title).trim(),
@@ -1183,6 +1232,14 @@ app.post('/api/bids', async (req, res) => {
     return res.status(402).json({ error: 'Active $99/month subscription required to submit estimates.' });
   }
 
+  if (USE_SUPABASE) {
+    const user = await getAuthUserById(mechanicId);
+    const role = String(user?.user_metadata?.role || '').toLowerCase();
+    if (!user || !['mechanic', 'shop'].includes(role)) {
+      return res.status(403).json({ error: 'Provider authorization failed.' });
+    }
+  }
+
   const cleanNotes = String(notes || '').trim();
   if (cleanNotes.replace(/\[META\][\s\S]*?\[\/META\]/g, '').trim().length < 15) {
     return res.status(400).json({ error: 'Please include at least 15 characters in estimate notes.' });
@@ -1207,6 +1264,14 @@ app.post('/api/bids', async (req, res) => {
 
   if (providerEmail && isBannedEmail(providerEmail)) {
     return res.status(403).json({ error: 'This account is restricted. Contact support.' });
+  }
+
+  if (USE_SUPABASE && providerEmail) {
+    const user = await getAuthUserById(mechanicId);
+    const authEmail = String(user?.email || '').trim().toLowerCase();
+    if (authEmail && authEmail !== providerEmail) {
+      return res.status(403).json({ error: 'Provider email mismatch.' });
+    }
   }
 
   try {
