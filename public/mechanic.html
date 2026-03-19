@@ -137,6 +137,9 @@
     .skeleton::after { content:''; position:absolute; inset:0; transform:translateX(-100%); background:linear-gradient(90deg,transparent,rgba(255,255,255,.06),transparent); animation: shimmer 1.2s infinite; }
     @keyframes shimmer { 100% { transform: translateX(100%); } }
     .mobile-cta { display:none; }
+    .services-grid { display:grid; grid-template-columns: repeat(2, minmax(0,1fr)); gap:8px; margin-top:8px; }
+    .svc-pill { display:flex; align-items:center; gap:8px; border:1px solid #323646; border-radius:10px; background:#0f1219; padding:8px 10px; font-size:13px; color:#d7dbea; }
+    .svc-pill input { width:auto; margin:0; }
 
     @media (max-width: 920px) {
       .quick-metrics, .row2, .estimate-kpis { grid-template-columns: 1fr; }
@@ -267,8 +270,19 @@
           <input id="profileCertifications" placeholder="Certifications (ASE, etc.)" />
         </div>
       </div>
-      <p class="subtle" style="margin-top:8px">Rating and review count are system-generated from owner feedback after completed jobs.</p>
-      <textarea id="profileServices" placeholder="Services (e.g. brakes, diagnostics, engine, mobile)" style="margin-top:8px"></textarea>
+      <p class="subtle" style="margin-top:8px">Choose the repair types you can perform. Matching uses these specialties.</p>
+      <div class="services-grid" id="serviceSpecialtiesGrid">
+        <label class="svc-pill"><input type="checkbox" value="brakes" data-service-specialty /> Brakes</label>
+        <label class="svc-pill"><input type="checkbox" value="engine" data-service-specialty /> Engine</label>
+        <label class="svc-pill"><input type="checkbox" value="transmission" data-service-specialty /> Transmission</label>
+        <label class="svc-pill"><input type="checkbox" value="electrical" data-service-specialty /> Electrical</label>
+        <label class="svc-pill"><input type="checkbox" value="diagnostics" data-service-specialty /> Diagnostics</label>
+        <label class="svc-pill"><input type="checkbox" value="suspension" data-service-specialty /> Suspension</label>
+        <label class="svc-pill"><input type="checkbox" value="ac" data-service-specialty /> A/C & Heating</label>
+        <label class="svc-pill"><input type="checkbox" value="oil_change" data-service-specialty /> Oil Change / Maintenance</label>
+        <label class="svc-pill"><input type="checkbox" value="other" data-service-specialty /> Other</label>
+      </div>
+      <textarea id="profileServices" placeholder="Optional: add extra specialties (comma separated)" style="margin-top:8px"></textarea>
       <button class="btn btn-orange" id="saveMechanicProfileBtn" style="margin-top:10px">Save Profile</button>
       <p id="mechanicProfileStatus" class="status">Profile not updated yet.</p>
     </section>

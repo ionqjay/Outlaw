@@ -97,6 +97,51 @@ function getProviderTypeLabel(role) {
   return getProviderType(role) === 'shop' ? 'Mechanic Shop' : 'Individual Mechanic';
 }
 
+const SERVICE_LABEL_TO_KEY = {
+  brakes: 'brakes',
+  engine: 'engine',
+  transmission: 'transmission',
+  electrical: 'electrical',
+  diagnostics: 'diagnostics',
+  suspension: 'suspension',
+  'a/c & heating': 'ac',
+  ac: 'ac',
+  heating: 'ac',
+  'oil change / maintenance': 'oil_change',
+  'oil change': 'oil_change',
+  maintenance: 'oil_change',
+  other: 'other'
+};
+
+function normalizeServiceKey(value) {
+  const s = String(value || '').trim().toLowerCase();
+  return SERVICE_LABEL_TO_KEY[s] || s.replace(/\s+/g, '_');
+}
+
+function getSelectedServiceKeys() {
+  return Array.from(document.querySelectorAll('[data-service-specialty]:checked')).map(x => normalizeServiceKey(x.value));
+}
+
+function setSelectedServiceKeys(keys = []) {
+  const set = new Set((keys || []).map(normalizeServiceKey));
+  document.querySelectorAll('[data-service-specialty]').forEach(cb => {
+    cb.checked = set.has(normalizeServiceKey(cb.value));
+  });
+}
+
+function parseProfileServices(profileServicesRaw = '') {
+  return String(profileServicesRaw || '')
+    .split(',')
+    .map(x => normalizeServiceKey(x))
+    .filter(Boolean);
+}
+
+function categoryToServiceKey(categoryRaw = '') {
+  const s = String(categoryRaw || '').trim().toLowerCase();
+  if (!s) return '';
+  return normalizeServiceKey(s);
+}
+
 function formatInviteCountdown(expiresAt) {
   const ts = new Date(expiresAt || 0).getTime();
   if (!Number.isFinite(ts)) return 'No timer available';
@@ -227,6 +272,7 @@ async function boot() {
     document.getElementById('profileBusinessAddress').value = profile.businessAddress || '';
     document.getElementById('profileZip').value = profile.zip || '';
     document.getElementById('profileServices').value = profile.services || '';
+    setSelectedServiceKeys(parseProfileServices(profile.services || ''));
     const radiusEl = document.getElementById('profileServiceRadius');
     const certEl = document.getElementById('profileCertifications');
     if (radiusEl) radiusEl.value = profile.serviceRadiusMiles || '';
@@ -239,12 +285,20 @@ async function boot() {
     wrap.innerHTML = "<div class='skeleton'></div><div class='skeleton'></div>";
 
     try {
-      const providerEmail = encodeURIComponent(String((await window.smrAuth.getMechanicProfile())?.email || session.email || '').trim().toLowerCase());
+      const profile = await window.smrAuth.getMechanicProfile();
+      const providerEmail = encodeURIComponent(String(profile?.email || session.email || '').trim().toLowerCase());
       const data = await fetchJson(`/api/repairs?status=open&providerEmail=${providerEmail}`);
       const repairs = data.repairs || [];
+      const serviceKeys = new Set(parseProfileServices(profile?.services || ''));
+      const filteredRepairs = serviceKeys.size
+        ? repairs.filter(r => {
+            const key = categoryToServiceKey(r.issue_category || '');
+            return serviceKeys.has(key) || serviceKeys.has('other');
+          })
+        : [];
 
-      wrap.innerHTML = repairs.length
-        ? repairs.map(rep => {
+      wrap.innerHTML = filteredRepairs.length
+        ? filteredRepairs.map(rep => {
             const ownerMeta = parseOwnerMeta(rep.issue_details);
             return `
           <div class='estimate-card'>
@@ -265,7 +319,9 @@ async function boot() {
           </div>
         `;
           }).join('')
-        : "<div class='list-card'><strong>No open repairs right now.</strong><div class='small'>You’ll only see requests you are invited to quote on (based on location/service fit and invite window).</div><div class='small'>Note: subscription is required to <b>submit</b> estimates, not to view invited requests.</div><div class='small'>Check back shortly — new owner demand comes in throughout the day.</div></div>";
+        : (serviceKeys.size
+            ? "<div class='list-card'><strong>No open repairs right now.</strong><div class='small'>You’ll only see requests you are invited to quote on (based on location/service fit and invite window).</div><div class='small'>Note: subscription is required to <b>submit</b> estimates, not to view invited requests.</div><div class='small'>Check back shortly — new owner demand comes in throughout the day.</div></div>"
+            : "<div class='list-card'><strong>Add your service specialties first.</strong><div class='small'>Go to Profile and select what you work on (brakes, engine, transmission, etc.).</div><div class='small'>We use this to match you with relevant repair requests.</div></div>");
 
       document.querySelectorAll('[data-bid]').forEach(btn => btn.addEventListener('click', async () => {
         const id = btn.dataset.bid;
@@ -290,6 +346,18 @@ async function boot() {
         }
 
         const savedProfile = await window.smrAuth.getMechanicProfile();
+        const selectedServices = new Set(parseProfileServices(savedProfile?.services || ''));
+        const targetRepair = filteredRepairs.find(r => Number(r.id) === Number(id));
+        const targetCategoryKey = categoryToServiceKey(targetRepair?.issue_category || '');
+        if (!selectedServices.size) {
+          fail('Select at least one service specialty in Profile before submitting estimates.', true);
+          return;
+        }
+        if (targetCategoryKey && !(selectedServices.has(targetCategoryKey) || selectedServices.has('other'))) {
+          fail(`This request is ${targetRepair?.issue_category || 'not in your selected specialties'}. Update Profile specialties to bid on it.`, true);
+          return;
+        }
+
         const rawNotes = String(document.getElementById(`notes-${id}`)?.value || '').trim();
         if (rawNotes.length < 15) {
           fail('Please include at least 15 characters in notes so owners get a quality estimate.');
@@ -323,7 +391,8 @@ async function boot() {
           businessEmail: savedProfile?.email || session.email || '',
           businessPhone: savedProfile?.phone || '',
           serviceRadiusMiles: savedProfile?.serviceRadiusMiles || '',
-          certifications: savedProfile?.certifications || ''
+          certifications: savedProfile?.certifications || '',
+          services: savedProfile?.services || ''
         };
 
         const payload = {
@@ -371,6 +440,14 @@ async function boot() {
     status.textContent = 'Saving profile...';
 
     try {
+      const selected = getSelectedServiceKeys();
+      const custom = String(document.getElementById('profileServices').value || '')
+        .split(',')
+        .map(x => normalizeServiceKey(x))
+        .filter(Boolean);
+      const serviceKeys = Array.from(new Set([...selected, ...custom]));
+      if (!serviceKeys.length) throw new Error('Select at least one service specialty.');
+
       await window.smrAuth.saveMechanicProfile({
         businessName: document.getElementById('profileBusinessName').value,
         businessAddress: document.getElementById('profileBusinessAddress').value,
@@ -380,7 +457,7 @@ async function boot() {
         city: document.getElementById('profileCity').value,
         state: document.getElementById('profileState').value,
         zip: document.getElementById('profileZip').value,
-        services: document.getElementById('profileServices').value,
+        services: serviceKeys.join(', '),
         serviceRadiusMiles: document.getElementById('profileServiceRadius')?.value || '',
         certifications: document.getElementById('profileCertifications')?.value || ''
       });

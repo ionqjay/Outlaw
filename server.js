@@ -317,6 +317,20 @@ function normalizeProviderType(v) {
   return s === 'shop' ? 'shop' : 'mechanic';
 }
 
+function normalizeServiceKey(v) {
+  return String(v || '').trim().toLowerCase().replace(/\s+/g, '_');
+}
+
+function providerSupportsRepair(provider, repair) {
+  const providerServices = String(provider?.services || '').trim().toLowerCase();
+  if (!providerServices) return true; // fallback for older profiles with no specialties yet
+  const set = new Set(providerServices.split(',').map(normalizeServiceKey).filter(Boolean));
+  if (!set.size) return true;
+  const category = normalizeServiceKey(repair?.issue_category || repair?.IssueCategory || '');
+  if (!category) return true;
+  return set.has(category) || set.has('other');
+}
+
 function getInviteWindowMs(urgency = '') {
   const s = String(urgency || '').toLowerCase();
   return s.includes('urgent') ? URGENT_INVITE_WINDOW_MS : STANDARD_INVITE_WINDOW_MS;
@@ -337,20 +351,45 @@ function writeInvites(rows) {
 }
 
 async function listProviderPool() {
-  const allSignups = await listSignups();
-  return allSignups
-    .filter(x => String(x.type || x.Type || '').toLowerCase() === 'mechanic')
-    .map(x => {
+  const providers = [];
+
+  const authUsers = await listAuthUsers();
+  for (const u of authUsers) {
+    const meta = u?.user_metadata || {};
+    const role = String(meta?.role || '').toLowerCase();
+    if (!['mechanic', 'shop'].includes(role)) continue;
+    const email = String(u?.email || '').trim().toLowerCase();
+    if (!email) continue;
+    providers.push({
+      email,
+      providerType: role === 'shop' ? 'shop' : 'mechanic',
+      services: String(meta?.services || '').trim().toLowerCase()
+    });
+  }
+
+  if (!providers.length) {
+    const allSignups = await listSignups();
+    for (const x of allSignups) {
+      if (String(x.type || x.Type || '').toLowerCase() !== 'mechanic') continue;
       const email = String(x.email || x.Email || '').trim().toLowerCase();
+      if (!email) continue;
       const hasShop = String(x.has_shop || x.HasShop || '').toLowerCase();
       const providerType = (hasShop === 'yes' || hasShop === 'true' || hasShop === 'shop') ? 'shop' : 'mechanic';
-      return { email, providerType };
-    })
-    .filter(x => x.email);
+      providers.push({ email, providerType, services: '' });
+    }
+  }
+
+  const seen = new Set();
+  return providers.filter(p => {
+    const key = `${p.email}:${p.providerType}`;
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
 }
 
 async function createDispatchSnapshot(repair) {
-  const mechanics = await listProviderPool();
+  const mechanics = (await listProviderPool()).filter(x => providerSupportsRepair(x, repair));
 
   const shops = mechanics.filter(x => x.providerType === 'shop').slice(0, 3);
   const inds = mechanics.filter(x => x.providerType === 'mechanic').slice(0, 2);
@@ -408,7 +447,7 @@ async function processInviteExpirations(repairs = []) {
 
       const type = normalizeProviderType(inv.provider_type);
       const used = new Set(rInvites.map(x => `${String(x.provider_email || '').toLowerCase()}:${normalizeProviderType(x.provider_type)}`));
-      const next = pool.find(p => p.providerType === type && !used.has(`${p.email}:${p.providerType}`));
+      const next = pool.find(p => p.providerType === type && providerSupportsRepair(p, repair) && !used.has(`${p.email}:${p.providerType}`));
       if (!next) continue;
 
       const windowMs = getInviteWindowMs(repair?.urgency);
@@ -446,6 +485,7 @@ async function ensureProviderInvitesForOpenRequests(providerEmail, repairs = [])
     if (!repairId) continue;
     if (String(repair?.status || '').toLowerCase() !== 'open') continue;
     if (requestIsExpiredForNewInvites(repair)) continue;
+    if (!providerSupportsRepair(provider, repair)) continue;
 
     const alreadyInvited = rows.some(i => (
       Number(i.repair_id) === repairId
