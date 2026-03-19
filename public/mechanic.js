@@ -265,7 +265,7 @@ async function boot() {
           </div>
         `;
           }).join('')
-        : "<div class='list-card'><strong>No open repairs right now.</strong><div class='small'>Check back shortly — new owner demand comes in throughout the day.</div></div>";
+        : "<div class='list-card'><strong>No open repairs right now.</strong><div class='small'>You’ll only see requests you are invited to quote on (based on location/service fit and invite window).</div><div class='small'>Note: subscription is required to <b>submit</b> estimates, not to view invited requests.</div><div class='small'>Check back shortly — new owner demand comes in throughout the day.</div></div>";
 
       document.querySelectorAll('[data-bid]').forEach(btn => btn.addEventListener('click', async () => {
         const id = btn.dataset.bid;

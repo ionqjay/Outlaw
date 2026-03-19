@@ -270,7 +270,13 @@ function renderBids() {
   const header = `<div class='muted-xs' style='margin-bottom:8px'>Showing repair estimates for <b>Request #${selected.id}</b> — ${selected.title}</div>`;
 
   if (!bids.length) {
-    bidWrap.innerHTML = `${header}<div class='list-card'><strong>No estimates yet.</strong><div class='muted-xs'>We are matching your request now. You can improve response quality by adding a little more detail.</div><button class='btn btn-dark' data-view='quote' style='margin-top:8px'>Update Request Details</button></div>`;
+    bidWrap.innerHTML = `${header}<div class='list-card'>
+      <strong>Finding nearby mechanics & shops...</strong>
+      <div class='skeleton' style='min-height:42px;margin-top:10px'></div>
+      <div class='muted-xs' style='margin-top:8px'>We’re actively matching your request with nearby providers and notifying eligible mechanics/shops now.</div>
+      <div class='muted-xs'>Most requests receive estimates within 24 hours.</div>
+      <button class='btn btn-dark' data-view='quote' style='margin-top:10px'>Update Request Details</button>
+    </div>`;
     document.querySelectorAll('#ownerBids [data-view]').forEach(btn => btn.addEventListener('click', () => setView(btn.dataset.view)));
     return;
   }
