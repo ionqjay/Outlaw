@@ -429,6 +429,48 @@ async function processInviteExpirations(repairs = []) {
   if (changed) writeInvites(rows);
 }
 
+async function ensureProviderInvitesForOpenRequests(providerEmail, repairs = []) {
+  const email = String(providerEmail || '').trim().toLowerCase();
+  if (!email) return;
+
+  const pool = await listProviderPool();
+  const provider = pool.find(p => String(p.email || '').toLowerCase() === email);
+  if (!provider) return;
+
+  const rows = readInvites();
+  const now = Date.now();
+  let changed = false;
+
+  for (const repair of repairs) {
+    const repairId = Number(repair?.id || repair?.Id);
+    if (!repairId) continue;
+    if (String(repair?.status || '').toLowerCase() !== 'open') continue;
+    if (requestIsExpiredForNewInvites(repair)) continue;
+
+    const alreadyInvited = rows.some(i => (
+      Number(i.repair_id) === repairId
+      && String(i.provider_email || '').toLowerCase() === email
+      && normalizeProviderType(i.provider_type) === provider.providerType
+    ));
+    if (alreadyInvited) continue;
+
+    const windowMs = getInviteWindowMs(repair?.urgency);
+    rows.push({
+      repair_id: repairId,
+      provider_email: email,
+      provider_type: provider.providerType,
+      status: 'pending',
+      created_at: new Date(now).toISOString(),
+      expires_at: new Date(now + windowMs).toISOString(),
+      submitted_at: null,
+      auto_backfill: true
+    });
+    changed = true;
+  }
+
+  if (changed) writeInvites(rows);
+}
+
 async function listRepairRequests({ ownerId, status, providerEmail } = {}) {
   if (USE_SUPABASE) {
     const q = ['select=*', 'order=created_at.desc'];
@@ -437,6 +479,7 @@ async function listRepairRequests({ ownerId, status, providerEmail } = {}) {
     let rows = await supabaseRequest(`repair_requests?${q.join('&')}`);
     try { await processInviteExpirations(rows); } catch {}
     if (providerEmail) {
+      try { await ensureProviderInvitesForOpenRequests(providerEmail, rows); } catch {}
       const now = Date.now();
       const invites = readInvites();
       const activeInvites = invites
@@ -458,6 +501,7 @@ async function listRepairRequests({ ownerId, status, providerEmail } = {}) {
   if (status) data = data.filter(x => String(x.status) === String(status));
   try { await processInviteExpirations(data); } catch {}
   if (providerEmail) {
+    try { await ensureProviderInvitesForOpenRequests(providerEmail, data); } catch {}
     const now = Date.now();
     const invites = readInvites();
     const activeInvites = invites
