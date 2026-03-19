@@ -271,9 +271,12 @@ function renderBids() {
 
   if (!bids.length) {
     bidWrap.innerHTML = `${header}<div class='list-card'>
-      <strong>Finding nearby mechanics & shops...</strong>
-      <div class='skeleton' style='min-height:42px;margin-top:10px'></div>
-      <div class='muted-xs' style='margin-top:8px'>We’re actively matching your request with nearby providers and notifying eligible mechanics/shops now.</div>
+      <strong>🔎 Matching your request with nearby providers...</strong>
+      <div class='skeleton' style='min-height:18px;margin-top:10px'></div>
+      <div class='skeleton' style='min-height:18px;margin-top:8px'></div>
+      <div class='skeleton' style='min-height:18px;margin-top:8px'></div>
+      <div class='muted-xs' style='margin-top:10px'>⏱️ Status: dispatching invites to eligible mechanics and auto shops.</div>
+      <div class='muted-xs'>✅ You’ll get notified here as soon as estimates start coming in.</div>
       <div class='muted-xs'>Most requests receive estimates within 24 hours.</div>
       <button class='btn btn-dark' data-view='quote' style='margin-top:10px'>Update Request Details</button>
     </div>`;

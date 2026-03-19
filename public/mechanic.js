@@ -287,7 +287,9 @@ async function boot() {
     try {
       const profile = await window.smrAuth.getMechanicProfile();
       const providerEmail = encodeURIComponent(String(profile?.email || session.email || '').trim().toLowerCase());
-      const data = await fetchJson(`/api/repairs?status=open&providerEmail=${providerEmail}`);
+      const providerType = encodeURIComponent(getProviderType(session.role));
+      const providerServices = encodeURIComponent(String(profile?.services || ''));
+      const data = await fetchJson(`/api/repairs?status=open&providerEmail=${providerEmail}&providerType=${providerType}&providerServices=${providerServices}`);
       const repairs = data.repairs || [];
       const serviceKeys = new Set(parseProfileServices(profile?.services || ''));
       const filteredRepairs = serviceKeys.size

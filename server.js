@@ -468,13 +468,13 @@ async function processInviteExpirations(repairs = []) {
   if (changed) writeInvites(rows);
 }
 
-async function ensureProviderInvitesForOpenRequests(providerEmail, repairs = []) {
+async function ensureProviderInvitesForOpenRequests(providerEmail, repairs = [], providerTypeHint = 'mechanic', providerServicesHint = '') {
   const email = String(providerEmail || '').trim().toLowerCase();
   if (!email) return;
 
   const pool = await listProviderPool();
-  const provider = pool.find(p => String(p.email || '').toLowerCase() === email);
-  if (!provider) return;
+  const provider = pool.find(p => String(p.email || '').toLowerCase() === email)
+    || { email, providerType: normalizeProviderType(providerTypeHint), services: String(providerServicesHint || '').trim().toLowerCase() };
 
   const rows = readInvites();
   const now = Date.now();
@@ -511,7 +511,7 @@ async function ensureProviderInvitesForOpenRequests(providerEmail, repairs = [])
   if (changed) writeInvites(rows);
 }
 
-async function listRepairRequests({ ownerId, status, providerEmail } = {}) {
+async function listRepairRequests({ ownerId, status, providerEmail, providerType, providerServices } = {}) {
   if (USE_SUPABASE) {
     const q = ['select=*', 'order=created_at.desc'];
     if (ownerId) q.push(`owner_id=eq.${encodeURIComponent(ownerId)}`);
@@ -519,7 +519,7 @@ async function listRepairRequests({ ownerId, status, providerEmail } = {}) {
     let rows = await supabaseRequest(`repair_requests?${q.join('&')}`);
     try { await processInviteExpirations(rows); } catch {}
     if (providerEmail) {
-      try { await ensureProviderInvitesForOpenRequests(providerEmail, rows); } catch {}
+      try { await ensureProviderInvitesForOpenRequests(providerEmail, rows, providerType, providerServices); } catch {}
       const now = Date.now();
       const invites = readInvites();
       const activeInvites = invites
@@ -541,7 +541,7 @@ async function listRepairRequests({ ownerId, status, providerEmail } = {}) {
   if (status) data = data.filter(x => String(x.status) === String(status));
   try { await processInviteExpirations(data); } catch {}
   if (providerEmail) {
-    try { await ensureProviderInvitesForOpenRequests(providerEmail, data); } catch {}
+    try { await ensureProviderInvitesForOpenRequests(providerEmail, data, providerType, providerServices); } catch {}
     const now = Date.now();
     const invites = readInvites();
     const activeInvites = invites
@@ -912,7 +912,9 @@ app.get('/api/repairs', async (req, res) => {
     const ownerId = req.query.ownerId ? String(req.query.ownerId) : undefined;
     const status = req.query.status ? String(req.query.status) : undefined;
     const providerEmail = req.query.providerEmail ? String(req.query.providerEmail).toLowerCase() : undefined;
-    const rows = await listRepairRequests({ ownerId, status, providerEmail });
+    const providerType = req.query.providerType ? String(req.query.providerType).toLowerCase() : undefined;
+    const providerServices = req.query.providerServices ? String(req.query.providerServices) : undefined;
+    const rows = await listRepairRequests({ ownerId, status, providerEmail, providerType, providerServices });
     res.json({ ok: true, repairs: rows });
   } catch (e) {
     res.status(500).json({ error: 'Could not load repairs.', detail: String(e?.message || e) });
