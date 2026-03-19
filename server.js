@@ -1485,6 +1485,68 @@ app.get('/api/admin/billing', async (req, res) => {
   }
 });
 
+app.get('/api/admin/repairs', async (req, res) => {
+  { const blocked = guardAdminApi(req, res); if (blocked) return; }
+  try {
+    const status = req.query.status ? String(req.query.status).toLowerCase() : 'open';
+    const repairs = await listRepairRequests({ status });
+    const invites = readInvites();
+
+    const rows = await Promise.all((repairs || []).map(async (r) => {
+      const rid = Number(r.id || r.Id);
+      const assigned = invites
+        .filter(i => Number(i.repair_id) === rid)
+        .sort((a, b) => new Date(b.created_at || 0).getTime() - new Date(a.created_at || 0).getTime());
+      const bids = await listBids({ requestId: rid });
+      return {
+        ...r,
+        admin: {
+          totalInvites: assigned.length,
+          activeInvites: assigned.filter(i => String(i.status || '').toLowerCase() === 'pending').length,
+          submittedInvites: assigned.filter(i => String(i.status || '').toLowerCase() === 'submitted').length,
+          bids: Array.isArray(bids) ? bids.length : 0,
+          assigned: assigned.map(i => ({
+            provider_email: i.provider_email,
+            provider_type: i.provider_type,
+            status: i.status,
+            created_at: i.created_at,
+            expires_at: i.expires_at,
+            submitted_at: i.submitted_at,
+            escalation_wave: i.escalation_wave || null
+          }))
+        }
+      };
+    }));
+
+    res.json({ ok: true, repairs: rows });
+  } catch (e) {
+    res.status(500).json({ error: 'Could not load admin repairs.', detail: String(e?.message || e) });
+  }
+});
+
+app.post('/api/admin/repairs/:id/remove', async (req, res) => {
+  { const blocked = guardAdminApi(req, res); if (blocked) return; }
+  const repairId = Number(req.params.id);
+  if (!repairId) return res.status(400).json({ error: 'Invalid repair id.' });
+
+  try {
+    if (USE_SUPABASE) {
+      await supabaseRequest(`repair_requests?id=eq.${repairId}`, { method: 'DELETE' });
+      await supabaseRequest(`bids?request_id=eq.${repairId}`, { method: 'DELETE' });
+      try { await supabaseRequest(`feedbacks?request_id=eq.${repairId}`, { method: 'DELETE' }); } catch {}
+    } else {
+      writeJson(REPAIR_REQUESTS_PATH, readJson(REPAIR_REQUESTS_PATH, []).filter(r => Number(r.id) !== repairId));
+      writeJson(BIDS_PATH, readJson(BIDS_PATH, []).filter(b => Number(b.request_id) !== repairId));
+      writeJson(FEEDBACKS_PATH, readJson(FEEDBACKS_PATH, []).filter(f => Number(f.request_id) !== repairId));
+    }
+
+    writeInvites(readInvites().filter(i => Number(i.repair_id) !== repairId));
+    res.json({ ok: true, removedRepairId: repairId });
+  } catch (e) {
+    res.status(500).json({ error: 'Could not remove repair.', detail: String(e?.message || e) });
+  }
+});
+
 app.post('/api/admin/billing/:userId/cancel', async (req, res) => {
   { const blocked = guardAdminApi(req, res); if (blocked) return; }
   const userId = String(req.params.userId || '').trim();
@@ -1872,6 +1934,21 @@ app.get('/admin', async (req, res) => {
     </div>
 
     <div class='card span6'>
+      <h3>Open Repair Requests</h3>
+      <div class='k' style='margin-top:8px'>Review open requests, assigned providers/invite times, and remove/cancel stale jobs.</div>
+      <div class='toolbar'>
+        <input id='repairSearch' class='search' placeholder='Search by title, city, category, owner ID...' />
+        <button class='btn' onclick='loadRepairs()'>Refresh</button>
+      </div>
+      <div class='tbl'>
+        <table>
+          <thead><tr><th>Request</th><th>Vehicle/Issue</th><th>Dispatch</th><th>Assigned Providers</th><th>Actions</th></tr></thead>
+          <tbody id='repairRows'><tr><td colspan='5'>Loading repairs...</td></tr></tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class='card span6'>
       <h3>Subscription Management</h3>
       <div id='billingSummary' class='k' style='margin-top:8px'>Loading billing accounts...</div>
       <div id='billingMode' class='notice'>Checking Stripe mode...</div>
@@ -1892,6 +1969,7 @@ app.get('/admin', async (req, res) => {
     const adminToken = '${encodeURIComponent(String(req.query.token||''))}';
     let billingCache = [];
     let accountCache = [];
+    let repairCache = [];
 
     function statusClass(status) {
       const s = String(status || 'none').toLowerCase();
@@ -1992,6 +2070,79 @@ app.get('/admin', async (req, res) => {
         toast('Account unbanned.');
         await loadAccounts();
       } catch (e) { toast(e.message || 'Failed to unban account'); }
+    }
+
+    function renderRepairRows(rows) {
+      const rowsEl = document.getElementById('repairRows');
+      if (!rows.length) {
+        rowsEl.innerHTML = '<tr><td colspan="5">No matching open repairs.</td></tr>';
+        return;
+      }
+      rowsEl.innerHTML = rows.map(r => {
+        const rid = Number(r.id || 0);
+        const a = r.admin || {};
+        const assigned = Array.isArray(a.assigned) ? a.assigned.slice(0, 6) : [];
+        const assignedHtml = assigned.length
+          ? assigned.map(x => {
+              const t = x.provider_type === 'shop' ? 'shop' : 'mechanic';
+              const st = String(x.status || 'pending');
+              const when = x.created_at ? new Date(x.created_at).toLocaleString() : '-';
+              const exp = x.expires_at ? new Date(x.expires_at).toLocaleString() : '-';
+              return '<div class="k" style="margin:4px 0"><span class="badge">' + t + '</span> ' + (x.provider_email || '-') + ' · ' + st + '<br><span style="color:#94a3b8">sent: ' + when + ' · expires: ' + exp + '</span></div>';
+            }).join('')
+          : '<span class="k">No assignments yet</span>';
+
+        return '<tr>' +
+          '<td><b>#' + rid + '</b><br><span class="k">' + (r.title || '-') + '</span><br><span class="k">Owner: ' + (r.owner_id || '-') + '</span></td>' +
+          '<td>' + (r.vehicle_year || '') + ' ' + (r.vehicle_make || '') + ' ' + (r.vehicle_model || '') + '<br><span class="k">' + (r.issue_category || '-') + ' · ' + (r.city || '-') + ', ' + (r.state || '-') + '</span></td>' +
+          '<td><span class="badge st-active">invites ' + (a.totalInvites || 0) + '</span> <span class="badge">active ' + (a.activeInvites || 0) + '</span><br><span class="badge">submitted ' + (a.submittedInvites || 0) + '</span> <span class="badge">bids ' + (a.bids || 0) + '</span></td>' +
+          '<td>' + assignedHtml + '</td>' +
+          '<td class="actions-cell"><button class="btn cancel" data-repair-act="cancel" data-repair-id="' + rid + '">Cancel</button><button class="btn cancel" data-repair-act="remove" data-repair-id="' + rid + '">Remove</button></td>' +
+        '</tr>';
+      }).join('');
+    }
+
+    function applyRepairFilters() {
+      const q = String(document.getElementById('repairSearch').value || '').trim().toLowerCase();
+      const rows = !q ? repairCache : repairCache.filter(r => {
+        const hay = [r.id, r.title, r.city, r.state, r.issue_category, r.owner_id, r.vehicle_make, r.vehicle_model].map(v => String(v || '').toLowerCase()).join(' ');
+        return hay.includes(q);
+      });
+      renderRepairRows(rows);
+    }
+
+    async function loadRepairs() {
+      try {
+        const r = await fetch('/api/admin/repairs?status=open&token=' + adminToken);
+        const d = await r.json();
+        if (!r.ok) throw new Error(d.error || 'Could not load repairs');
+        repairCache = d.repairs || [];
+        applyRepairFilters();
+      } catch (e) {
+        document.getElementById('repairRows').innerHTML = '<tr><td colspan="5">' + (e.message || 'Could not load repairs') + '</td></tr>';
+      }
+    }
+
+    async function cancelRepair(repairId) {
+      if (!confirm('Cancel repair #' + repairId + '?')) return;
+      try {
+        const r = await fetch('/api/repairs/' + encodeURIComponent(repairId) + '/cancel?token=' + adminToken, { method: 'POST' });
+        const d = await r.json();
+        if (!r.ok) throw new Error(d.error || 'Could not cancel repair');
+        toast('Repair cancelled.');
+        await loadRepairs();
+      } catch (e) { toast(e.message || 'Failed to cancel repair'); }
+    }
+
+    async function removeRepair(repairId) {
+      if (!confirm('Remove repair #' + repairId + ' permanently? This also removes bids/invites.')) return;
+      try {
+        const r = await fetch('/api/admin/repairs/' + encodeURIComponent(repairId) + '/remove?token=' + adminToken, { method: 'POST' });
+        const d = await r.json();
+        if (!r.ok) throw new Error(d.error || 'Could not remove repair');
+        toast('Repair removed.');
+        await loadRepairs();
+      } catch (e) { toast(e.message || 'Failed to remove repair'); }
     }
 
     function renderBillingRows(rows) {
@@ -2100,6 +2251,7 @@ app.get('/admin', async (req, res) => {
     }
 
     document.getElementById('billingSearch').addEventListener('input', applySearch);
+    document.getElementById('repairSearch').addEventListener('input', applyRepairFilters);
     document.getElementById('accountSearch').addEventListener('input', applyAccountFilters);
     document.getElementById('accountCategory').addEventListener('change', applyAccountFilters);
     document.getElementById('accountRows').addEventListener('click', (ev) => {
@@ -2124,7 +2276,17 @@ app.get('/admin', async (req, res) => {
       if (act === 'force-disable') setManualAccess(userId, 'disabled');
       if (act === 'clear-manual') setManualAccess(userId, 'clear');
     });
+    document.getElementById('repairRows').addEventListener('click', (ev) => {
+      const btn = ev.target.closest('button[data-repair-act]');
+      if (!btn) return;
+      const act = btn.getAttribute('data-repair-act');
+      const repairId = Number(btn.getAttribute('data-repair-id') || 0);
+      if (!repairId) return;
+      if (act === 'cancel') cancelRepair(repairId);
+      if (act === 'remove') removeRepair(repairId);
+    });
     loadAccounts();
+    loadRepairs();
     loadBilling();
   </script>
   </div></body></html>`);
