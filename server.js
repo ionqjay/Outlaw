@@ -331,6 +331,10 @@ function providerSupportsRepair(provider, repair) {
   return set.has(category) || set.has('other');
 }
 
+function providerEligibleForInvites(provider) {
+  return !!provider?.can_submit_estimates;
+}
+
 function toPreviewRepair(r) {
   return {
     ...r,
@@ -373,10 +377,13 @@ async function listProviderPool() {
     if (!['mechanic', 'shop'].includes(role)) continue;
     const email = String(u?.email || '').trim().toLowerCase();
     if (!email) continue;
+    const billing = getBillingByUserId(String(u?.id || ''));
     providers.push({
       email,
+      userId: String(u?.id || ''),
       providerType: role === 'shop' ? 'shop' : 'mechanic',
-      services: String(meta?.services || '').trim().toLowerCase()
+      services: String(meta?.services || '').trim().toLowerCase(),
+      can_submit_estimates: canSubmitEstimatesFromBilling(billing)
     });
   }
 
@@ -388,7 +395,7 @@ async function listProviderPool() {
       if (!email) continue;
       const hasShop = String(x.has_shop || x.HasShop || '').toLowerCase();
       const providerType = (hasShop === 'yes' || hasShop === 'true' || hasShop === 'shop') ? 'shop' : 'mechanic';
-      providers.push({ email, providerType, services: '' });
+      providers.push({ email, providerType, services: '', can_submit_estimates: false });
     }
   }
 
@@ -402,7 +409,9 @@ async function listProviderPool() {
 }
 
 async function createDispatchSnapshot(repair) {
-  const mechanics = (await listProviderPool()).filter(x => providerSupportsRepair(x, repair));
+  const mechanics = (await listProviderPool())
+    .filter(x => providerEligibleForInvites(x))
+    .filter(x => providerSupportsRepair(x, repair));
 
   const shops = mechanics.filter(x => x.providerType === 'shop').slice(0, 3);
   const inds = mechanics.filter(x => x.providerType === 'mechanic').slice(0, 2);
@@ -460,7 +469,7 @@ async function processInviteExpirations(repairs = []) {
 
       const type = normalizeProviderType(inv.provider_type);
       const used = new Set(rInvites.map(x => `${String(x.provider_email || '').toLowerCase()}:${normalizeProviderType(x.provider_type)}`));
-      const next = pool.find(p => p.providerType === type && providerSupportsRepair(p, repair) && !used.has(`${p.email}:${p.providerType}`));
+      const next = pool.find(p => p.providerType === type && providerEligibleForInvites(p) && providerSupportsRepair(p, repair) && !used.has(`${p.email}:${p.providerType}`));
       if (!next) continue;
 
       const windowMs = getInviteWindowMs(repair?.urgency);
@@ -487,7 +496,9 @@ async function ensureProviderInvitesForOpenRequests(providerEmail, repairs = [],
 
   const pool = await listProviderPool();
   const provider = pool.find(p => String(p.email || '').toLowerCase() === email)
-    || { email, providerType: normalizeProviderType(providerTypeHint), services: String(providerServicesHint || '').trim().toLowerCase() };
+    || { email, providerType: normalizeProviderType(providerTypeHint), services: String(providerServicesHint || '').trim().toLowerCase(), can_submit_estimates: false };
+
+  if (!providerEligibleForInvites(provider)) return;
 
   const rows = readInvites();
   const now = Date.now();
@@ -533,6 +544,9 @@ async function listRepairRequests({ ownerId, status, providerEmail, providerType
     try { await processInviteExpirations(rows); } catch {}
     if (providerEmail) {
       try { await ensureProviderInvitesForOpenRequests(providerEmail, rows, providerType, providerServices); } catch {}
+      const pool = await listProviderPool();
+      const provider = pool.find(p => String(p.email || '').toLowerCase() === String(providerEmail).toLowerCase());
+      const canSeeInvitedFull = providerEligibleForInvites(provider);
       const now = Date.now();
       const invites = readInvites();
       const activeInvites = invites
@@ -543,9 +557,11 @@ async function listRepairRequests({ ownerId, status, providerEmail, providerType
           return Number.isFinite(exp) ? exp > now : true;
         });
       const byRepair = new Map(activeInvites.map(i => [Number(i.repair_id), i]));
-      const invitedRows = rows
-        .filter(r => byRepair.has(Number(r.id)))
-        .map(r => ({ ...r, invite_expires_at: byRepair.get(Number(r.id))?.expires_at || null }));
+      const invitedRows = canSeeInvitedFull
+        ? rows
+          .filter(r => byRepair.has(Number(r.id)))
+          .map(r => ({ ...r, invite_expires_at: byRepair.get(Number(r.id))?.expires_at || null }))
+        : [];
 
       if (previewLeads) {
         const invitedIds = new Set(invitedRows.map(x => Number(x.id)));
@@ -567,6 +583,9 @@ async function listRepairRequests({ ownerId, status, providerEmail, providerType
   try { await processInviteExpirations(data); } catch {}
   if (providerEmail) {
     try { await ensureProviderInvitesForOpenRequests(providerEmail, data, providerType, providerServices); } catch {}
+    const pool = await listProviderPool();
+    const provider = pool.find(p => String(p.email || '').toLowerCase() === String(providerEmail).toLowerCase());
+    const canSeeInvitedFull = providerEligibleForInvites(provider);
     const now = Date.now();
     const invites = readInvites();
     const activeInvites = invites
@@ -577,9 +596,11 @@ async function listRepairRequests({ ownerId, status, providerEmail, providerType
         return Number.isFinite(exp) ? exp > now : true;
       });
     const byRepair = new Map(activeInvites.map(i => [Number(i.repair_id), i]));
-    const invitedRows = data
-      .filter(x => byRepair.has(Number(x.id)))
-      .map(x => ({ ...x, invite_expires_at: byRepair.get(Number(x.id))?.expires_at || null }));
+    const invitedRows = canSeeInvitedFull
+      ? data
+        .filter(x => byRepair.has(Number(x.id)))
+        .map(x => ({ ...x, invite_expires_at: byRepair.get(Number(x.id))?.expires_at || null }))
+      : [];
 
     if (previewLeads) {
       const invitedIds = new Set(invitedRows.map(x => Number(x.id)));
