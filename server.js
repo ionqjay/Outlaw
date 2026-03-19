@@ -623,6 +623,41 @@ async function ensureProviderInvitesForOpenRequests(providerEmail, repairs = [],
   if (changed) writeInvites(rows);
 }
 
+async function attachOwnerDispatchSummary(rows = []) {
+  if (!Array.isArray(rows) || !rows.length) return rows;
+
+  const invites = readInvites();
+  const byRepair = new Map();
+  for (const inv of invites) {
+    const rid = Number(inv.repair_id);
+    if (!rid) continue;
+    const slot = byRepair.get(rid) || { totalInvites: 0, activeInvites: 0, submittedInvites: 0, expiredInvites: 0, lastInviteAt: null };
+    slot.totalInvites += 1;
+    const st = String(inv.status || 'pending').toLowerCase();
+    if (st === 'pending') slot.activeInvites += 1;
+    if (st === 'submitted') slot.submittedInvites += 1;
+    if (st === 'expired') slot.expiredInvites += 1;
+    const createdAt = inv.created_at || null;
+    if (createdAt && (!slot.lastInviteAt || new Date(createdAt).getTime() > new Date(slot.lastInviteAt).getTime())) {
+      slot.lastInviteAt = createdAt;
+    }
+    byRepair.set(rid, slot);
+  }
+
+  const withCounts = await Promise.all(rows.map(async (r) => {
+    const rid = Number(r.id || r.Id);
+    const dispatch = byRepair.get(rid) || { totalInvites: 0, activeInvites: 0, submittedInvites: 0, expiredInvites: 0, lastInviteAt: null };
+    let totalBids = 0;
+    try {
+      const bids = await listBids({ requestId: rid });
+      totalBids = Array.isArray(bids) ? bids.length : 0;
+    } catch {}
+    return { ...r, dispatch_summary: { ...dispatch, totalBids } };
+  }));
+
+  return withCounts;
+}
+
 async function listRepairRequests({ ownerId, status, providerEmail, providerType, providerServices, previewLeads } = {}) {
   if (USE_SUPABASE) {
     const q = ['select=*', 'order=created_at.desc'];
@@ -664,6 +699,7 @@ async function listRepairRequests({ ownerId, status, providerEmail, providerType
         rows = invitedRows;
       }
     }
+    if (ownerId && !providerEmail) rows = await attachOwnerDispatchSummary(rows);
     return rows;
   }
   let data = readJson(REPAIR_REQUESTS_PATH, []);
@@ -704,6 +740,7 @@ async function listRepairRequests({ ownerId, status, providerEmail, providerType
       data = invitedRows;
     }
   }
+  if (ownerId && !providerEmail) data = await attachOwnerDispatchSummary(data);
   return data;
 }
 

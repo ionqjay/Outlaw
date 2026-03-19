@@ -242,13 +242,26 @@ function renderRequests() {
     const statusLabel = labelForStatus(status);
     const isSelected = Number(selectedRequestId) === Number(x.id);
 
+    const ds = x.dispatch_summary || {};
+    const hasBids = Number(ds.totalBids || 0) > 0;
+    const invited = Number(ds.totalInvites || 0) > 0;
+    const activeInvites = Number(ds.activeInvites || 0);
+    const timeline = `
+      <div class='timeline'>
+        <span class='done'>Posted</span>
+        <span class='${invited ? 'done' : 'current'}'>Invites sent ${invited ? `(${ds.totalInvites || 0})` : ''}</span>
+        <span class='${activeInvites > 0 ? 'current' : (hasBids ? 'done' : '')}'>Providers reviewing ${activeInvites > 0 ? `(${activeInvites})` : ''}</span>
+        <span class='${hasBids ? 'done' : 'current'}'>Estimates ${hasBids ? `(${ds.totalBids || 0})` : 'incoming'}</span>
+      </div>`;
+
     return `<div class='list-card'>
       <div class='request-head'>
         <strong>#${x.id} · ${x.title}</strong>
         <span class='pill ${status}'>${statusLabel}</span>
       </div>
       <div class='muted-xs'>${x.vehicle_year || ''} ${x.vehicle_make || ''} ${x.vehicle_model || ''} · ${x.city || ''}, ${x.state || ''}</div>
-      <div class='muted-xs'>Next step: ${status === 'open' ? 'wait for bids' : status === 'accepted' ? 'coordinate service' : status === 'in_progress' ? 'service in progress' : status === 'completed' ? 'job completed' : 'review status'}.</div>
+      ${timeline}
+      <div class='muted-xs'>${hasBids ? 'Great — estimates are arriving. Review and compare to choose the best value.' : 'We’re actively matching your request and sending invite waves to eligible providers.'}</div>
       <div style='display:flex;gap:8px;flex-wrap:wrap;margin-top:8px'>
         <button class='btn btn-dark' data-view-request='${x.id}' style='padding:8px 12px'>${isSelected ? 'Viewing Repair Estimates' : 'View Repair Estimates'}</button>
         ${status === 'open' ? `<button class='btn btn-dark' data-cancel-request='${x.id}' style='padding:8px 12px;border-color:#7b3b3b;color:#ffb3b3'>Cancel Request</button>` : ''}

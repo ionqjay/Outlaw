@@ -158,6 +158,10 @@
     .winner-timeline span.done { border-color:#2a9f60; color:#a8ebc5; background:#132419; }
     .winner-timeline span.current { border-color:#e8a93f; color:#ffe3b0; background:#2a2111; }
     .winner-actions { display:flex; gap:8px; flex-wrap:wrap; margin-top:10px; }
+    .timeline { display:flex; gap:6px; flex-wrap:wrap; margin-top:8px; }
+    .timeline span { border:1px solid #3b4458; border-radius:999px; padding:4px 9px; font-size:11px; color:#cfd7ea; background:#121726; }
+    .timeline span.done { border-color:#2a9f60; color:#a8ebc5; background:#132419; }
+    .timeline span.current { border-color:#e8a93f; color:#ffe3b0; background:#2a2111; }
 
     .quote-grid {
       display: grid;
@@ -270,7 +274,7 @@
 
     <section id="view-dashboard" class="panel" style="display:none">
       <h2>My Requests & Estimates</h2>
-      <p class="subtle">Lifecycle: submitted → bids received → accepted → in progress → completed · Estimate status colors are now standardized for clarity.</p>
+      <p class="subtle">Track live progress as providers are matched, invited, and estimates arrive.</p>
       <div id="ownerRequests" class="subtle">Loading...</div>
       <h3 style="margin-top:14px">Current Repair Estimates</h3>
       <div id="ownerBids" class="subtle">Loading...</div>
