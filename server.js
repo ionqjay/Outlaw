@@ -44,6 +44,7 @@ const OWNER_REQUESTS_PATH = path.join(__dirname, 'owner_requests.json');
 const REPAIR_REQUESTS_PATH = path.join(__dirname, 'repair_requests.json');
 const BIDS_PATH = path.join(__dirname, 'bids.json');
 const REQUEST_INVITES_PATH = path.join(__dirname, 'request_invites.json');
+const DISPATCH_EVENTS_PATH = path.join(__dirname, 'dispatch_events.json');
 const FEEDBACKS_PATH = path.join(__dirname, 'feedbacks.json');
 const BILLING_ACCOUNTS_PATH = path.join(__dirname, 'billing_accounts.json');
 const BANNED_ACCOUNTS_PATH = path.join(__dirname, 'banned_accounts.json');
@@ -391,6 +392,25 @@ function writeInvites(rows) {
   writeJson(REQUEST_INVITES_PATH, rows);
 }
 
+function readDispatchEvents() {
+  return readJson(DISPATCH_EVENTS_PATH, []);
+}
+
+function writeDispatchEvents(rows) {
+  writeJson(DISPATCH_EVENTS_PATH, rows);
+}
+
+function logDispatchEvent(event = {}) {
+  const rows = readDispatchEvents();
+  rows.unshift({
+    id: `${Date.now()}_${Math.random().toString(36).slice(2, 10)}`,
+    at: new Date().toISOString(),
+    ...event
+  });
+  if (rows.length > 10000) rows.length = 10000;
+  writeDispatchEvents(rows);
+}
+
 async function listProviderPool() {
   const providers = [];
 
@@ -433,17 +453,44 @@ async function listProviderPool() {
 }
 
 async function createDispatchSnapshot(repair) {
-  const mechanics = (await listProviderPool())
-    .filter(x => providerEligibleForInvites(x))
-    .filter(x => providerSupportsRepair(x, repair));
+  const repairId = Number(repair.id || repair.Id);
+  const providerPool = await listProviderPool();
 
-  const shops = mechanics.filter(x => x.providerType === 'shop').slice(0, 3);
-  const inds = mechanics.filter(x => x.providerType === 'mechanic').slice(0, 2);
+  const decisions = providerPool.map((p) => {
+    const subscribed = providerEligibleForInvites(p);
+    const supportsRepair = providerSupportsRepair(p, repair);
+    let outcome = 'include';
+    let reason = 'Eligible: subscribed + specialty match';
+    if (!subscribed) {
+      outcome = 'exclude';
+      reason = 'Excluded: no active subscription / estimate access';
+    } else if (!supportsRepair) {
+      outcome = 'exclude';
+      reason = 'Excluded: specialty mismatch for this repair category';
+    }
+    return {
+      provider_email: p.email,
+      provider_type: p.providerType,
+      user_id: p.userId || null,
+      subscribed,
+      supports_repair: supportsRepair,
+      outcome,
+      reason
+    };
+  });
+
+  const eligible = decisions
+    .filter(d => d.outcome === 'include')
+    .map(d => providerPool.find(p => p.email === d.provider_email && p.providerType === d.provider_type))
+    .filter(Boolean);
+
+  const shops = eligible.filter(x => x.providerType === 'shop').slice(0, 3);
+  const inds = eligible.filter(x => x.providerType === 'mechanic').slice(0, 2);
   let invited = [...shops, ...inds];
 
   if (invited.length < 5) {
     const used = new Set(invited.map(x => `${x.email}:${x.providerType}`));
-    for (const p of mechanics) {
+    for (const p of eligible) {
       const key = `${p.email}:${p.providerType}`;
       if (used.has(key)) continue;
       invited.push(p);
@@ -452,19 +499,51 @@ async function createDispatchSnapshot(repair) {
     }
   }
 
+  const includedKeys = new Set(invited.map(x => `${x.email}:${x.providerType}`));
+  for (const d of decisions) {
+    const key = `${d.provider_email}:${d.provider_type}`;
+    if (d.outcome === 'include' && !includedKeys.has(key)) {
+      d.outcome = 'exclude';
+      d.reason = 'Excluded: eligible but not selected in initial cap (3 shops / 2 mechanics)';
+    } else if (d.outcome === 'include' && includedKeys.has(key)) {
+      d.reason = 'Included: initial dispatch assignment';
+    }
+    logDispatchEvent({
+      event_type: 'dispatch_decision',
+      repair_id: repairId,
+      ...d
+    });
+  }
+
   const rows = readInvites();
   const now = Date.now();
   const windowMs = getInviteWindowMs(repair?.urgency);
-  const additions = invited.map(p => ({
-    repair_id: Number(repair.id || repair.Id),
-    provider_email: p.email,
-    provider_type: p.providerType,
-    status: 'pending',
-    created_at: new Date(now).toISOString(),
-    expires_at: new Date(now + windowMs).toISOString(),
-    submitted_at: null
-  }));
-  writeInvites([...rows.filter(r => Number(r.repair_id) !== Number(repair.id || repair.Id)), ...additions]);
+  const additions = invited.map((p) => {
+    let selection_reason = 'Included: initial dispatch assignment';
+    if (p.providerType === 'shop' && shops.some(x => x.email === p.email)) selection_reason = 'Included: selected in shop quota (max 3)';
+    else if (p.providerType === 'mechanic' && inds.some(x => x.email === p.email)) selection_reason = 'Included: selected in mechanic quota (max 2)';
+    else selection_reason = 'Included: backfill slot to reach 5 invites';
+
+    logDispatchEvent({
+      event_type: 'offer_sent',
+      repair_id: repairId,
+      provider_email: p.email,
+      provider_type: p.providerType,
+      reason: selection_reason
+    });
+
+    return {
+      repair_id: repairId,
+      provider_email: p.email,
+      provider_type: p.providerType,
+      status: 'pending',
+      created_at: new Date(now).toISOString(),
+      expires_at: new Date(now + windowMs).toISOString(),
+      submitted_at: null,
+      selection_reason
+    };
+  });
+  writeInvites([...rows.filter(r => Number(r.repair_id) !== repairId), ...additions]);
 }
 
 async function processInviteExpirations(repairs = []) {
@@ -505,7 +584,15 @@ async function processInviteExpirations(repairs = []) {
         created_at: new Date(now).toISOString(),
         expires_at: new Date(now + windowMs).toISOString(),
         submitted_at: null,
-        replaced_from: String(inv.provider_email || '').toLowerCase()
+        replaced_from: String(inv.provider_email || '').toLowerCase(),
+        selection_reason: 'Included: replacement after invite expiration'
+      });
+      logDispatchEvent({
+        event_type: 'offer_sent',
+        repair_id: repairId,
+        provider_email: next.email,
+        provider_type: next.providerType,
+        reason: 'Included: replacement after invite expiration'
       });
       changed = true;
     }
@@ -551,7 +638,15 @@ async function processInviteEscalations(repairs = []) {
         created_at: new Date(now).toISOString(),
         expires_at: new Date(now + windowMs).toISOString(),
         submitted_at: null,
-        escalation_wave: wave
+        escalation_wave: wave,
+        selection_reason: `Included: escalation wave ${wave}`
+      });
+      logDispatchEvent({
+        event_type: 'offer_sent',
+        repair_id: repairId,
+        provider_email: p.email,
+        provider_type: p.providerType,
+        reason: `Included: escalation wave ${wave}`
       });
       changed = true;
     }
@@ -622,7 +717,15 @@ async function ensureProviderInvitesForOpenRequests(providerEmail, repairs = [],
       created_at: new Date(now).toISOString(),
       expires_at: new Date(now + windowMs).toISOString(),
       submitted_at: null,
-      auto_backfill: true
+      auto_backfill: true,
+      selection_reason: 'Included: provider backfill for open eligible request'
+    });
+    logDispatchEvent({
+      event_type: 'offer_sent',
+      repair_id: repairId,
+      provider_email: email,
+      provider_type: provider.providerType,
+      reason: 'Included: provider backfill for open eligible request'
     });
     changed = true;
   }
@@ -1168,7 +1271,12 @@ app.post('/api/repairs/:id/cancel', async (req, res) => {
         return res.status(400).json({ error: 'Accepted requests cannot be cancelled.' });
       }
       await supabaseRequest(`repair_requests?id=eq.${repairId}`, { method: 'PATCH', body: { status: 'cancelled' } });
+      const openBids = await listBids({ requestId: repairId, status: 'open' });
       await supabaseRequest(`bids?request_id=eq.${repairId}&status=eq.open`, { method: 'PATCH', body: { status: 'declined' } });
+      const nowIso = new Date().toISOString();
+      for (const b of openBids) {
+        logDispatchEvent({ event_type: 'bid_declined', repair_id: repairId, bid_id: Number(b.id || 0) || null, mechanic_id: String(b.mechanic_id || '') || null, at: nowIso, reason: 'Repair request cancelled' });
+      }
       return res.json({ ok: true });
     }
 
@@ -1184,8 +1292,13 @@ app.post('/api/repairs/:id/cancel', async (req, res) => {
     writeJson(REPAIR_REQUESTS_PATH, requests);
 
     const bids = readJson(BIDS_PATH, []);
+    const nowIso = new Date().toISOString();
     bids.forEach(b => {
-      if (Number(b.request_id) === repairId && String(b.status || '').toLowerCase() === 'open') b.status = 'declined';
+      if (Number(b.request_id) === repairId && String(b.status || '').toLowerCase() === 'open') {
+        b.status = 'declined';
+        b.declined_at = nowIso;
+        logDispatchEvent({ event_type: 'bid_declined', repair_id: repairId, bid_id: Number(b.id || 0) || null, mechanic_id: String(b.mechanic_id || '') || null, at: nowIso, reason: 'Repair request cancelled' });
+      }
     });
     writeJson(BIDS_PATH, bids);
 
@@ -1325,6 +1438,7 @@ app.post('/api/bids', async (req, res) => {
       return res.status(400).json({ error: 'This request already has 2 individual mechanic estimates.' });
     }
 
+    const createdAtIso = new Date().toISOString();
     const created = await createBid({
       request_id: Number(requestId),
       mechanic_id: String(mechanicId).trim(),
@@ -1333,7 +1447,17 @@ app.post('/api/bids', async (req, res) => {
       eta_hours: Number(etaHours),
       notes: cleanNotes,
       status: 'open',
-      created_at: new Date().toISOString()
+      created_at: createdAtIso
+    });
+
+    logDispatchEvent({
+      event_type: 'bid_submitted',
+      repair_id: Number(requestId),
+      bid_id: Number(created?.id || 0) || null,
+      mechanic_id: String(mechanicId).trim(),
+      provider_type: providerType,
+      provider_email: providerEmail || null,
+      at: createdAtIso
     });
 
     if (providerEmail) {
@@ -1343,7 +1467,8 @@ app.post('/api/bids', async (req, res) => {
         rows[idx] = {
           ...rows[idx],
           status: 'submitted',
-          submitted_at: new Date().toISOString()
+          submitted_at: new Date().toISOString(),
+          response_reason: 'Provider submitted estimate'
         };
         writeInvites(rows);
       }
@@ -1376,19 +1501,37 @@ app.post('/api/bids/:id/accept', async (req, res) => {
       const found = await supabaseRequest(`bids?select=*&id=eq.${bidId}&limit=1`);
       if (!found[0]) return res.status(404).json({ error: 'Bid not found.' });
       const bid = found[0];
+      const nowIso = new Date().toISOString();
       await supabaseRequest(`bids?id=eq.${bidId}`, { method: 'PATCH', body: { status: 'accepted' } });
       await supabaseRequest(`bids?request_id=eq.${bid.request_id}&id=neq.${bidId}`, { method: 'PATCH', body: { status: 'declined' } });
       await supabaseRequest(`repair_requests?id=eq.${bid.request_id}`, { method: 'PATCH', body: { status: 'accepted' } });
+      logDispatchEvent({ event_type: 'bid_accepted', repair_id: Number(bid.request_id), bid_id: Number(bidId), mechanic_id: String(bid.mechanic_id || '') || null, at: nowIso });
+      const allReqBids = await listBids({ requestId: Number(bid.request_id) });
+      for (const b of allReqBids) {
+        if (Number(b.id) === Number(bidId)) continue;
+        logDispatchEvent({ event_type: 'bid_declined', repair_id: Number(bid.request_id), bid_id: Number(b.id || 0) || null, mechanic_id: String(b.mechanic_id || '') || null, at: nowIso, reason: 'Owner accepted different bid' });
+      }
       return res.json({ ok: true });
     }
 
     const bids = readJson(BIDS_PATH, []);
     const target = bids.find(b => Number(b.id) === bidId);
     if (!target) return res.status(404).json({ error: 'Bid not found.' });
+    const nowIso = new Date().toISOString();
     bids.forEach(b => {
-      if (Number(b.request_id) === Number(target.request_id)) b.status = Number(b.id) === bidId ? 'accepted' : 'declined';
+      if (Number(b.request_id) !== Number(target.request_id)) return;
+      if (Number(b.id) === bidId) {
+        b.status = 'accepted';
+        b.accepted_at = nowIso;
+      } else {
+        b.status = 'declined';
+        b.declined_at = nowIso;
+      }
     });
     writeJson(BIDS_PATH, bids);
+    logDispatchEvent({ event_type: 'bid_accepted', repair_id: Number(target.request_id), bid_id: Number(bidId), mechanic_id: String(target.mechanic_id || '') || null, at: nowIso });
+    bids.filter(b => Number(b.request_id) === Number(target.request_id) && Number(b.id) !== bidId)
+      .forEach(b => logDispatchEvent({ event_type: 'bid_declined', repair_id: Number(target.request_id), bid_id: Number(b.id || 0) || null, mechanic_id: String(b.mechanic_id || '') || null, at: nowIso, reason: 'Owner accepted different bid' }));
 
     const requests = readJson(REPAIR_REQUESTS_PATH, []);
     requests.forEach(r => {
@@ -1577,6 +1720,8 @@ app.get('/api/admin/repairs', async (req, res) => {
             created_at: i.created_at,
             expires_at: i.expires_at,
             submitted_at: i.submitted_at,
+            selection_reason: i.selection_reason || null,
+            response_reason: i.response_reason || null,
             escalation_wave: i.escalation_wave || null
           }))
         }
@@ -1829,9 +1974,49 @@ app.get('/api/admin/ops', async (req, res) => {
     const repairs = await listRepairRequests({});
     const bids = await listBids({});
     const invites = readInvites();
+    const events = readDispatchEvents();
+
     const openRepairs = repairs.filter(r => String(r.status || '').toLowerCase() === 'open').length;
     const acceptedRepairs = repairs.filter(r => String(r.status || '').toLowerCase() === 'accepted').length;
     const avgBidsPerOpen = openRepairs ? (bids.filter(b => String(b.status || '').toLowerCase() === 'open').length / openRepairs) : 0;
+
+    let repairsWithBids = 0;
+    let firstBidWithin2h = 0;
+    let firstBidCount = 0;
+    for (const r of repairs) {
+      const rid = Number(r.id || r.Id);
+      const created = new Date(r.created_at || r.CreatedDate || 0).getTime();
+      const rbids = bids
+        .filter(b => Number(b.request_id) === rid)
+        .map(b => new Date(b.created_at || 0).getTime())
+        .filter(Number.isFinite)
+        .sort((a, b) => a - b);
+      if (rbids.length) {
+        repairsWithBids += 1;
+        if (Number.isFinite(created)) {
+          firstBidCount += 1;
+          if ((rbids[0] - created) <= (2 * 60 * 60 * 1000)) firstBidWithin2h += 1;
+        }
+      }
+    }
+
+    const providerInviteCounts = invites.reduce((acc, i) => {
+      const t = normalizeProviderType(i.provider_type);
+      acc[t] = (acc[t] || 0) + 1;
+      return acc;
+    }, { shop: 0, mechanic: 0 });
+    const totalTierInvites = providerInviteCounts.shop + providerInviteCounts.mechanic;
+
+    const decisions = events.filter(e => String(e.event_type) === 'dispatch_decision');
+    const subscribedDecisions = decisions.filter(d => !!d.subscribed);
+    const unsubscribedDecisions = decisions.filter(d => !d.subscribed);
+    const subscribedIncludeRate = subscribedDecisions.length
+      ? Math.round((subscribedDecisions.filter(d => d.outcome === 'include').length / subscribedDecisions.length) * 100)
+      : 0;
+    const unsubscribedIncludeRate = unsubscribedDecisions.length
+      ? Math.round((unsubscribedDecisions.filter(d => d.outcome === 'include').length / unsubscribedDecisions.length) * 100)
+      : 0;
+
     res.json({
       ok: true,
       kpis: {
@@ -1841,7 +2026,16 @@ app.get('/api/admin/ops', async (req, res) => {
         totalBids: bids.length,
         openBids: bids.filter(b => String(b.status || '').toLowerCase() === 'open').length,
         avgBidsPerOpen: Math.round(avgBidsPerOpen * 10) / 10,
-        totalInvites: invites.length
+        totalInvites: invites.length,
+        offerCount: events.filter(e => String(e.event_type) === 'offer_sent').length,
+        acceptCount: events.filter(e => String(e.event_type) === 'bid_accepted').length,
+        declineCount: events.filter(e => String(e.event_type) === 'bid_declined').length,
+        fillRatePct: repairs.length ? Math.round((repairsWithBids / repairs.length) * 100) : 0,
+        slaFirstBid2hPct: firstBidCount ? Math.round((firstBidWithin2h / firstBidCount) * 100) : 0,
+        shopInviteSharePct: totalTierInvites ? Math.round((providerInviteCounts.shop / totalTierInvites) * 100) : 0,
+        mechanicInviteSharePct: totalTierInvites ? Math.round((providerInviteCounts.mechanic / totalTierInvites) * 100) : 0,
+        subscribedIncludeRatePct: subscribedIncludeRate,
+        unsubscribedIncludeRatePct: unsubscribedIncludeRate
       }
     });
   } catch (e) {
@@ -1874,7 +2068,15 @@ app.get('/admin/ops', async (req, res) => {
         ['Open Repairs',k.openRepairs,'Need more estimate coverage'],
         ['Accepted Repairs',k.acceptedRepairs,'Converted jobs'],
         ['Total Estimates',k.totalBids,'All estimates submitted'],
-        ['Open Estimates',k.openBids,'Awaiting owner action'],
+        ['Offers Sent',k.offerCount,'Invite offers sent to providers'],
+        ['Accept Events',k.acceptCount,'Owner accepted estimate events'],
+        ['Decline Events',k.declineCount,'Declines from cancellation or non-winning bids'],
+        ['Fill Rate', (k.fillRatePct ?? 0) + '%','Repairs with at least one estimate'],
+        ['SLA: First Bid <=2h', (k.slaFirstBid2hPct ?? 0) + '%','Response speed quality'],
+        ['Fairness: Shop Invite Share', (k.shopInviteSharePct ?? 0) + '%','Target near 60% (3 of 5 cap)'],
+        ['Fairness: Mechanic Invite Share', (k.mechanicInviteSharePct ?? 0) + '%','Target near 40% (2 of 5 cap)'],
+        ['Subscribed Include Rate', (k.subscribedIncludeRatePct ?? 0) + '%','How often subscribed providers are included'],
+        ['Unsubscribed Include Rate', (k.unsubscribedIncludeRatePct ?? 0) + '%','Should be low until escalation/backfill'],
         ['Avg Estimates / Open Repair',k.avgBidsPerOpen,'Supply depth indicator'],
         ['Dispatch Invites',k.totalInvites,'Providers invited to jobs']
       ];
@@ -2153,7 +2355,8 @@ app.get('/admin', async (req, res) => {
               const st = String(x.status || 'pending');
               const when = x.created_at ? new Date(x.created_at).toLocaleString() : '-';
               const exp = x.expires_at ? new Date(x.expires_at).toLocaleString() : '-';
-              return '<div class="k" style="margin:4px 0"><span class="badge">' + t + '</span> ' + (x.provider_email || '-') + ' · ' + st + '<br><span style="color:#94a3b8">sent: ' + when + ' · expires: ' + exp + '</span></div>';
+              const why = x.selection_reason ? ('<br><span style="color:#8bc0ff">reason: ' + x.selection_reason + '</span>') : '';
+              return '<div class="k" style="margin:4px 0"><span class="badge">' + t + '</span> ' + (x.provider_email || '-') + ' · ' + st + '<br><span style="color:#94a3b8">sent: ' + when + ' · expires: ' + exp + '</span>' + why + '</div>';
             }).join('')
           : '<span class="k">No assignments yet</span>';
 
