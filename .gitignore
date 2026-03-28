@@ -22,6 +22,7 @@ temp_*.html
 tmp*.csv
 tmp_*.js
 *.xml
+!public/sitemap.xml
 *.csv
 cal.html
 ec.html
