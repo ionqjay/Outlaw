@@ -13,11 +13,11 @@
     .svc-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
     .svc-pill{display:flex;align-items:center;gap:8px;border:1px solid #333;border-radius:10px;padding:8px 10px;background:#0f0f13;font-size:13px;color:#ddd}
     .svc-pill input{width:auto}
-    @media (max-width: 620px){.svc-grid{grid-template-columns:1fr}}
+    @media (max-width: 620px){.svc-grid{grid-template-columns:1fr}.auth-actions{flex-direction:column}.auth-actions .btn{width:100%}}
   </style>
 </head>
 <body>
-  <nav class="nav"><div class="logo"><span>SHOPMY</span><span class="orange">REPAIR</span></div><a class="btn btn-dark" href="/" style="text-decoration:none">← Back to Home</a></nav>
+  <nav class="nav"><div class="logo"><span>SHOPMY</span><span class="orange">REPAIR</span></div><div class="nav-actions"><a class="btn btn-dark btn-link-reset" href="/">← Back to Home</a></div></nav>
   <main class="auth-wrap">
     <h1>Sign in / Sign up</h1>
     <div class="card grid">
@@ -41,7 +41,7 @@
           <label class="svc-pill"><input type="checkbox" value="other" data-signup-service /> Other</label>
         </div>
       </div>
-      <div style="display:flex;gap:8px">
+      <div class="auth-actions" style="display:flex;gap:8px">
         <button class="btn btn-dark" id="signInBtn" type="button">Sign In</button>
         <button class="btn btn-orange" id="signUpBtn" type="button">Sign Up</button>
       </div>
