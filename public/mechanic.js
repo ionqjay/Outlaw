@@ -243,11 +243,13 @@ async function boot() {
 
   let pendingLogoDataUrl = '';
   const logoFileInput = document.getElementById('profileLogoFile');
+  const logoFileName = document.getElementById('profileLogoFileName');
   const removeLogoBtn = document.getElementById('removeLogoBtn');
   logoFileInput?.addEventListener('change', async () => {
     const status = document.getElementById('mechanicProfileStatus');
     const file = logoFileInput.files?.[0];
     if (!file) return;
+    if (logoFileName) logoFileName.textContent = `Selected: ${file.name}`;
     status.classList.remove('ok', 'err');
     status.textContent = 'Processing logo...';
     try {
@@ -259,6 +261,7 @@ async function boot() {
     } catch (err) {
       pendingLogoDataUrl = '';
       logoFileInput.value = '';
+      if (logoFileName) logoFileName.textContent = 'No file selected yet.';
       status.textContent = err.message || 'Could not process image.';
       status.classList.add('err');
     }
@@ -266,6 +269,7 @@ async function boot() {
   removeLogoBtn?.addEventListener('click', () => {
     pendingLogoDataUrl = '';
     if (logoFileInput) logoFileInput.value = '';
+    if (logoFileName) logoFileName.textContent = 'No file selected yet.';
     renderProfileLogo('');
     const status = document.getElementById('mechanicProfileStatus');
     status.classList.remove('ok', 'err');
@@ -356,6 +360,8 @@ async function boot() {
     if (certEl) certEl.value = profile.certifications || '';
     pendingLogoDataUrl = String(profile.profileImageUrl || '');
     renderProfileLogo(pendingLogoDataUrl);
+    if (logoFileInput) logoFileInput.value = '';
+    if (logoFileName) logoFileName.textContent = pendingLogoDataUrl ? 'Current logo on file. Upload a new one to replace it.' : 'No file selected yet.';
   }
 
   async function loadRepairs() {

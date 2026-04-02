@@ -142,10 +142,16 @@
     .services-grid { display:grid; grid-template-columns: repeat(2, minmax(0,1fr)); gap:8px; margin-top:8px; }
     .svc-pill { display:flex; align-items:center; gap:8px; border:1px solid #323646; border-radius:10px; background:#0f1219; padding:8px 10px; font-size:13px; color:#d7dbea; }
     .svc-pill input { width:auto; margin:0; }
-    .logo-row { display:flex; align-items:center; gap:12px; margin-top:10px; flex-wrap:wrap; }
+    .logo-row { display:flex; align-items:flex-start; gap:12px; margin-top:10px; flex-wrap:wrap; }
     .logo-preview { width:68px; height:68px; border-radius:14px; border:1px solid #394058; background:#0f131d; object-fit:cover; display:none; }
     .logo-preview.show { display:block; }
-    .logo-actions { display:flex; gap:8px; flex-wrap:wrap; }
+    .logo-actions { display:flex; flex-direction:column; gap:8px; min-width:280px; }
+    .logo-upload-card { border:1px dashed #4b536f; border-radius:12px; background:#101622; padding:10px; }
+    .logo-upload-head { font-size:13px; color:#dce6ff; font-weight:600; }
+    .logo-upload-sub { font-size:12px; color:#9eabc8; margin-top:4px; }
+    .logo-file-input { position:absolute; width:1px; height:1px; opacity:0; pointer-events:none; }
+    .logo-file-label { display:inline-flex; align-items:center; justify-content:center; border:1px solid #3f5ea8; background:#14213d; color:#d6e4ff; border-radius:10px; min-height:40px; padding:0 12px; cursor:pointer; font-size:13px; font-weight:600; margin-top:8px; }
+    .logo-file-name { font-size:12px; color:#aeb9d2; margin-top:6px; word-break:break-word; }
 
     @media (max-width: 920px) {
       .quick-metrics, .row2, .estimate-kpis { grid-template-columns: 1fr; }
@@ -300,11 +306,17 @@
       <div class="logo-row">
         <img id="profileLogoPreview" class="logo-preview" alt="Company logo/profile preview" />
         <div class="logo-actions">
-          <input id="profileLogoFile" type="file" accept="image/png,image/jpeg,image/webp" />
+          <div class="logo-upload-card">
+            <div class="logo-upload-head">Company Logo / Profile Photo</div>
+            <div class="logo-upload-sub">Help car owners trust your business at a glance.</div>
+            <input id="profileLogoFile" class="logo-file-input" type="file" accept="image/png,image/jpeg,image/webp" />
+            <label for="profileLogoFile" class="logo-file-label">📷 Upload Logo or Photo</label>
+            <div id="profileLogoFileName" class="logo-file-name">No file selected yet.</div>
+          </div>
           <button class="btn btn-dark" id="removeLogoBtn" type="button">Remove Logo</button>
         </div>
       </div>
-      <p class="subtle">Upload a logo/profile photo (PNG/JPG/WEBP). It appears on your estimates and public profile.</p>
+      <p class="subtle">Accepted formats: PNG, JPG, WEBP. Your image appears on estimates and public provider profile.</p>
       <button class="btn btn-orange" id="saveMechanicProfileBtn" style="margin-top:10px">Save Profile</button>
       <p id="mechanicProfileStatus" class="status">Profile not updated yet.</p>
     </section>
