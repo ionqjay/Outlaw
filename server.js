@@ -1950,6 +1950,15 @@ app.get('/provider/:id', async (req, res) => {
     const bids = await listBids({ mechanicId });
     const feedbacks = await listFeedbacks({ mechanicId });
     const avg = feedbacks.length ? Math.round((feedbacks.reduce((s, f) => s + Number(f.rating || 0), 0) / feedbacks.length) * 10) / 10 : null;
+    const parseMeta = (notes) => {
+      const m = String(notes || '').match(/\[META\]([\s\S]*?)\[\/META\]/);
+      if (!m) return null;
+      try { return JSON.parse(m[1]); } catch { return null; }
+    };
+    const newestMeta = bids.map(b => parseMeta(b.notes)).find(Boolean) || {};
+    const logoRaw = String(newestMeta.profileImageUrl || newestMeta.logoUrl || '').trim();
+    const logoSrc = /^data:image\/(png|jpeg|jpg|webp);base64,/i.test(logoRaw) || /^https?:\/\//i.test(logoRaw) ? logoRaw : '';
+    const providerName = esc(String(newestMeta.businessName || 'Provider'));
     const latest = bids.slice(0, 8).map(b => `<li>Request #${b.request_id} · $${b.amount} · ${String(b.status || '').toLowerCase()}</li>`).join('');
     const fb = feedbacks.slice(0, 8).map(f => `<li>${Number(f.rating || 0)}/5${f.text ? ` — ${esc(f.text)}` : ''}</li>`).join('');
 
@@ -1957,9 +1966,10 @@ app.get('/provider/:id', async (req, res) => {
       body{font-family:Inter,Arial,sans-serif;background:#0e1016;color:#eef2ff;padding:22px}
       .wrap{max-width:820px;margin:0 auto}.card{background:#151b2a;border:1px solid #2d3550;border-radius:14px;padding:14px;margin-top:10px}
       .k{color:#a9b4d2;font-size:12px}.v{font-size:28px;font-weight:800}
+      .head{display:flex;align-items:center;gap:12px}.logo{width:72px;height:72px;border-radius:14px;border:1px solid #314063;object-fit:cover;background:#0f131d}
       li{margin:6px 0}
     </style></head><body><div class='wrap'>
-      <h1>Provider Profile</h1><div class='k'>ID: ${esc(mechanicId)}</div>
+      <div class='head'>${logoSrc ? `<img class='logo' src='${logoSrc}' alt='${providerName} logo'/>` : ''}<div><h1 style='margin:0'>${providerName} Profile</h1><div class='k'>ID: ${esc(mechanicId)}</div></div></div>
       <div class='card'><div class='k'>Average Rating</div><div class='v'>${avg ?? 'N/A'}</div><div class='k'>${feedbacks.length} review(s)</div></div>
       <div class='card'><h3>Recent Estimate Activity</h3><ul>${latest || '<li>No activity yet.</li>'}</ul></div>
       <div class='card'><h3>Recent Reviews</h3><ul>${fb || '<li>No reviews yet.</li>'}</ul></div>

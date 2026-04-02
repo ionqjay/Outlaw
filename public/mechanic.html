@@ -142,6 +142,10 @@
     .services-grid { display:grid; grid-template-columns: repeat(2, minmax(0,1fr)); gap:8px; margin-top:8px; }
     .svc-pill { display:flex; align-items:center; gap:8px; border:1px solid #323646; border-radius:10px; background:#0f1219; padding:8px 10px; font-size:13px; color:#d7dbea; }
     .svc-pill input { width:auto; margin:0; }
+    .logo-row { display:flex; align-items:center; gap:12px; margin-top:10px; flex-wrap:wrap; }
+    .logo-preview { width:68px; height:68px; border-radius:14px; border:1px solid #394058; background:#0f131d; object-fit:cover; display:none; }
+    .logo-preview.show { display:block; }
+    .logo-actions { display:flex; gap:8px; flex-wrap:wrap; }
 
     @media (max-width: 920px) {
       .quick-metrics, .row2, .estimate-kpis { grid-template-columns: 1fr; }
@@ -293,6 +297,14 @@
         <label class="svc-pill"><input type="checkbox" value="other" data-service-specialty /> Other</label>
       </div>
       <textarea id="profileServices" placeholder="Optional: add extra specialties (comma separated)" style="margin-top:8px"></textarea>
+      <div class="logo-row">
+        <img id="profileLogoPreview" class="logo-preview" alt="Company logo/profile preview" />
+        <div class="logo-actions">
+          <input id="profileLogoFile" type="file" accept="image/png,image/jpeg,image/webp" />
+          <button class="btn btn-dark" id="removeLogoBtn" type="button">Remove Logo</button>
+        </div>
+      </div>
+      <p class="subtle">Upload a logo/profile photo (PNG/JPG/WEBP). It appears on your estimates and public profile.</p>
       <button class="btn btn-orange" id="saveMechanicProfileBtn" style="margin-top:10px">Save Profile</button>
       <p id="mechanicProfileStatus" class="status">Profile not updated yet.</p>
     </section>

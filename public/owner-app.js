@@ -111,6 +111,14 @@ function parseBidNotes(notesRaw) {
   }
 }
 
+function getSafeProfileImageSrc(srcRaw) {
+  const src = String(srcRaw || '').trim();
+  if (!src) return '';
+  if (/^data:image\/(png|jpeg|jpg|webp);base64,/i.test(src)) return src;
+  if (/^https?:\/\//i.test(src)) return src;
+  return '';
+}
+
 const MODELS_BY_MAKE = {
   Toyota: ['Camry', 'Corolla', 'RAV4', 'Highlander', 'Prius', 'Tacoma'],
   Honda: ['Civic', 'Accord', 'CR-V', 'Pilot', 'HR-V'],
@@ -381,11 +389,16 @@ function renderBids() {
     const deltaVsBestPrice = cheapestOpen !== null ? Math.max(0, Number(b.amount || 0) - Number(cheapestOpen)) : 0;
     const deltaVsFastest = fastestOpen !== null ? Math.max(0, Number(b.eta_hours || 24) - Number(fastestOpen)) : 0;
 
+    const logoSrc = getSafeProfileImageSrc(meta.profileImageUrl || meta.logoUrl || '');
+
     return `<div class='estimate-card ${providerType}'>
       <div class='estimate-top'>
-        <div>
-          <div class='estimate-name'>${meta.businessName || b.mechanic_name}</div>
-          <div class='provider-chip ${providerType}'>${providerType === 'shop' ? '🏪' : '🧰'} ${providerTypeLabel}</div>
+        <div class='estimate-provider-head'>
+          ${logoSrc ? `<img class='estimate-logo' src='${logoSrc}' alt='${meta.businessName || b.mechanic_name} logo' />` : ''}
+          <div>
+            <div class='estimate-name'>${meta.businessName || b.mechanic_name}</div>
+            <div class='provider-chip ${providerType}'>${providerType === 'shop' ? '🏪' : '🧰'} ${providerTypeLabel}</div>
+          </div>
         </div>
         <span class='pill ${status}'>${labelForStatus(status)}</span>
       </div>
@@ -430,12 +443,16 @@ function renderBids() {
           ? 'Top Rated'
           : 'Selected by you')))
     : '';
+  const acceptedLogoSrc = getSafeProfileImageSrc(acceptedMeta.profileImageUrl || acceptedMeta.logoUrl || '');
   const acceptedInfo = accepted ? `<div class='winner-shell estimate-card ${acceptedProviderType}' style='border-color:#2a9f60;box-shadow:0 0 0 1px rgba(42,159,96,.18) inset'>
     <div class='winner-hero'>
-      <div>
-        <div class='winner-title'>✅ Selected Estimate</div>
-        <div class='estimate-name'>${acceptedMeta.businessName || accepted.mechanic_name}</div>
-        <div class='provider-chip ${acceptedProviderType}'>${acceptedProviderType === 'shop' ? '🏪' : '🧰'} ${acceptedProviderTypeLabel}</div>
+      <div class='estimate-provider-head'>
+        ${acceptedLogoSrc ? `<img class='estimate-logo' src='${acceptedLogoSrc}' alt='${acceptedMeta.businessName || accepted.mechanic_name} logo' />` : ''}
+        <div>
+          <div class='winner-title'>✅ Selected Estimate</div>
+          <div class='estimate-name'>${acceptedMeta.businessName || accepted.mechanic_name}</div>
+          <div class='provider-chip ${acceptedProviderType}'>${acceptedProviderType === 'shop' ? '🏪' : '🧰'} ${acceptedProviderTypeLabel}</div>
+        </div>
       </div>
       <span class='pill accepted'>Accepted</span>
     </div>

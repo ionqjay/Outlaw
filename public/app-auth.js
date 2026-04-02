@@ -11,7 +11,8 @@ async function getActiveSession() {
     const zip = s.user.user_metadata?.zip || '';
     const contactEmail = s.user.user_metadata?.email || '';
     const services = s.user.user_metadata?.services || '';
-    return { id: s.user.id, email: s.user.email || '', contactEmail, role, name, phone, city, state, zip, services };
+    const profileImageUrl = s.user.user_metadata?.profileImageUrl || '';
+    return { id: s.user.id, email: s.user.email || '', contactEmail, role, name, phone, city, state, zip, services, profileImageUrl };
   }
   const local = JSON.parse(localStorage.getItem('smr_session') || 'null');
   return local;
@@ -90,7 +91,8 @@ async function saveMechanicProfile(profile = {}) {
     zip: String(profile.zip || '').trim(),
     services: String(profile.services || '').trim(),
     serviceRadiusMiles: String(profile.serviceRadiusMiles || '').trim(),
-    certifications: String(profile.certifications || '').trim()
+    certifications: String(profile.certifications || '').trim(),
+    profileImageUrl: String(profile.profileImageUrl || '').trim()
   };
 
   localStorage.setItem(`smr_mechanic_profile_${session.id}`, JSON.stringify(clean));
@@ -118,7 +120,8 @@ async function getMechanicProfile() {
     zip: local.zip || session.zip || '',
     services: local.services || session.services || '',
     serviceRadiusMiles: local.serviceRadiusMiles || '',
-    certifications: local.certifications || ''
+    certifications: local.certifications || '',
+    profileImageUrl: local.profileImageUrl || session.profileImageUrl || ''
   };
 }
 

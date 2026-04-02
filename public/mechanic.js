@@ -143,6 +143,45 @@ function parseProfileServices(profileServicesRaw = '') {
     .filter(Boolean);
 }
 
+function renderProfileLogo(value = '') {
+  const img = document.getElementById('profileLogoPreview');
+  if (!img) return;
+  const src = String(value || '').trim();
+  if (!src) {
+    img.removeAttribute('src');
+    img.classList.remove('show');
+    return;
+  }
+  img.src = src;
+  img.classList.add('show');
+}
+
+async function fileToDataUrl(file, { maxWidth = 320, quality = 0.82 } = {}) {
+  const dataUrl = await new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result || ''));
+    reader.onerror = () => reject(new Error('Could not read selected image.'));
+    reader.readAsDataURL(file);
+  });
+
+  const img = await new Promise((resolve, reject) => {
+    const i = new Image();
+    i.onload = () => resolve(i);
+    i.onerror = () => reject(new Error('Selected file is not a valid image.'));
+    i.src = dataUrl;
+  });
+
+  const scale = Math.min(1, maxWidth / Math.max(1, Number(img.width || maxWidth)));
+  const w = Math.max(1, Math.round(img.width * scale));
+  const h = Math.max(1, Math.round(img.height * scale));
+  const canvas = document.createElement('canvas');
+  canvas.width = w;
+  canvas.height = h;
+  const ctx = canvas.getContext('2d');
+  ctx.drawImage(img, 0, 0, w, h);
+  return canvas.toDataURL('image/jpeg', quality);
+}
+
 function categoryToServiceKey(categoryRaw = '') {
   const s = String(categoryRaw || '').trim().toLowerCase();
   if (!s) return '';
@@ -201,6 +240,37 @@ async function boot() {
   }
   const individualOnlyFields = document.getElementById('individualOnlyFields');
   if (individualOnlyFields) individualOnlyFields.style.display = isShop ? 'none' : 'block';
+
+  let pendingLogoDataUrl = '';
+  const logoFileInput = document.getElementById('profileLogoFile');
+  const removeLogoBtn = document.getElementById('removeLogoBtn');
+  logoFileInput?.addEventListener('change', async () => {
+    const status = document.getElementById('mechanicProfileStatus');
+    const file = logoFileInput.files?.[0];
+    if (!file) return;
+    status.classList.remove('ok', 'err');
+    status.textContent = 'Processing logo...';
+    try {
+      pendingLogoDataUrl = await fileToDataUrl(file);
+      if (pendingLogoDataUrl.length > 260000) throw new Error('Image is too large after compression. Try a smaller image.');
+      renderProfileLogo(pendingLogoDataUrl);
+      status.textContent = 'Logo ready. Click Save Profile to publish it.';
+      status.classList.add('ok');
+    } catch (err) {
+      pendingLogoDataUrl = '';
+      logoFileInput.value = '';
+      status.textContent = err.message || 'Could not process image.';
+      status.classList.add('err');
+    }
+  });
+  removeLogoBtn?.addEventListener('click', () => {
+    pendingLogoDataUrl = '';
+    if (logoFileInput) logoFileInput.value = '';
+    renderProfileLogo('');
+    const status = document.getElementById('mechanicProfileStatus');
+    status.classList.remove('ok', 'err');
+    status.textContent = 'Logo removed. Click Save Profile to apply.';
+  });
 
   async function refreshBillingStatus() {
     const el = document.getElementById('billingStatus');
@@ -284,6 +354,8 @@ async function boot() {
     const certEl = document.getElementById('profileCertifications');
     if (radiusEl) radiusEl.value = profile.serviceRadiusMiles || '';
     if (certEl) certEl.value = profile.certifications || '';
+    pendingLogoDataUrl = String(profile.profileImageUrl || '');
+    renderProfileLogo(pendingLogoDataUrl);
   }
 
   async function loadRepairs() {
@@ -412,7 +484,8 @@ async function boot() {
           businessPhone: savedProfile?.phone || '',
           serviceRadiusMiles: savedProfile?.serviceRadiusMiles || '',
           certifications: savedProfile?.certifications || '',
-          services: savedProfile?.services || ''
+          services: savedProfile?.services || '',
+          profileImageUrl: savedProfile?.profileImageUrl || ''
         };
 
         const payload = {
@@ -479,7 +552,8 @@ async function boot() {
         zip: document.getElementById('profileZip').value,
         services: serviceKeys.join(', '),
         serviceRadiusMiles: document.getElementById('profileServiceRadius')?.value || '',
-        certifications: document.getElementById('profileCertifications')?.value || ''
+        certifications: document.getElementById('profileCertifications')?.value || '',
+        profileImageUrl: pendingLogoDataUrl || ''
       });
       status.textContent = 'Profile updated successfully.';
       status.classList.add('ok');
@@ -580,8 +654,8 @@ async function boot() {
     const profile = await window.smrAuth.getMechanicProfile();
     const providerType = getProviderType(session.role);
     const profileFields = providerType === 'shop'
-      ? [profile?.businessName, profile?.businessAddress, profile?.phone, profile?.services, profile?.city, profile?.zip]
-      : [profile?.name, profile?.phone, profile?.services, profile?.city, profile?.zip, profile?.serviceRadiusMiles, profile?.certifications];
+      ? [profile?.businessName, profile?.businessAddress, profile?.phone, profile?.services, profile?.city, profile?.zip, profile?.profileImageUrl]
+      : [profile?.name, profile?.phone, profile?.services, profile?.city, profile?.zip, profile?.serviceRadiusMiles, profile?.certifications, profile?.profileImageUrl];
     const completed = profileFields.filter(v => String(v || '').trim()).length;
     const strength = Math.round((completed / profileFields.length) * 100);
 
