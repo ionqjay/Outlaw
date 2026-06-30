@@ -106,17 +106,8 @@ form.addEventListener('submit', async (e) => {
   signupCount.textContent = data.counts.total;
 
   if (currentTab === 'owner') {
-    const ownerSeed = {
-      name: form.name.value,
-      email: form.email.value,
-      phone: rawPhone,
-      zip: form.zip.value,
-      borough: form.borough.value,
-      repairAddress: form.repairAddress?.value || ''
-    };
-    localStorage.setItem('smr_owner_seed', JSON.stringify(ownerSeed));
-    showToast('Signup complete. Redirecting to your dashboard...', 'ok');
-    setTimeout(() => { window.location.href = '/owner.html'; }, 450);
+    showToast('Signup complete. Create an account to post your repair request.', 'ok');
+    setTimeout(() => { window.location.href = '/login.html'; }, 700);
     return;
   }
 
