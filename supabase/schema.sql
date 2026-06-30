@@ -107,16 +107,18 @@ create table if not exists public.billing_accounts (
   subscription_status text,
   current_period_end timestamptz,
   cancel_at_period_end boolean default false,
+  manual_access_override text check (manual_access_override in ('active','disabled') or manual_access_override is null),
+  manual_access_reason text,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );
 
 create index if not exists idx_billing_accounts_subscription_status on public.billing_accounts(subscription_status);
 
--- service-role backend only for now; enable RLS later once auth is fully live
-alter table public.signups disable row level security;
-alter table public.owner_requests disable row level security;
-alter table public.repair_requests disable row level security;
-alter table public.bids disable row level security;
-alter table public.feedbacks disable row level security;
-alter table public.billing_accounts disable row level security;
+-- Production installs should apply 002_enable_rls.sql immediately after this baseline.
+alter table public.signups enable row level security;
+alter table public.owner_requests enable row level security;
+alter table public.repair_requests enable row level security;
+alter table public.bids enable row level security;
+alter table public.feedbacks enable row level security;
+alter table public.billing_accounts enable row level security;
