@@ -17,6 +17,28 @@ async function getActiveSession() {
   return local;
 }
 
+async function getAuthHeaders() {
+  if (window.smrSupabaseReady && window.smrSupabase) {
+    const { data } = await window.smrSupabase.auth.getSession();
+    const token = data?.session?.access_token;
+    return token ? { Authorization: `Bearer ${token}` } : {};
+  }
+
+  const localDev = ['localhost', '127.0.0.1'].includes(location.hostname);
+  if (localDev) {
+    const local = JSON.parse(localStorage.getItem('smr_session') || 'null');
+    if (local?.id) {
+      return {
+        'x-dev-user-id': local.id,
+        'x-dev-user-email': local.email || '',
+        'x-dev-user-role': local.role || ''
+      };
+    }
+  }
+
+  return {};
+}
+
 async function requireRole(requiredRole) {
   const session = await getActiveSession();
   const allowedRoles = Array.isArray(requiredRole) ? requiredRole : [requiredRole];
@@ -122,4 +144,4 @@ async function getMechanicProfile() {
   };
 }
 
-window.smrAuth = { getActiveSession, requireRole, saveOwnerProfile, getOwnerProfile, saveMechanicProfile, getMechanicProfile, logoutToLogin };
+window.smrAuth = { getActiveSession, getAuthHeaders, requireRole, saveOwnerProfile, getOwnerProfile, saveMechanicProfile, getMechanicProfile, logoutToLogin };

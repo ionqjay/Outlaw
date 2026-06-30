@@ -15,12 +15,14 @@ function api(base, path) {
 
 async function fetchJson(path, options = {}) {
   let lastErr = null;
+  const authHeaders = await window.smrAuth.getAuthHeaders();
+  const headers = { ...(options.headers || {}), ...authHeaders };
 
   for (const base of API_BASES) {
     try {
       const controller = new AbortController();
       const timer = setTimeout(() => controller.abort(), 8000);
-      const res = await fetch(api(base, path), { ...options, signal: controller.signal });
+      const res = await fetch(api(base, path), { ...options, headers, signal: controller.signal });
       clearTimeout(timer);
       const text = await res.text();
       let data = {};

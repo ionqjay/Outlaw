@@ -11,6 +11,10 @@ function go(role) {
   window.location.href = (normalized === 'mechanic' || normalized === 'shop') ? '/mechanic.html' : '/owner-app.html';
 }
 
+function allowLocalDevAuth() {
+  return !window.smrSupabaseReady && ['localhost', '127.0.0.1'].includes(location.hostname);
+}
+
 const statusEl = document.getElementById('authStatus');
 const signInBtn = document.getElementById('signInBtn');
 const signUpBtn = document.getElementById('signUpBtn');
@@ -64,6 +68,7 @@ signUpBtn.addEventListener('click', async () => {
 
   try {
     if (window.smrSupabaseReady) return await signUpSupabase({ name, email, password, role, services });
+    if (!allowLocalDevAuth()) throw new Error('Supabase Auth is required. Please try again once authentication is configured.');
 
     const users = getUsers();
     if (users.some(u => u.email === email)) return statusEl.textContent = 'Account already exists. Sign in instead.';
@@ -83,6 +88,7 @@ signInBtn.addEventListener('click', async () => {
 
   try {
     if (window.smrSupabaseReady) return await signInSupabase({ email, password });
+    if (!allowLocalDevAuth()) throw new Error('Supabase Auth is required. Please try again once authentication is configured.');
 
     const users = getUsers();
     const user = users.find(u => u.email === email && u.password === password);
@@ -104,6 +110,8 @@ function syncSpecialtiesVisibility() {
 roleEl?.addEventListener('change', syncSpecialtiesVisibility);
 syncSpecialtiesVisibility();
 
-if (!window.smrSupabaseReady) {
+if (allowLocalDevAuth()) {
   statusEl.textContent = 'Supabase Auth not configured yet. Using local dev auth mode.';
+} else if (!window.smrSupabaseReady) {
+  statusEl.textContent = 'Supabase Auth is required for production login.';
 }

@@ -66,6 +66,25 @@ const STRIPE_PRICE_MECHANIC_MONTHLY = process.env.STRIPE_PRICE_MECHANIC_MONTHLY 
 const APP_URL = process.env.APP_URL || 'http://localhost:3000';
 const stripe = STRIPE_SECRET_KEY ? new Stripe(STRIPE_SECRET_KEY) : null;
 
+function missingProductionConfig() {
+  if (process.env.NODE_ENV !== 'production') return [];
+  const required = [
+    'ADMIN_TOKEN',
+    'SUPABASE_URL',
+    'SUPABASE_SERVICE_ROLE_KEY',
+    'CORS_ORIGINS',
+    'APP_URL',
+    'STRIPE_SECRET_KEY',
+    'STRIPE_WEBHOOK_SECRET',
+    'STRIPE_PRICE_MECHANIC_MONTHLY'
+  ];
+  return required.filter(key => !String(process.env[key] || '').trim());
+}
+
+function billingConfigReady() {
+  return !!(stripe && STRIPE_WEBHOOK_SECRET && (STRIPE_PRICE_MECHANIC_MONTHLY || STRIPE_PRICE_SHOP_MONTHLY));
+}
+
 const STANDARD_INVITE_WINDOW_MS = 2 * 60 * 60 * 1000; // 2h
 const URGENT_INVITE_WINDOW_MS = 45 * 60 * 1000; // 45m
 const MAX_REQUEST_AGE_MS = 24 * 60 * 60 * 1000; // 24h
@@ -133,6 +152,74 @@ function upsertBillingByUserId(userId, patch = {}) {
   else rows.unshift(next);
   writeBillingAccounts(rows);
   return next;
+}
+
+async function listBillingAccounts() {
+  if (USE_SUPABASE) {
+    try {
+      return await supabaseRequest('billing_accounts?select=*&order=updated_at.desc');
+    } catch {
+      return [];
+    }
+  }
+  return readBillingAccounts();
+}
+
+async function getBillingByUserIdAsync(userId) {
+  const id = String(userId || '').trim();
+  if (!id) return null;
+  if (USE_SUPABASE) {
+    try {
+      const rows = await supabaseRequest(`billing_accounts?select=*&user_id=eq.${encodeURIComponent(id)}&limit=1`);
+      return rows[0] || null;
+    } catch {
+      return null;
+    }
+  }
+  return getBillingByUserId(id);
+}
+
+async function getBillingBySubscriptionId(subscriptionId) {
+  const id = String(subscriptionId || '').trim();
+  if (!id) return null;
+  if (USE_SUPABASE) {
+    try {
+      const rows = await supabaseRequest(`billing_accounts?select=*&stripe_subscription_id=eq.${encodeURIComponent(id)}&limit=1`);
+      return rows[0] || null;
+    } catch {
+      return null;
+    }
+  }
+  return readBillingAccounts().find(r => String(r.stripe_subscription_id || '') === id) || null;
+}
+
+async function upsertBillingByUserIdAsync(userId, patch = {}) {
+  const id = String(userId || '').trim();
+  if (!id) return null;
+  if (USE_SUPABASE) {
+    const existing = await getBillingByUserIdAsync(id);
+    const payload = {
+      ...patch,
+      user_id: id,
+      updated_at: new Date().toISOString()
+    };
+    if (existing?.id) {
+      await supabaseRequest(`billing_accounts?user_id=eq.${encodeURIComponent(id)}`, { method: 'PATCH', body: payload });
+      return getBillingByUserIdAsync(id);
+    }
+    const out = await supabaseRequest('billing_accounts', {
+      method: 'POST',
+      body: [{ ...payload, created_at: new Date().toISOString() }]
+    });
+    return out[0] || null;
+  }
+  return upsertBillingByUserId(id, patch);
+}
+
+async function updateBillingBySubscriptionId(subscriptionId, patch = {}) {
+  const billing = await getBillingBySubscriptionId(subscriptionId);
+  if (!billing?.user_id) return null;
+  return upsertBillingByUserIdAsync(billing.user_id, patch);
 }
 
 function isSubscriptionActive(status) {
@@ -232,6 +319,161 @@ async function getAuthUserById(userId) {
   if (!id || !USE_SUPABASE) return null;
   const users = await listAuthUsers();
   return users.find(u => String(u?.id || '') === id) || null;
+}
+
+async function getAuthUserFromAccessToken(token) {
+  const bearer = String(token || '').trim();
+  if (!bearer || !USE_SUPABASE) return null;
+  try {
+    const res = await fetch(`${SUPABASE_URL}/auth/v1/user`, {
+      method: 'GET',
+      headers: {
+        apikey: SUPABASE_SERVICE_ROLE_KEY,
+        Authorization: `Bearer ${bearer}`
+      }
+    });
+    if (!res.ok) return null;
+    return res.json();
+  } catch {
+    return null;
+  }
+}
+
+async function getAuthenticatedUser(req) {
+  const auth = String(req.headers.authorization || '');
+  const token = auth.toLowerCase().startsWith('bearer ') ? auth.slice(7).trim() : '';
+  const user = await getAuthUserFromAccessToken(token);
+  if (user?.id) return user;
+
+  const allowDevAuth = String(process.env.ALLOW_DEV_AUTH || '').toLowerCase() === 'true' && process.env.NODE_ENV !== 'production';
+  if (allowDevAuth) {
+    const devUserId = String(req.headers['x-dev-user-id'] || '').trim();
+    const devEmail = String(req.headers['x-dev-user-email'] || '').trim().toLowerCase();
+    const devRole = String(req.headers['x-dev-user-role'] || 'owner').trim().toLowerCase();
+    if (devUserId) return { id: devUserId, email: devEmail, user_metadata: { role: devRole, services: '' }, app_metadata: {} };
+  }
+
+  return null;
+}
+
+async function requireAuthenticatedUser(req, res, allowedRoles = []) {
+  const user = await getAuthenticatedUser(req);
+  if (!user?.id) {
+    res.status(401).json({ error: 'Authentication required.' });
+    return null;
+  }
+  const role = String(user.user_metadata?.role || '').toLowerCase();
+  const allowed = Array.isArray(allowedRoles) ? allowedRoles : [allowedRoles];
+  if (allowed.length && !allowed.includes(role)) {
+    res.status(403).json({ error: 'You are not authorized for this action.' });
+    return null;
+  }
+  return user;
+}
+
+function roleForUser(user) {
+  return String(user?.user_metadata?.role || '').toLowerCase();
+}
+
+function getUserServices(user) {
+  return String(user?.user_metadata?.services || '').trim();
+}
+
+function stripTaggedJson(text = '', tagName = '') {
+  const tag = String(tagName || '').trim();
+  if (!tag) return String(text || '').trim();
+  return String(text || '').replace(new RegExp(`\\[${tag}\\][\\s\\S]*?\\[\\/${tag}\\]`, 'g'), '').trim();
+}
+
+function parseTaggedJson(text = '', tagName = '') {
+  const tag = String(tagName || '').trim();
+  if (!tag) return {};
+  const match = String(text || '').match(new RegExp(`\\[${tag}\\]([\\s\\S]*?)\\[\\/${tag}\\]`));
+  if (!match) return {};
+  try {
+    return JSON.parse(match[1]);
+  } catch {
+    return {};
+  }
+}
+
+function sanitizeRepairForUser(repair, user, { includeOwnerContact = false } = {}) {
+  const role = roleForUser(user);
+  const isOwner = String(repair?.owner_id || '') === String(user?.id || '');
+  const out = {
+    id: repair?.id,
+    owner_id: isOwner ? repair?.owner_id : undefined,
+    title: repair?.title,
+    issue_category: repair?.issue_category,
+    issue_details: stripTaggedJson(repair?.issue_details || '', 'OWNER_META'),
+    vehicle_year: repair?.vehicle_year,
+    vehicle_make: repair?.vehicle_make,
+    vehicle_model: repair?.vehicle_model,
+    city: repair?.city,
+    state: repair?.state,
+    zip: role === 'owner' && isOwner ? repair?.zip : String(repair?.zip || '').replace(/^(\d{3}).*/, '$1xx'),
+    urgency: repair?.urgency,
+    status: repair?.status,
+    created_at: repair?.created_at,
+    invite_expires_at: repair?.invite_expires_at || null,
+    dispatch_summary: isOwner ? repair?.dispatch_summary : undefined,
+    __preview_locked: !!repair?.__preview_locked
+  };
+  if (isOwner || includeOwnerContact) {
+    out.zip = repair?.zip;
+  }
+  return Object.fromEntries(Object.entries(out).filter(([, v]) => v !== undefined));
+}
+
+function sanitizeBidForUser(bid, user, { includeProviderContact = false } = {}) {
+  const meta = parseTaggedJson(bid?.notes || '', 'META');
+  const cleanNotes = stripTaggedJson(bid?.notes || '', 'META');
+  const out = {
+    id: bid?.id,
+    request_id: bid?.request_id,
+    mechanic_id: String(bid?.mechanic_id || '') === String(user?.id || '') ? bid?.mechanic_id : undefined,
+    mechanic_name: bid?.mechanic_name,
+    amount: bid?.amount,
+    eta_hours: bid?.eta_hours,
+    notes: cleanNotes,
+    status: bid?.status,
+    created_at: bid?.created_at,
+    provider: {
+      type: meta.providerType || '',
+      typeLabel: meta.providerTypeLabel || '',
+      businessName: meta.businessName || bid?.mechanic_name || '',
+      businessAddress: includeProviderContact ? (meta.businessAddress || '') : '',
+      businessZip: meta.businessZip || '',
+      serviceRadiusMiles: meta.serviceRadiusMiles || '',
+      certifications: meta.certifications || '',
+      services: meta.services || ''
+    }
+  };
+  if (includeProviderContact) {
+    out.provider.businessEmail = meta.businessEmail || '';
+    out.provider.businessPhone = meta.businessPhone || '';
+  }
+  return Object.fromEntries(Object.entries(out).filter(([, v]) => v !== undefined));
+}
+
+async function getRepairById(repairId) {
+  const id = Number(repairId);
+  if (!id) return null;
+  if (USE_SUPABASE) {
+    const found = await supabaseRequest(`repair_requests?select=*&id=eq.${id}&limit=1`);
+    return found[0] || null;
+  }
+  return readJson(REPAIR_REQUESTS_PATH, []).find(r => Number(r.id) === id) || null;
+}
+
+async function getBidById(bidId) {
+  const id = Number(bidId);
+  if (!id) return null;
+  if (USE_SUPABASE) {
+    const found = await supabaseRequest(`bids?select=*&id=eq.${id}&limit=1`);
+    return found[0] || null;
+  }
+  return readJson(BIDS_PATH, []).find(b => Number(b.id) === id) || null;
 }
 
 async function listSignups() {
@@ -401,7 +643,7 @@ async function listProviderPool() {
     if (!['mechanic', 'shop'].includes(role)) continue;
     const email = String(u?.email || '').trim().toLowerCase();
     if (!email) continue;
-    const billing = getBillingByUserId(String(u?.id || ''));
+    const billing = await getBillingByUserIdAsync(String(u?.id || ''));
     providers.push({
       email,
       userId: String(u?.id || ''),
@@ -902,7 +1144,7 @@ app.use(cors({
   }
 }));
 
-app.post('/api/stripe/webhook', express.raw({ type: 'application/json' }), (req, res) => {
+app.post('/api/stripe/webhook', express.raw({ type: 'application/json' }), async (req, res) => {
   if (!stripe || !STRIPE_WEBHOOK_SECRET) return res.status(400).send('Stripe webhook not configured.');
 
   let event;
@@ -918,7 +1160,7 @@ app.post('/api/stripe/webhook', express.raw({ type: 'application/json' }), (req,
       const sessionObj = event.data.object;
       const userId = sessionObj?.metadata?.userId;
       if (userId) {
-        upsertBillingByUserId(userId, {
+        await upsertBillingByUserIdAsync(userId, {
           email: sessionObj?.customer_details?.email || '',
           role: sessionObj?.metadata?.role || 'mechanic',
           stripe_customer_id: sessionObj?.customer || '',
@@ -930,17 +1172,20 @@ app.post('/api/stripe/webhook', express.raw({ type: 'application/json' }), (req,
 
     if (event.type === 'customer.subscription.updated' || event.type === 'customer.subscription.deleted') {
       const sub = event.data.object;
-      const rows = readBillingAccounts();
-      const idx = rows.findIndex(r => String(r.stripe_subscription_id || '') === String(sub.id || ''));
-      if (idx >= 0) {
-        rows[idx] = {
-          ...rows[idx],
-          subscription_status: String(sub.status || ''),
-          current_period_end: sub.current_period_end ? new Date(Number(sub.current_period_end) * 1000).toISOString() : null,
-          cancel_at_period_end: !!sub.cancel_at_period_end,
-          updated_at: new Date().toISOString()
-        };
-        writeBillingAccounts(rows);
+      await updateBillingBySubscriptionId(sub.id, {
+        subscription_status: String(sub.status || ''),
+        current_period_end: sub.current_period_end ? new Date(Number(sub.current_period_end) * 1000).toISOString() : null,
+        cancel_at_period_end: !!sub.cancel_at_period_end
+      });
+    }
+
+    if (event.type === 'invoice.payment_failed' || event.type === 'invoice.payment_succeeded') {
+      const invoice = event.data.object;
+      const subscriptionId = invoice?.subscription;
+      if (subscriptionId) {
+        await updateBillingBySubscriptionId(subscriptionId, {
+          subscription_status: event.type === 'invoice.payment_failed' ? 'past_due' : 'active'
+        });
       }
     }
 
@@ -992,7 +1237,16 @@ app.get('/api/stats', async (req, res) => {
 
 app.get('/api/health', async (req, res) => {
   try {
-    res.json({ ok: true, uptimeSec: Math.round(process.uptime()), stripeConfigured: !!stripe, supabaseConfigured: USE_SUPABASE, ts: new Date().toISOString() });
+    const missingConfig = missingProductionConfig();
+    res.json({
+      ok: missingConfig.length === 0,
+      uptimeSec: Math.round(process.uptime()),
+      stripeConfigured: !!stripe,
+      stripeBillingReady: billingConfigReady(),
+      supabaseConfigured: USE_SUPABASE,
+      missingProductionConfig: missingConfig,
+      ts: new Date().toISOString()
+    });
   } catch {
     res.status(500).json({ ok: false });
   }
@@ -1094,8 +1348,10 @@ app.post('/api/owner-request', async (req, res) => {
 
 // --- V1 marketplace APIs ---
 app.post('/api/repairs', async (req, res) => {
+  const user = await requireAuthenticatedUser(req, res, ['owner']);
+  if (!user) return;
+
   const {
-    ownerId,
     title,
     issueCategory,
     issueDetails,
@@ -1113,14 +1369,8 @@ app.post('/api/repairs', async (req, res) => {
   }
 
   try {
-    if (USE_SUPABASE) {
-      const owner = await getAuthUserById(ownerId);
-      const ownerRole = String(owner?.user_metadata?.role || '').toLowerCase();
-      if (!owner || ownerRole !== 'owner') return res.status(403).json({ error: 'Owner authorization failed.' });
-    }
-
     const created = await createRepairRequest({
-      owner_id: String(ownerId).trim(),
+      owner_id: String(user.id).trim(),
       title: String(title).trim(),
       issue_category: String(issueCategory).trim(),
       issue_details: String(issueDetails).trim(),
@@ -1135,22 +1385,26 @@ app.post('/api/repairs', async (req, res) => {
       created_at: new Date().toISOString()
     });
     try { await createDispatchSnapshot(created); } catch {}
-    res.json({ ok: true, repair: created });
+    res.json({ ok: true, repair: sanitizeRepairForUser(created, user) });
   } catch (e) {
     res.status(500).json({ error: 'Could not create repair request.', detail: String(e?.message || e) });
   }
 });
 
 app.get('/api/repairs', async (req, res) => {
+  const user = await requireAuthenticatedUser(req, res, ['owner', 'mechanic', 'shop']);
+  if (!user) return;
+
   try {
-    const ownerId = req.query.ownerId ? String(req.query.ownerId) : undefined;
+    const role = roleForUser(user);
     const status = req.query.status ? String(req.query.status) : undefined;
-    const providerEmail = req.query.providerEmail ? String(req.query.providerEmail).toLowerCase() : undefined;
-    const providerType = req.query.providerType ? String(req.query.providerType).toLowerCase() : undefined;
-    const providerServices = req.query.providerServices ? String(req.query.providerServices) : undefined;
-    const previewLeads = String(req.query.previewLeads || '').toLowerCase() === 'true';
+    const ownerId = role === 'owner' ? String(user.id) : undefined;
+    const providerEmail = role === 'mechanic' || role === 'shop' ? String(user.email || '').toLowerCase() : undefined;
+    const providerType = role === 'shop' ? 'shop' : role === 'mechanic' ? 'mechanic' : undefined;
+    const providerServices = providerEmail ? (req.query.providerServices ? String(req.query.providerServices) : getUserServices(user)) : undefined;
+    const previewLeads = providerEmail ? String(req.query.previewLeads || '').toLowerCase() === 'true' : false;
     const rows = await listRepairRequests({ ownerId, status, providerEmail, providerType, providerServices, previewLeads });
-    res.json({ ok: true, repairs: rows });
+    res.json({ ok: true, repairs: rows.map(r => sanitizeRepairForUser(r, user)) });
   } catch (e) {
     res.status(500).json({ error: 'Could not load repairs.', detail: String(e?.message || e) });
   }
@@ -1159,12 +1413,19 @@ app.get('/api/repairs', async (req, res) => {
 app.post('/api/repairs/:id/cancel', async (req, res) => {
   const repairId = Number(req.params.id);
   if (!repairId) return res.status(400).json({ error: 'Invalid repair id.' });
+  const adminOverride = isAuthorizedAdminRequest(req);
+  const user = adminOverride ? null : await requireAuthenticatedUser(req, res, ['owner']);
+  if (!adminOverride && !user) return;
 
   try {
+    const target = await getRepairById(repairId);
+    if (!target) return res.status(404).json({ error: 'Repair request not found.' });
+    if (!adminOverride && String(target.owner_id || '') !== String(user.id)) {
+      return res.status(403).json({ error: 'You can only cancel your own repair requests.' });
+    }
+
     if (USE_SUPABASE) {
-      const found = await supabaseRequest(`repair_requests?select=*&id=eq.${repairId}&limit=1`);
-      if (!found[0]) return res.status(404).json({ error: 'Repair request not found.' });
-      if (String(found[0].status || '').toLowerCase() === 'accepted') {
+      if (String(target.status || '').toLowerCase() === 'accepted') {
         return res.status(400).json({ error: 'Accepted requests cannot be cancelled.' });
       }
       await supabaseRequest(`repair_requests?id=eq.${repairId}`, { method: 'PATCH', body: { status: 'cancelled' } });
@@ -1173,8 +1434,6 @@ app.post('/api/repairs/:id/cancel', async (req, res) => {
     }
 
     const requests = readJson(REPAIR_REQUESTS_PATH, []);
-    const target = requests.find(r => Number(r.id) === repairId);
-    if (!target) return res.status(404).json({ error: 'Repair request not found.' });
     if (String(target.status || '').toLowerCase() === 'accepted') {
       return res.status(400).json({ error: 'Accepted requests cannot be cancelled.' });
     }
@@ -1198,19 +1457,24 @@ app.post('/api/repairs/:id/cancel', async (req, res) => {
 app.post('/api/repairs/:id/complete', async (req, res) => {
   const repairId = Number(req.params.id);
   if (!repairId) return res.status(400).json({ error: 'Invalid repair id.' });
+  const adminOverride = isAuthorizedAdminRequest(req);
+  const user = adminOverride ? null : await requireAuthenticatedUser(req, res, ['owner']);
+  if (!adminOverride && !user) return;
   try {
+    const target = await getRepairById(repairId);
+    if (!target) return res.status(404).json({ error: 'Repair request not found.' });
+    if (!adminOverride && String(target.owner_id || '') !== String(user.id)) {
+      return res.status(403).json({ error: 'You can only complete your own repair requests.' });
+    }
+
     if (USE_SUPABASE) {
-      const found = await supabaseRequest(`repair_requests?select=*&id=eq.${repairId}&limit=1`);
-      if (!found[0]) return res.status(404).json({ error: 'Repair request not found.' });
-      const st = String(found[0].status || '').toLowerCase();
+      const st = String(target.status || '').toLowerCase();
       if (!['accepted', 'in_progress', 'completed'].includes(st)) return res.status(400).json({ error: 'Only accepted/in-progress jobs can be completed.' });
       await supabaseRequest(`repair_requests?id=eq.${repairId}`, { method: 'PATCH', body: { status: 'completed' } });
       return res.json({ ok: true });
     }
 
     const requests = readJson(REPAIR_REQUESTS_PATH, []);
-    const target = requests.find(r => Number(r.id) === repairId);
-    if (!target) return res.status(404).json({ error: 'Repair request not found.' });
     const st = String(target.status || '').toLowerCase();
     if (!['accepted', 'in_progress', 'completed'].includes(st)) return res.status(400).json({ error: 'Only accepted/in-progress jobs can be completed.' });
     target.status = 'completed';
@@ -1222,22 +1486,18 @@ app.post('/api/repairs/:id/complete', async (req, res) => {
 });
 
 app.post('/api/bids', async (req, res) => {
-  const { requestId, mechanicId, mechanicName, amount, etaHours, notes } = req.body || {};
-  if (!requestId || !mechanicId || !mechanicName || !amount || !etaHours) {
+  const user = await requireAuthenticatedUser(req, res, ['mechanic', 'shop']);
+  if (!user) return;
+
+  const { requestId, mechanicName, amount, etaHours, notes } = req.body || {};
+  if (!requestId || !mechanicName || !amount || !etaHours) {
     return res.status(400).json({ error: 'Missing required fields.' });
   }
 
-  const billing = getBillingByUserId(mechanicId);
+  const mechanicId = String(user.id);
+  const billing = await getBillingByUserIdAsync(mechanicId);
   if (!billing || !canSubmitEstimatesFromBilling(billing)) {
     return res.status(402).json({ error: 'Active $99/month subscription required to submit estimates.' });
-  }
-
-  if (USE_SUPABASE) {
-    const user = await getAuthUserById(mechanicId);
-    const role = String(user?.user_metadata?.role || '').toLowerCase();
-    if (!user || !['mechanic', 'shop'].includes(role)) {
-      return res.status(403).json({ error: 'Provider authorization failed.' });
-    }
   }
 
   const cleanNotes = String(notes || '').trim();
@@ -1267,7 +1527,6 @@ app.post('/api/bids', async (req, res) => {
   }
 
   if (USE_SUPABASE && providerEmail) {
-    const user = await getAuthUserById(mechanicId);
     const authEmail = String(user?.email || '').trim().toLowerCase();
     if (authEmail && authEmail !== providerEmail) {
       return res.status(403).json({ error: 'Provider email mismatch.' });
@@ -1275,7 +1534,12 @@ app.post('/api/bids', async (req, res) => {
   }
 
   try {
-    const repairs = await listRepairRequests({});
+    const repairs = await listRepairRequests({
+      providerEmail: String(user.email || '').toLowerCase(),
+      providerType: roleForUser(user) === 'shop' ? 'shop' : 'mechanic',
+      providerServices: getUserServices(user),
+      previewLeads: false
+    });
     const targetRepair = repairs.find(r => Number(r.id) === Number(requestId));
     if (!targetRepair) return res.status(404).json({ error: 'Repair request not found.' });
     if (requestIsExpiredForNewInvites(targetRepair)) {
@@ -1349,19 +1613,40 @@ app.post('/api/bids', async (req, res) => {
       }
     }
 
-    res.json({ ok: true, bid: created });
+    res.json({ ok: true, bid: sanitizeBidForUser(created, user, { includeProviderContact: true }) });
   } catch {
     res.status(500).json({ error: 'Could not create bid.' });
   }
 });
 
 app.get('/api/bids', async (req, res) => {
+  const adminOverride = isAuthorizedAdminRequest(req);
+  const user = adminOverride ? null : await requireAuthenticatedUser(req, res, ['owner', 'mechanic', 'shop']);
+  if (!adminOverride && !user) return;
+
   try {
     const requestId = req.query.requestId ? Number(req.query.requestId) : undefined;
-    const mechanicId = req.query.mechanicId ? String(req.query.mechanicId) : undefined;
     const status = req.query.status ? String(req.query.status) : undefined;
-    const rows = await listBids({ requestId, mechanicId, status });
-    res.json({ ok: true, bids: rows });
+    let rows = [];
+
+    if (adminOverride) {
+      rows = await listBids({ requestId, mechanicId: req.query.mechanicId ? String(req.query.mechanicId) : undefined, status });
+      return res.json({ ok: true, bids: rows });
+    }
+
+    const role = roleForUser(user);
+    if (role === 'owner') {
+      if (!requestId) return res.status(400).json({ error: 'requestId is required for owner bid access.' });
+      const repair = await getRepairById(requestId);
+      if (!repair || String(repair.owner_id || '') !== String(user.id)) {
+        return res.status(403).json({ error: 'You can only view bids for your own repair requests.' });
+      }
+      rows = await listBids({ requestId, status });
+      return res.json({ ok: true, bids: rows.map(b => sanitizeBidForUser(b, user, { includeProviderContact: true })) });
+    }
+
+    rows = await listBids({ requestId, mechanicId: String(user.id), status });
+    res.json({ ok: true, bids: rows.map(b => sanitizeBidForUser(b, user, { includeProviderContact: true })) });
   } catch {
     res.status(500).json({ error: 'Could not load bids.' });
   }
@@ -1370,12 +1655,20 @@ app.get('/api/bids', async (req, res) => {
 app.post('/api/bids/:id/accept', async (req, res) => {
   const bidId = Number(req.params.id);
   if (!bidId) return res.status(400).json({ error: 'Invalid bid id.' });
+  const adminOverride = isAuthorizedAdminRequest(req);
+  const user = adminOverride ? null : await requireAuthenticatedUser(req, res, ['owner']);
+  if (!adminOverride && !user) return;
 
   try {
+    const bid = await getBidById(bidId);
+    if (!bid) return res.status(404).json({ error: 'Bid not found.' });
+    const repair = await getRepairById(bid.request_id);
+    if (!repair) return res.status(404).json({ error: 'Repair request not found.' });
+    if (!adminOverride && String(repair.owner_id || '') !== String(user.id)) {
+      return res.status(403).json({ error: 'You can only accept bids for your own repair requests.' });
+    }
+
     if (USE_SUPABASE) {
-      const found = await supabaseRequest(`bids?select=*&id=eq.${bidId}&limit=1`);
-      if (!found[0]) return res.status(404).json({ error: 'Bid not found.' });
-      const bid = found[0];
       await supabaseRequest(`bids?id=eq.${bidId}`, { method: 'PATCH', body: { status: 'accepted' } });
       await supabaseRequest(`bids?request_id=eq.${bid.request_id}&id=neq.${bidId}`, { method: 'PATCH', body: { status: 'declined' } });
       await supabaseRequest(`repair_requests?id=eq.${bid.request_id}`, { method: 'PATCH', body: { status: 'accepted' } });
@@ -1403,9 +1696,21 @@ app.post('/api/bids/:id/accept', async (req, res) => {
 });
 
 app.get('/api/feedbacks', async (req, res) => {
+  const adminOverride = isAuthorizedAdminRequest(req);
+  const user = adminOverride ? null : await requireAuthenticatedUser(req, res, ['owner', 'mechanic', 'shop']);
+  if (!adminOverride && !user) return;
+
   try {
     const requestId = req.query.requestId ? Number(req.query.requestId) : undefined;
-    const mechanicId = req.query.mechanicId ? String(req.query.mechanicId) : undefined;
+    const mechanicId = adminOverride
+      ? (req.query.mechanicId ? String(req.query.mechanicId) : undefined)
+      : (roleForUser(user) === 'owner' ? undefined : String(user.id));
+    if (!adminOverride && roleForUser(user) === 'owner' && requestId) {
+      const repair = await getRepairById(requestId);
+      if (!repair || String(repair.owner_id || '') !== String(user.id)) {
+        return res.status(403).json({ error: 'You can only view feedback for your own repair requests.' });
+      }
+    }
     const rows = await listFeedbacks({ requestId, mechanicId });
     res.json({ ok: true, feedbacks: rows });
   } catch (e) {
@@ -1414,21 +1719,31 @@ app.get('/api/feedbacks', async (req, res) => {
 });
 
 app.post('/api/feedbacks', async (req, res) => {
-  const { requestId, bidId, mechanicId, ownerId, rating, text } = req.body || {};
-  if (!requestId || !bidId || !mechanicId || !rating) return res.status(400).json({ error: 'Missing required fields.' });
+  const user = await requireAuthenticatedUser(req, res, ['owner']);
+  if (!user) return;
+
+  const { requestId, bidId, rating, text } = req.body || {};
+  if (!requestId || !bidId || !rating) return res.status(400).json({ error: 'Missing required fields.' });
   const score = Number(rating);
   if (!Number.isFinite(score) || score < 1 || score > 5) return res.status(400).json({ error: 'Rating must be between 1 and 5.' });
 
   try {
-    const repair = (await listRepairRequests({})).find(r => Number(r.id) === Number(requestId));
+    const repair = await getRepairById(requestId);
+    if (!repair || String(repair.owner_id || '') !== String(user.id)) {
+      return res.status(403).json({ error: 'You can only review your own completed repairs.' });
+    }
     const st = String(repair?.status || '').toLowerCase();
     if (st !== 'completed') return res.status(400).json({ error: 'Reviews can only be submitted for completed jobs.' });
+    const bid = await getBidById(bidId);
+    if (!bid || Number(bid.request_id) !== Number(requestId) || String(bid.status || '').toLowerCase() !== 'accepted') {
+      return res.status(400).json({ error: 'Reviews require the accepted bid for this repair.' });
+    }
 
     const saved = await upsertFeedback({
       request_id: Number(requestId),
       bid_id: Number(bidId),
-      mechanic_id: String(mechanicId),
-      owner_id: String(ownerId || ''),
+      mechanic_id: String(bid.mechanic_id),
+      owner_id: String(user.id),
       rating: score,
       text: String(text || '').trim()
     });
@@ -1439,10 +1754,12 @@ app.post('/api/feedbacks', async (req, res) => {
 });
 
 app.get('/api/billing/status', async (req, res) => {
-  const userId = String(req.query.userId || '').trim();
+  const user = await requireAuthenticatedUser(req, res, ['mechanic', 'shop']);
+  if (!user) return;
+  const userId = String(user.id || '').trim();
   if (!userId) return res.status(400).json({ error: 'userId is required.' });
 
-  const billing = getBillingByUserId(userId);
+  const billing = await getBillingByUserIdAsync(userId);
   if (!billing) {
     return res.json({
       ok: true,
@@ -1470,14 +1787,18 @@ app.get('/api/billing/status', async (req, res) => {
 app.post('/api/billing/create-checkout-session', async (req, res) => {
   if (!stripe) return res.status(500).json({ error: 'Stripe is not configured on the server.' });
 
-  const { userId, email, role } = req.body || {};
+  const user = await requireAuthenticatedUser(req, res, ['mechanic', 'shop']);
+  if (!user) return;
+  const userId = String(user.id || '');
+  const email = String(user.email || '').trim().toLowerCase();
   if (!userId || !email) return res.status(400).json({ error: 'userId and email are required.' });
 
+  const role = roleForUser(user);
   const price = resolvePriceForRole(role);
   if (!price) return res.status(500).json({ error: 'No Stripe price is configured for this package.' });
 
   try {
-    const existing = getBillingByUserId(userId);
+    const existing = await getBillingByUserIdAsync(userId);
     let customerId = existing?.stripe_customer_id || '';
 
     if (!customerId) {
@@ -1501,7 +1822,7 @@ app.post('/api/billing/create-checkout-session', async (req, res) => {
       }
     });
 
-    upsertBillingByUserId(userId, {
+    await upsertBillingByUserIdAsync(userId, {
       email: String(email).trim().toLowerCase(),
       role: String(role || 'mechanic'),
       stripe_customer_id: customerId,
@@ -1517,10 +1838,12 @@ app.post('/api/billing/create-checkout-session', async (req, res) => {
 app.post('/api/billing/create-portal-session', async (req, res) => {
   if (!stripe) return res.status(500).json({ error: 'Stripe is not configured on the server.' });
 
-  const { userId } = req.body || {};
+  const user = await requireAuthenticatedUser(req, res, ['mechanic', 'shop']);
+  if (!user) return;
+  const userId = String(user.id || '');
   if (!userId) return res.status(400).json({ error: 'userId is required.' });
 
-  const billing = getBillingByUserId(userId);
+  const billing = await getBillingByUserIdAsync(userId);
   if (!billing?.stripe_customer_id) return res.status(400).json({ error: 'No Stripe customer found for this account yet.' });
 
   try {
@@ -1537,7 +1860,7 @@ app.post('/api/billing/create-portal-session', async (req, res) => {
 app.get('/api/admin/billing', async (req, res) => {
   { const blocked = guardAdminApi(req, res); if (blocked) return; }
   try {
-    const rows = readBillingAccounts().sort((a, b) => new Date(b.updated_at || 0).getTime() - new Date(a.updated_at || 0).getTime());
+    const rows = (await listBillingAccounts()).sort((a, b) => new Date(b.updated_at || 0).getTime() - new Date(a.updated_at || 0).getTime());
     const summary = {
       total: rows.length,
       active: rows.filter(r => isSubscriptionActive(r.subscription_status)).length,
@@ -1617,11 +1940,11 @@ app.post('/api/admin/billing/:userId/cancel', async (req, res) => {
   const userId = String(req.params.userId || '').trim();
   if (!userId) return res.status(400).json({ error: 'userId required.' });
 
-  const billing = getBillingByUserId(userId);
+  const billing = await getBillingByUserIdAsync(userId);
   if (!billing) return res.status(404).json({ error: 'Billing account not found for this user.' });
 
   if (!stripe) {
-    const updated = upsertBillingByUserId(userId, {
+    const updated = await upsertBillingByUserIdAsync(userId, {
       subscription_status: 'canceled',
       cancel_at_period_end: true
     });
@@ -1632,7 +1955,7 @@ app.post('/api/admin/billing/:userId/cancel', async (req, res) => {
 
   try {
     const sub = await stripe.subscriptions.update(billing.stripe_subscription_id, { cancel_at_period_end: true });
-    const updated = upsertBillingByUserId(userId, {
+    const updated = await upsertBillingByUserIdAsync(userId, {
       subscription_status: sub.status,
       cancel_at_period_end: !!sub.cancel_at_period_end,
       current_period_end: sub.current_period_end ? new Date(Number(sub.current_period_end) * 1000).toISOString() : null
@@ -1648,11 +1971,11 @@ app.post('/api/admin/billing/:userId/reactivate', async (req, res) => {
   const userId = String(req.params.userId || '').trim();
   if (!userId) return res.status(400).json({ error: 'userId required.' });
 
-  const billing = getBillingByUserId(userId);
+  const billing = await getBillingByUserIdAsync(userId);
   if (!billing) return res.status(404).json({ error: 'Billing account not found for this user.' });
 
   if (!stripe) {
-    const updated = upsertBillingByUserId(userId, {
+    const updated = await upsertBillingByUserIdAsync(userId, {
       subscription_status: 'active',
       cancel_at_period_end: false
     });
@@ -1663,7 +1986,7 @@ app.post('/api/admin/billing/:userId/reactivate', async (req, res) => {
 
   try {
     const sub = await stripe.subscriptions.update(billing.stripe_subscription_id, { cancel_at_period_end: false });
-    const updated = upsertBillingByUserId(userId, {
+    const updated = await upsertBillingByUserIdAsync(userId, {
       subscription_status: sub.status,
       cancel_at_period_end: !!sub.cancel_at_period_end,
       current_period_end: sub.current_period_end ? new Date(Number(sub.current_period_end) * 1000).toISOString() : null
@@ -1682,8 +2005,8 @@ app.post('/api/admin/billing/:userId/manual-access', async (req, res) => {
   if (!userId) return res.status(400).json({ error: 'userId required.' });
   if (!['active', 'disabled', 'clear'].includes(mode)) return res.status(400).json({ error: 'mode must be active, disabled, or clear.' });
 
-  const existing = getBillingByUserId(userId) || { user_id: userId };
-  const updated = upsertBillingByUserId(userId, {
+  const existing = await getBillingByUserIdAsync(userId) || { user_id: userId };
+  const updated = await upsertBillingByUserIdAsync(userId, {
     email: existing.email || '',
     role: existing.role || '',
     manual_access_override: mode === 'clear' ? null : mode,
@@ -1696,8 +2019,7 @@ app.post('/api/admin/billing/:userId/manual-access', async (req, res) => {
 app.get('/api/admin/accounts', async (req, res) => {
   { const blocked = guardAdminApi(req, res); if (blocked) return; }
   try {
-    const [signups, authUsers] = await Promise.all([listSignups(), listAuthUsers()]);
-    const billing = readBillingAccounts();
+    const [signups, authUsers, billing] = await Promise.all([listSignups(), listAuthUsers(), listBillingAccounts()]);
     const bans = readBannedAccounts();
 
     const banMap = new Map(bans.map(b => [String(b.email || '').toLowerCase(), b]));
@@ -2357,10 +2679,14 @@ app.get('/admin', async (req, res) => {
   </div></body></html>`);
 });
 
+if (process.env.NODE_ENV !== 'test') {
 app.listen(PORT, () => {
   if (!isAdminConfigValid()) {
     console.warn('⚠️ Admin routes disabled: set ADMIN_TOKEN to a strong non-default value.');
   }
   console.log(`Live: http://localhost:${PORT}`);
 });
+}
+
+export { app, sanitizeRepairForUser, sanitizeBidForUser, stripTaggedJson, parseTaggedJson };
 

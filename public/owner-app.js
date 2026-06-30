@@ -23,10 +23,12 @@ function api(base, path) {
 
 async function fetchJson(path, options = {}) {
   let lastErr = null;
+  const authHeaders = await window.smrAuth.getAuthHeaders();
+  const headers = { ...(options.headers || {}), ...authHeaders };
 
   for (const base of API_BASES) {
     try {
-      const res = await fetch(api(base, path), options);
+      const res = await fetch(api(base, path), { ...options, headers });
       const text = await res.text();
       let data = {};
       try { data = text ? JSON.parse(text) : {}; } catch { data = { error: text || 'Unexpected response' }; }
