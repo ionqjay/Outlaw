@@ -398,6 +398,10 @@ function parseTaggedJson(text = '', tagName = '') {
   }
 }
 
+function stripPrivateRepairTags(text = '') {
+  return stripTaggedJson(stripTaggedJson(text, 'OWNER_META'), 'CLIENT_META');
+}
+
 function sanitizeRepairForUser(repair, user, { includeOwnerContact = false } = {}) {
   const role = roleForUser(user);
   const isOwner = String(repair?.owner_id || '') === String(user?.id || '');
@@ -406,7 +410,7 @@ function sanitizeRepairForUser(repair, user, { includeOwnerContact = false } = {
     owner_id: isOwner ? repair?.owner_id : undefined,
     title: repair?.title,
     issue_category: repair?.issue_category,
-    issue_details: stripTaggedJson(repair?.issue_details || '', 'OWNER_META'),
+    issue_details: stripPrivateRepairTags(repair?.issue_details || ''),
     vehicle_year: repair?.vehicle_year,
     vehicle_make: repair?.vehicle_make,
     vehicle_model: repair?.vehicle_model,
@@ -1362,19 +1366,39 @@ app.post('/api/repairs', async (req, res) => {
     city,
     state,
     zip,
-    urgency
+    urgency,
+    clientRequestId
   } = req.body || {};
 
-  if (!ownerId || !title || !issueCategory || !issueDetails || !vehicleYear || !vehicleMake || !vehicleModel || !city || !state || !zip) {
+  if (!title || !issueCategory || !issueDetails || !vehicleYear || !vehicleMake || !vehicleModel || !city || !state || !zip) {
     return res.status(400).json({ error: 'Missing required fields.' });
   }
 
   try {
+    const cleanClientRequestId = String(clientRequestId || '').trim();
+    if (cleanClientRequestId && !/^[a-zA-Z0-9_.:-]{8,120}$/.test(cleanClientRequestId)) {
+      return res.status(400).json({ error: 'Invalid request token.' });
+    }
+
+    if (cleanClientRequestId) {
+      const ownerRepairs = await listRepairRequests({ ownerId: String(user.id) });
+      const existing = ownerRepairs.find(r => {
+        const meta = parseTaggedJson(r?.issue_details || '', 'CLIENT_META');
+        return String(meta.clientRequestId || '') === cleanClientRequestId;
+      });
+      if (existing) {
+        return res.json({ ok: true, repair: sanitizeRepairForUser(existing, user), duplicate: true });
+      }
+    }
+
+    const clientMeta = cleanClientRequestId
+      ? `[CLIENT_META]${JSON.stringify({ clientRequestId: cleanClientRequestId })}[/CLIENT_META]`
+      : '';
     const created = await createRepairRequest({
       owner_id: String(user.id).trim(),
       title: String(title).trim(),
       issue_category: String(issueCategory).trim(),
-      issue_details: String(issueDetails).trim(),
+      issue_details: `${clientMeta}${String(issueDetails).trim()}`,
       vehicle_year: String(vehicleYear).trim(),
       vehicle_make: String(vehicleMake).trim(),
       vehicle_model: String(vehicleModel).trim(),

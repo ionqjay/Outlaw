@@ -22,6 +22,15 @@ function api(base, path) {
   return `${base}${path}`;
 }
 
+function sleep(ms) {
+  return new Promise(resolve => setTimeout(resolve, ms));
+}
+
+function newClientRequestId() {
+  if (window.crypto?.randomUUID) return window.crypto.randomUUID();
+  return `repair-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+}
+
 class ApiHttpError extends Error {
   constructor(message, status, base) {
     super(message);
@@ -33,33 +42,38 @@ class ApiHttpError extends Error {
 
 async function fetchJson(path, options = {}) {
   let lastErr = null;
+  const { retryOnNetworkError = false, ...fetchOptions } = options;
   const authHeaders = await window.smrAuth.getAuthHeaders();
-  const headers = { ...(options.headers || {}), ...authHeaders };
+  const headers = { ...(fetchOptions.headers || {}), ...authHeaders };
+  const attempts = retryOnNetworkError ? 3 : 1;
 
   for (const base of API_BASES) {
-    let timer;
-    try {
-      const controller = new AbortController();
-      timer = setTimeout(() => controller.abort(), 60000);
-      const res = await fetch(api(base, path), { ...options, headers, signal: controller.signal });
-      clearTimeout(timer);
-      const text = await res.text();
-      let data = {};
-      try { data = text ? JSON.parse(text) : {}; } catch { data = { error: text || 'Unexpected response' }; }
+    for (let attempt = 1; attempt <= attempts; attempt += 1) {
+      let timer;
+      try {
+        const controller = new AbortController();
+        timer = setTimeout(() => controller.abort(), 60000);
+        const res = await fetch(api(base, path), { ...fetchOptions, headers, signal: controller.signal });
+        clearTimeout(timer);
+        const text = await res.text();
+        let data = {};
+        try { data = text ? JSON.parse(text) : {}; } catch { data = { error: text || 'Unexpected response' }; }
 
-      if (!res.ok && res.status === 404 && /route not found|not found|not_found|page could not be found/i.test(String(data?.error || data?.message || text))) {
-        lastErr = new Error(`API route missing on ${base}`);
-        continue;
+        if (!res.ok && res.status === 404 && /route not found|not found|not_found|page could not be found/i.test(String(data?.error || data?.message || text))) {
+          lastErr = new Error(`API route missing on ${base}`);
+          break;
+        }
+
+        workingApiBase = base;
+        if (!res.ok) throw new ApiHttpError(data.error || data.message || `Request failed (${res.status})`, res.status, base);
+        return data;
+      } catch (err) {
+        if (err instanceof ApiHttpError) throw err;
+        lastErr = err;
+        if (attempt < attempts) await sleep(1000 * attempt);
+      } finally {
+        clearTimeout(timer);
       }
-
-      workingApiBase = base;
-      if (!res.ok) throw new ApiHttpError(data.error || data.message || `Request failed (${res.status})`, res.status, base);
-      return data;
-    } catch (err) {
-      if (err instanceof ApiHttpError) throw err;
-      lastErr = err;
-    } finally {
-      clearTimeout(timer);
     }
   }
 
@@ -774,7 +788,8 @@ async function boot() {
       city: document.getElementById('city').value.trim(),
       state: document.getElementById('state').value.trim(),
       zip: document.getElementById('zip').value.trim(),
-      urgency: document.getElementById('urgency').value
+      urgency: document.getElementById('urgency').value,
+      clientRequestId: newClientRequestId()
     };
 
     const btn = document.getElementById('submitRepairBtn');
@@ -786,7 +801,8 @@ async function boot() {
       await fetchJson('/api/repairs', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload)
+        body: JSON.stringify(payload),
+        retryOnNetworkError: true
       });
 
       setStatus('Request submitted successfully.', 'ok');

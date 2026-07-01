@@ -1,5 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import fs from 'node:fs';
 
 process.env.NODE_ENV = 'test';
 process.env.ALLOW_DEV_AUTH = 'true';
@@ -19,6 +20,24 @@ async function withServer(fn) {
     await fn(base);
   } finally {
     await new Promise(resolve => server.close(resolve));
+  }
+}
+
+async function preservingJsonFiles(paths, fn) {
+  const snapshots = new Map(paths.map(filePath => [
+    filePath,
+    fs.existsSync(filePath) ? fs.readFileSync(filePath, 'utf8') : null
+  ]));
+  try {
+    await fn();
+  } finally {
+    for (const [filePath, contents] of snapshots.entries()) {
+      if (contents === null) {
+        if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
+      } else {
+        fs.writeFileSync(filePath, contents);
+      }
+    }
   }
 }
 
@@ -60,6 +79,58 @@ test('Render-hosted origins can reach marketplace routes', async () => {
     });
     assert.equal(repairs.status, 401);
     assert.equal(repairs.headers.get('access-control-allow-origin'), origin);
+  });
+});
+
+test('repair submission client request id is idempotent', async () => {
+  const repairRequestsPath = new URL('../repair_requests.json', import.meta.url);
+  const requestInvitesPath = new URL('../request_invites.json', import.meta.url);
+
+  await preservingJsonFiles([repairRequestsPath, requestInvitesPath], async () => {
+    await withServer(async base => {
+      const payload = {
+        title: 'Brake noise',
+        issueCategory: 'brakes',
+        issueDetails: '[OWNER_META]{"ownerEmail":"owner@example.com"}[/OWNER_META] Squeaking front brakes',
+        vehicleYear: '2020',
+        vehicleMake: 'Toyota',
+        vehicleModel: 'Camry',
+        city: 'Yonkers',
+        state: 'NY',
+        zip: '10701',
+        urgency: 'Standard',
+        clientRequestId: 'test-client-request-1'
+      };
+      const headers = {
+        'Content-Type': 'application/json',
+        'x-dev-user-id': 'owner-idempotent-1',
+        'x-dev-user-email': 'owner@example.com',
+        'x-dev-user-role': 'owner'
+      };
+
+      const first = await fetch(`${base}/api/repairs`, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify(payload)
+      });
+      assert.equal(first.status, 200);
+      const firstData = await first.json();
+      assert.equal(firstData.ok, true);
+      assert.equal(firstData.duplicate, undefined);
+
+      const second = await fetch(`${base}/api/repairs`, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify(payload)
+      });
+      assert.equal(second.status, 200);
+      const secondData = await second.json();
+      assert.equal(secondData.ok, true);
+      assert.equal(secondData.duplicate, true);
+      assert.equal(secondData.repair.id, firstData.repair.id);
+      assert.equal(secondData.repair.issue_details.includes('CLIENT_META'), false);
+      assert.equal(secondData.repair.issue_details, 'Squeaking front brakes');
+    });
   });
 });
 
