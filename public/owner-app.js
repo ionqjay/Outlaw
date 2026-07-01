@@ -40,7 +40,7 @@ async function fetchJson(path, options = {}) {
     let timer;
     try {
       const controller = new AbortController();
-      timer = setTimeout(() => controller.abort(), 30000);
+      timer = setTimeout(() => controller.abort(), 60000);
       const res = await fetch(api(base, path), { ...options, headers, signal: controller.signal });
       clearTimeout(timer);
       const text = await res.text();
