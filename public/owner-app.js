@@ -3,9 +3,7 @@ const configuredApiBase = (window.APP_CONFIG?.API_BASE || '').trim().replace(/\/
 const API_BASES = [
   configuredApiBase,
   location.origin,
-  'https://outlaw-ba9s.onrender.com',
-  'https://shopmyrepair-prelaunch.onrender.com',
-  'https://shopmyrepair.onrender.com'
+  'https://outlaw-ba9s.onrender.com'
 ].filter(Boolean).filter((v, i, a) => a.indexOf(v) === i);
 
 let workingApiBase = configuredApiBase || location.origin;
@@ -21,6 +19,15 @@ function api(base, path) {
   return `${base}${path}`;
 }
 
+class ApiHttpError extends Error {
+  constructor(message, status, base) {
+    super(message);
+    this.name = 'ApiHttpError';
+    this.status = status;
+    this.base = base;
+  }
+}
+
 async function fetchJson(path, options = {}) {
   let lastErr = null;
   const authHeaders = await window.smrAuth.getAuthHeaders();
@@ -28,20 +35,24 @@ async function fetchJson(path, options = {}) {
 
   for (const base of API_BASES) {
     try {
-      const res = await fetch(api(base, path), { ...options, headers });
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), 8000);
+      const res = await fetch(api(base, path), { ...options, headers, signal: controller.signal });
+      clearTimeout(timer);
       const text = await res.text();
       let data = {};
       try { data = text ? JSON.parse(text) : {}; } catch { data = { error: text || 'Unexpected response' }; }
 
-      if (!res.ok && (res.status === 404) && /route not found|not found/i.test(String(data?.error || data?.message || text))) {
+      if (!res.ok && res.status === 404 && /route not found|not found|not_found|page could not be found/i.test(String(data?.error || data?.message || text))) {
         lastErr = new Error(`API route missing on ${base}`);
         continue;
       }
 
       workingApiBase = base;
-      if (!res.ok) throw new Error(data.error || data.message || `Request failed (${res.status})`);
+      if (!res.ok) throw new ApiHttpError(data.error || data.message || `Request failed (${res.status})`, res.status, base);
       return data;
     } catch (err) {
+      if (err instanceof ApiHttpError) throw err;
       lastErr = err;
     }
   }
@@ -783,7 +794,8 @@ async function boot() {
       setView('dashboard');
       await refreshDashboard();
     } catch (err) {
-      setStatus(`${err.message || 'Failed to submit request.'} (Tried: ${API_BASES.join(', ')})`, 'err');
+      const suffix = err instanceof ApiHttpError ? '' : ` (Tried: ${API_BASES.join(', ')})`;
+      setStatus(`${err.message || 'Failed to submit request.'}${suffix}`, 'err');
     } finally {
       btn.disabled = false;
       btn.textContent = 'Submit Repair Request';
