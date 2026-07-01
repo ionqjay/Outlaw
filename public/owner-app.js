@@ -1,8 +1,11 @@
 const configuredApiBase = (window.APP_CONFIG?.API_BASE || '').trim().replace(/\/$/, '');
+const sameOriginApiBase = /^(localhost|127\.0\.0\.1)$|\.onrender\.com$/i.test(location.hostname)
+  ? location.origin
+  : '';
 
 const API_BASES = [
   configuredApiBase,
-  location.origin,
+  sameOriginApiBase,
   'https://outlaw-ba9s.onrender.com'
 ].filter(Boolean).filter((v, i, a) => a.indexOf(v) === i);
 
@@ -34,9 +37,10 @@ async function fetchJson(path, options = {}) {
   const headers = { ...(options.headers || {}), ...authHeaders };
 
   for (const base of API_BASES) {
+    let timer;
     try {
       const controller = new AbortController();
-      const timer = setTimeout(() => controller.abort(), 8000);
+      timer = setTimeout(() => controller.abort(), 30000);
       const res = await fetch(api(base, path), { ...options, headers, signal: controller.signal });
       clearTimeout(timer);
       const text = await res.text();
@@ -54,6 +58,8 @@ async function fetchJson(path, options = {}) {
     } catch (err) {
       if (err instanceof ApiHttpError) throw err;
       lastErr = err;
+    } finally {
+      clearTimeout(timer);
     }
   }
 
