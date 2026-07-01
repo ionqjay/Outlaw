@@ -91,7 +91,7 @@ const MAX_REQUEST_AGE_MS = 24 * 60 * 60 * 1000; // 24h
 const ESCALATION_WAVE_2_MS = 90 * 60 * 1000; // 90m
 const ESCALATION_WAVE_3_MS = 180 * 60 * 1000; // 180m
 const ESCALATION_MIN_BIDS = 2;
-const CORS_ORIGINS = (process.env.CORS_ORIGINS || 'https://shopmyrepair.vercel.app,https://beta.shopmyrepair.com,https://shopmyrepair.com,http://localhost:3000')
+const CORS_ORIGINS = (process.env.CORS_ORIGINS || 'https://shopmyrepair.vercel.app,https://beta.shopmyrepair.com,https://shopmyrepair.com,https://shopmyrepair.onrender.com,http://localhost:3000')
   .split(',')
   .map(s => s.trim())
   .filter(Boolean);
@@ -103,6 +103,7 @@ function isAllowedOrigin(origin = '') {
     const u = new URL(origin);
     const host = u.hostname.toLowerCase();
     if (host.endsWith('.vercel.app')) return true; // allow Vercel preview deploys
+    if (host.endsWith('.onrender.com')) return true; // allow Render-hosted app/API aliases
     if (host === 'shopmyrepair.com' || host.endsWith('.shopmyrepair.com')) return true;
   } catch {}
   return false;

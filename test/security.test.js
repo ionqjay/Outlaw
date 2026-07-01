@@ -35,6 +35,34 @@ test('marketplace routes require authentication', async () => {
   });
 });
 
+test('Render-hosted origins can reach marketplace routes', async () => {
+  await withServer(async base => {
+    const origin = 'https://outlaw-ba9s.onrender.com';
+
+    const preflight = await fetch(`${base}/api/repairs`, {
+      method: 'OPTIONS',
+      headers: {
+        Origin: origin,
+        'Access-Control-Request-Method': 'POST',
+        'Access-Control-Request-Headers': 'authorization,content-type'
+      }
+    });
+    assert.equal(preflight.status, 204);
+    assert.equal(preflight.headers.get('access-control-allow-origin'), origin);
+
+    const repairs = await fetch(`${base}/api/repairs`, {
+      method: 'POST',
+      headers: {
+        Origin: origin,
+        'Content-Type': 'application/json'
+      },
+      body: '{}'
+    });
+    assert.equal(repairs.status, 401);
+    assert.equal(repairs.headers.get('access-control-allow-origin'), origin);
+  });
+});
+
 test('repair sanitizer strips owner contact metadata for providers', () => {
   const provider = { id: 'provider-1', email: 'provider@example.com', user_metadata: { role: 'mechanic' } };
   const repair = {
