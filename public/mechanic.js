@@ -375,8 +375,8 @@ async function boot() {
             <div class='small'>${rep.issue_category || ''} · ${rep.city || ''}, ${rep.state || ''} · ${rep.urgency || 'Standard'}</div>
             <div class='small'>${rep.vehicle_year || ''} ${rep.vehicle_make || ''} ${rep.vehicle_model || ''}</div>
             <div class='small'><b>Repair needed:</b> ${ownerMeta.cleanDetails || 'No description provided.'}</div>
-            ${locked ? "<div class='small'><b>Preview:</b> This is market activity preview. Unlock full lead access by invitation + active subscription.</div>" : `<div class='small'><b>Estimate window:</b> ${formatInviteCountdown(rep.invite_expires_at)}</div>`}
-            ${locked ? "<button class='btn btn-dark' data-view='profile' style='margin-top:10px'>Unlock Lead Access</button>" : `
+            ${locked ? "<div class='small'><b>Preview:</b> This shows market activity before subscription. Active subscribers see full details for leads matched by the dispatch algorithm.</div>" : `<div class='small'><b>Estimate window:</b> ${formatInviteCountdown(rep.invite_expires_at)}</div>`}
+            ${locked ? "<button class='btn btn-dark' data-view='profile' style='margin-top:10px'>Unlock Matched Lead System</button>" : `
             <div class='estimate-kpis'>
               <div class='kpi-pill'><div class='lbl'>Your estimate (USD)</div><input placeholder='e.g. 325' id='amount-${rep.id}' /></div>
               <div class='kpi-pill'><div class='lbl'>ETA (hours)</div><input placeholder='24' id='eta-${rep.id}' value='24' /></div>

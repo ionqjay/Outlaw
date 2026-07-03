@@ -988,7 +988,7 @@ async function listRepairRequests({ ownerId, status, providerEmail, providerType
           .map(r => ({ ...r, invite_expires_at: byRepair.get(Number(r.id))?.expires_at || null }))
         : [];
 
-      if (previewLeads) {
+      if (previewLeads && !canSeeInvitedFull) {
         const invitedIds = new Set(invitedRows.map(x => Number(x.id)));
         const previewRows = rows
           .filter(r => String(r.status || '').toLowerCase() === 'open')
@@ -1029,7 +1029,7 @@ async function listRepairRequests({ ownerId, status, providerEmail, providerType
         .map(x => ({ ...x, invite_expires_at: byRepair.get(Number(x.id))?.expires_at || null }))
       : [];
 
-    if (previewLeads) {
+    if (previewLeads && !canSeeInvitedFull) {
       const invitedIds = new Set(invitedRows.map(x => Number(x.id)));
       const previewRows = data
         .filter(x => String(x.status || '').toLowerCase() === 'open')
