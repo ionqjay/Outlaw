@@ -1,12 +1,15 @@
 const configuredApiBase = (window.APP_CONFIG?.API_BASE || '').trim().replace(/\/$/, '');
+const sameOriginApiBase = /^(localhost|127\.0\.0\.1)$|\.onrender\.com$/i.test(location.hostname)
+  ? location.origin
+  : '';
 
 const API_BASES = [
   configuredApiBase,
-  location.origin,
+  sameOriginApiBase,
   'https://outlaw-ba9s.onrender.com'
 ].filter(Boolean).filter((v, i, a) => a.indexOf(v) === i);
 
-let workingApiBase = configuredApiBase || location.origin;
+let workingApiBase = configuredApiBase || sameOriginApiBase || 'https://outlaw-ba9s.onrender.com';
 let billingState = { canSubmitEstimates: false, hasStripeCustomer: false, status: 'none' };
 
 function api(base, path) {
