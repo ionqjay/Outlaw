@@ -7,7 +7,7 @@ const API_BASES = [
 ].filter(Boolean).filter((v, i, a) => a.indexOf(v) === i);
 
 let workingApiBase = configuredApiBase || location.origin;
-let billingState = { canSubmitEstimates: false, status: 'none' };
+let billingState = { canSubmitEstimates: false, hasStripeCustomer: false, status: 'none' };
 
 function api(base, path) {
   return `${base}${path}`;
@@ -76,6 +76,30 @@ function setInlineAlert(message = '') {
   }
   box.textContent = msg;
   box.classList.add('show');
+}
+
+function setBillingNotice(message = '', type = 'err') {
+  const box = document.getElementById('billingNotice');
+  if (!box) return;
+  const msg = String(message || '').trim();
+  if (!msg) {
+    box.textContent = '';
+    box.classList.remove('show', 'ok', 'err');
+    return;
+  }
+  box.textContent = msg;
+  box.classList.add('show');
+  box.classList.toggle('ok', type === 'ok');
+  box.classList.toggle('err', type === 'err');
+}
+
+function updateBillingButtons() {
+  const manageBtn = document.getElementById('manageBillingBtn');
+  if (!manageBtn) return;
+  manageBtn.disabled = !billingState.hasStripeCustomer;
+  manageBtn.title = billingState.hasStripeCustomer
+    ? 'Open Stripe billing portal'
+    : 'Start a subscription first to create billing portal access';
 }
 
 function parseOwnerMeta(issueDetailsRaw) {
@@ -178,8 +202,14 @@ async function boot() {
   document.getElementById('manageBillingBtn')?.addEventListener('click', openBillingPortal);
 
   const billingParam = new URLSearchParams(window.location.search).get('billing');
-  if (billingParam === 'success') setStatus('Subscription checkout completed. Refreshing billing status...', 'ok');
-  if (billingParam === 'cancel') setStatus('Checkout canceled. You can start subscription anytime.', 'err');
+  if (billingParam === 'success') {
+    setView('profile');
+    setStatus('Subscription checkout completed. Refreshing billing status...', 'ok');
+  }
+  if (billingParam === 'cancel') {
+    setView('profile');
+    setStatus('Checkout canceled. You can start subscription anytime.', 'err');
+  }
 
   const providerType = getProviderType(session.role);
   const providerTypeLabel = getProviderTypeLabel(session.role);
@@ -206,18 +236,27 @@ async function boot() {
 
   async function refreshBillingStatus() {
     const el = document.getElementById('billingStatus');
+    setBillingNotice('');
     if (el) el.textContent = 'Checking subscription status...';
     try {
       const data = await fetchJson(`/api/billing/status?userId=${encodeURIComponent(session.id)}`);
       billingState = {
         canSubmitEstimates: !!data.canSubmitEstimates,
+        hasStripeCustomer: !!data.hasStripeCustomer,
         status: String(data.status || 'none')
       };
+      updateBillingButtons();
       if (el) {
         if (billingState.canSubmitEstimates) {
           el.textContent = `Subscription active (${billingState.status}). You can submit estimates.`;
           el.classList.remove('err');
           el.classList.add('ok');
+          if (billingParam === 'success') setBillingNotice('Subscription complete. Estimate access is unlocked.', 'ok');
+        } else if (billingState.hasStripeCustomer && billingParam === 'success') {
+          el.textContent = 'Subscription checkout completed. Waiting for Stripe confirmation to unlock estimates.';
+          el.classList.remove('ok');
+          el.classList.add('err');
+          setBillingNotice('Payment returned successfully, but Stripe has not confirmed the subscription yet. Refresh in a moment; if this stays locked, check the Stripe webhook delivery.', 'err');
         } else {
           el.textContent = 'No active subscription yet. Start the $99/month package to unlock estimate submissions.';
           el.classList.remove('ok');
@@ -225,6 +264,7 @@ async function boot() {
         }
       }
     } catch (err) {
+      updateBillingButtons();
       if (el) {
         el.textContent = err.message || 'Could not load billing status.';
         el.classList.remove('ok');
@@ -245,6 +285,7 @@ async function boot() {
       if (!data?.url) throw new Error('Checkout URL missing.');
       window.location.href = data.url;
     } catch (err) {
+      setBillingNotice(err.message || 'Could not start Stripe checkout.', 'err');
       setStatus(err.message || 'Could not start Stripe checkout.', 'err');
     } finally {
       if (btn) { btn.disabled = false; btn.textContent = 'Start $99 Subscription'; }
@@ -252,6 +293,10 @@ async function boot() {
   }
 
   async function openBillingPortal() {
+    if (!billingState.hasStripeCustomer) {
+      setBillingNotice('Start a subscription first. The billing portal is available after Stripe creates your customer account.', 'err');
+      return;
+    }
     const btn = document.getElementById('manageBillingBtn');
     if (btn) { btn.disabled = true; btn.textContent = 'Opening...'; }
     try {
@@ -263,9 +308,11 @@ async function boot() {
       if (!data?.url) throw new Error('Portal URL missing.');
       window.location.href = data.url;
     } catch (err) {
+      setBillingNotice(err.message || 'Could not open billing portal.', 'err');
       setStatus(err.message || 'Could not open billing portal.', 'err');
     } finally {
       if (btn) { btn.disabled = false; btn.textContent = 'Manage Billing'; }
+      updateBillingButtons();
     }
   }
 

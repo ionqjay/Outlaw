@@ -134,6 +134,63 @@ test('repair submission client request id is idempotent', async () => {
   });
 });
 
+test('mechanic billing status reports portal availability', async () => {
+  const billingAccountsPath = new URL('../billing_accounts.json', import.meta.url);
+
+  await preservingJsonFiles([billingAccountsPath], async () => {
+    await withServer(async base => {
+      const res = await fetch(`${base}/api/billing/status`, {
+        headers: {
+          'x-dev-user-id': 'mechanic-no-billing-1',
+          'x-dev-user-email': 'mechanic@example.com',
+          'x-dev-user-role': 'mechanic'
+        }
+      });
+
+      assert.equal(res.status, 200);
+      const data = await res.json();
+      assert.equal(data.ok, true);
+      assert.equal(data.hasSubscription, false);
+      assert.equal(data.hasStripeCustomer, false);
+      assert.equal(data.canSubmitEstimates, false);
+    });
+  });
+});
+
+test('mechanic billing status allows active billing access', async () => {
+  const billingAccountsPath = new URL('../billing_accounts.json', import.meta.url);
+
+  await preservingJsonFiles([billingAccountsPath], async () => {
+    fs.writeFileSync(billingAccountsPath, JSON.stringify([
+      {
+        user_id: 'mechanic-active-billing-1',
+        email: 'mechanic-active@example.com',
+        role: 'mechanic',
+        stripe_customer_id: 'cus_test_active',
+        stripe_subscription_id: 'sub_test_active',
+        subscription_status: 'active'
+      }
+    ], null, 2));
+
+    await withServer(async base => {
+      const res = await fetch(`${base}/api/billing/status`, {
+        headers: {
+          'x-dev-user-id': 'mechanic-active-billing-1',
+          'x-dev-user-email': 'mechanic-active@example.com',
+          'x-dev-user-role': 'mechanic'
+        }
+      });
+
+      assert.equal(res.status, 200);
+      const data = await res.json();
+      assert.equal(data.ok, true);
+      assert.equal(data.hasStripeCustomer, true);
+      assert.equal(data.status, 'active');
+      assert.equal(data.canSubmitEstimates, true);
+    });
+  });
+});
+
 test('repair sanitizer strips owner contact metadata for providers', () => {
   const provider = { id: 'provider-1', email: 'provider@example.com', user_metadata: { role: 'mechanic' } };
   const repair = {

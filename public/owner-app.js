@@ -778,7 +778,6 @@ async function boot() {
     const ownerMeta = `[OWNER_META]${JSON.stringify({ ownerEmail, ownerPhone })}[/OWNER_META]`;
 
     const payload = {
-      ownerId: session.id,
       title: document.getElementById('title').value.trim(),
       issueCategory: document.getElementById('issueCategory').value,
       issueDetails: `${ownerMeta} [Parts preference: ${partsLabel}] ${document.getElementById('issueDetails').value.trim()}`,

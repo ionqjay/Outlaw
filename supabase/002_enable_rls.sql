@@ -11,6 +11,7 @@ as $$
 $$;
 
 alter table public.billing_accounts
+  add column if not exists stripe_checkout_session_id text,
   add column if not exists manual_access_override text check (manual_access_override in ('active','disabled') or manual_access_override is null),
   add column if not exists manual_access_reason text;
 

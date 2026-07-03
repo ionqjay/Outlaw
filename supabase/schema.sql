@@ -103,6 +103,7 @@ create table if not exists public.billing_accounts (
   email text,
   role text,
   stripe_customer_id text,
+  stripe_checkout_session_id text,
   stripe_subscription_id text,
   subscription_status text,
   current_period_end timestamptz,

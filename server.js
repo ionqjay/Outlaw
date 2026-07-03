@@ -223,6 +223,45 @@ async function updateBillingBySubscriptionId(subscriptionId, patch = {}) {
   return upsertBillingByUserIdAsync(billing.user_id, patch);
 }
 
+async function syncBillingFromStripe(billing) {
+  if (!stripe || !billing?.user_id) return billing || null;
+
+  let subscriptionId = String(billing.stripe_subscription_id || '').trim();
+  let patch = {};
+
+  const checkoutSessionId = String(billing.stripe_checkout_session_id || '').trim();
+  if (!subscriptionId && checkoutSessionId) {
+    try {
+      const checkout = await stripe.checkout.sessions.retrieve(checkoutSessionId);
+      if (checkout?.customer && !billing.stripe_customer_id) patch.stripe_customer_id = checkout.customer;
+      if (checkout?.subscription) {
+        subscriptionId = String(checkout.subscription);
+        patch.stripe_subscription_id = subscriptionId;
+      }
+      if (checkout?.payment_status === 'paid' && !subscriptionId) {
+        patch.subscription_status = 'active';
+      }
+    } catch {}
+  }
+
+  if (subscriptionId) {
+    try {
+      const sub = await stripe.subscriptions.retrieve(subscriptionId);
+      patch = {
+        ...patch,
+        stripe_subscription_id: sub.id,
+        stripe_customer_id: sub.customer || patch.stripe_customer_id || billing.stripe_customer_id || '',
+        subscription_status: String(sub.status || ''),
+        current_period_end: sub.current_period_end ? new Date(Number(sub.current_period_end) * 1000).toISOString() : null,
+        cancel_at_period_end: !!sub.cancel_at_period_end
+      };
+    } catch {}
+  }
+
+  if (!Object.keys(patch).length) return billing;
+  return upsertBillingByUserIdAsync(billing.user_id, patch);
+}
+
 function isSubscriptionActive(status) {
   return ['active', 'trialing', 'past_due'].includes(String(status || '').toLowerCase());
 }
@@ -273,6 +312,14 @@ function resolvePriceForRole(role) {
   const normalized = String(role || '').toLowerCase();
   if (normalized === 'shop') return STRIPE_PRICE_SHOP_MONTHLY || STRIPE_PRICE_MECHANIC_MONTHLY;
   return STRIPE_PRICE_MECHANIC_MONTHLY || STRIPE_PRICE_SHOP_MONTHLY;
+}
+
+function stripePriceConfigError(price) {
+  const value = String(price || '').trim();
+  if (!value) return 'No Stripe price is configured for this package.';
+  if (value.startsWith('prod_')) return 'Stripe price misconfigured: use the recurring price ID that starts with price_, not the product ID that starts with prod_.';
+  if (!value.startsWith('price_')) return 'Stripe price misconfigured: expected a Stripe price ID that starts with price_.';
+  return '';
 }
 
 async function supabaseRequest(pathname, { method = 'GET', body } = {}) {
@@ -1784,11 +1831,13 @@ app.get('/api/billing/status', async (req, res) => {
   const userId = String(user.id || '').trim();
   if (!userId) return res.status(400).json({ error: 'userId is required.' });
 
-  const billing = await getBillingByUserIdAsync(userId);
+  let billing = await getBillingByUserIdAsync(userId);
+  billing = await syncBillingFromStripe(billing);
   if (!billing) {
     return res.json({
       ok: true,
       hasSubscription: false,
+      hasStripeCustomer: false,
       status: 'none',
       canSubmitEstimates: false,
       amountLabel: '$99/month',
@@ -1800,6 +1849,7 @@ app.get('/api/billing/status', async (req, res) => {
   return res.json({
     ok: true,
     hasSubscription: true,
+    hasStripeCustomer: !!billing.stripe_customer_id,
     status,
     manualAccessOverride: billing.manual_access_override || null,
     canSubmitEstimates: canSubmitEstimatesFromBilling(billing),
@@ -1820,7 +1870,8 @@ app.post('/api/billing/create-checkout-session', async (req, res) => {
 
   const role = roleForUser(user);
   const price = resolvePriceForRole(role);
-  if (!price) return res.status(500).json({ error: 'No Stripe price is configured for this package.' });
+  const priceConfigError = stripePriceConfigError(price);
+  if (priceConfigError) return res.status(500).json({ error: priceConfigError });
 
   try {
     const existing = await getBillingByUserIdAsync(userId);
