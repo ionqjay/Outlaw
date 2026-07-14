@@ -483,7 +483,7 @@ function sanitizeBidForUser(bid, user, { includeProviderContact = false } = {}) 
   const out = {
     id: bid?.id,
     request_id: bid?.request_id,
-    mechanic_id: String(bid?.mechanic_id || '') === String(user?.id || '') ? bid?.mechanic_id : undefined,
+    mechanic_id: includeProviderContact || String(bid?.mechanic_id || '') === String(user?.id || '') ? bid?.mechanic_id : undefined,
     mechanic_name: bid?.mechanic_name,
     amount: bid?.amount,
     eta_hours: bid?.eta_hours,

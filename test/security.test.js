@@ -233,6 +233,7 @@ test('bid sanitizer strips provider private metadata unless explicitly allowed',
   assert.equal(JSON.stringify(publicOut).includes('5559990000'), false);
 
   const authorizedOut = sanitizeBidForUser(bid, owner, { includeProviderContact: true });
+  assert.equal(authorizedOut.mechanic_id, 'provider-1');
   assert.equal(authorizedOut.provider.businessEmail, 'shop@example.com');
   assert.equal(authorizedOut.provider.businessPhone, '5559990000');
 });

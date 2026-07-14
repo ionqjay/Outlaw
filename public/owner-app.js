@@ -399,7 +399,7 @@ function renderBids() {
   const cards = bids.map(b => {
     const status = String(b.status || 'open').toLowerCase();
     const parsed = parseBidNotes(b.notes);
-    const meta = parsed.meta || {};
+    const meta = { ...(b.provider || {}), ...(parsed.meta || {}) };
     const r = getMechanicRating(b.mechanic_id);
     const rating = r.avg ? `${r.avg}/5` : 'New';
     const reviewCount = `${r.count} review${r.count === 1 ? '' : 's'}`;
@@ -444,7 +444,7 @@ function renderBids() {
   }).join('');
 
   const acceptedParsed = accepted ? parseBidNotes(accepted.notes) : null;
-  const acceptedMeta = acceptedParsed?.meta || {};
+  const acceptedMeta = { ...(accepted?.provider || {}), ...(acceptedParsed?.meta || {}) };
   const acceptedRating = accepted ? getMechanicRating(accepted.mechanic_id) : { avg: null, count: 0 };
   const existingFeedback = accepted ? getFeedbackForRequest(selected.id) : null;
   const acceptedProviderType = String(acceptedMeta.providerType || '').toLowerCase() === 'shop' ? 'shop' : 'mechanic';
