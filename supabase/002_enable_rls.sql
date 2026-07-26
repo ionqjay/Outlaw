@@ -15,12 +15,34 @@ alter table public.billing_accounts
   add column if not exists manual_access_override text check (manual_access_override in ('active','disabled') or manual_access_override is null),
   add column if not exists manual_access_reason text;
 
+create table if not exists public.request_invites (
+  id bigint generated always as identity primary key,
+  repair_id bigint not null references public.repair_requests(id) on delete cascade,
+  provider_email text not null,
+  provider_type text not null check (provider_type in ('mechanic','shop')),
+  status text not null default 'pending' check (status in ('pending','submitted','expired')),
+  created_at timestamptz not null default now(),
+  expires_at timestamptz,
+  submitted_at timestamptz,
+  expired_at timestamptz,
+  replaced_from text,
+  escalation_wave int,
+  auto_backfill boolean default false
+);
+
+create index if not exists idx_request_invites_repair_id on public.request_invites(repair_id);
+create index if not exists idx_request_invites_provider on public.request_invites(provider_email, provider_type);
+create index if not exists idx_request_invites_status on public.request_invites(status);
+create unique index if not exists idx_request_invites_unique_provider
+  on public.request_invites(repair_id, provider_email, provider_type);
+
 alter table public.signups enable row level security;
 alter table public.owner_requests enable row level security;
 alter table public.repair_requests enable row level security;
 alter table public.bids enable row level security;
 alter table public.feedbacks enable row level security;
 alter table public.billing_accounts enable row level security;
+alter table public.request_invites enable row level security;
 
 drop policy if exists "admins manage signups" on public.signups;
 create policy "admins manage signups"
@@ -150,6 +172,36 @@ create policy "users read own billing account"
 drop policy if exists "admins manage billing accounts" on public.billing_accounts;
 create policy "admins manage billing accounts"
   on public.billing_accounts
+  for all
+  using (public.is_admin())
+  with check (public.is_admin());
+
+drop policy if exists "providers read own invites" on public.request_invites;
+create policy "providers read own invites"
+  on public.request_invites
+  for select
+  using (
+    lower(provider_email) = lower(coalesce(auth.jwt() ->> 'email', ''))
+    or public.is_admin()
+  );
+
+drop policy if exists "owners read invites on own repairs" on public.request_invites;
+create policy "owners read invites on own repairs"
+  on public.request_invites
+  for select
+  using (
+    public.is_admin()
+    or exists (
+      select 1
+      from public.repair_requests rr
+      where rr.id = request_invites.repair_id
+        and rr.owner_id = auth.uid()::text
+    )
+  );
+
+drop policy if exists "admins manage request invites" on public.request_invites;
+create policy "admins manage request invites"
+  on public.request_invites
   for all
   using (public.is_admin())
   with check (public.is_admin());

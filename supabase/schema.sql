@@ -116,6 +116,27 @@ create table if not exists public.billing_accounts (
 
 create index if not exists idx_billing_accounts_subscription_status on public.billing_accounts(subscription_status);
 
+create table if not exists public.request_invites (
+  id bigint generated always as identity primary key,
+  repair_id bigint not null references public.repair_requests(id) on delete cascade,
+  provider_email text not null,
+  provider_type text not null check (provider_type in ('mechanic','shop')),
+  status text not null default 'pending' check (status in ('pending','submitted','expired')),
+  created_at timestamptz not null default now(),
+  expires_at timestamptz,
+  submitted_at timestamptz,
+  expired_at timestamptz,
+  replaced_from text,
+  escalation_wave int,
+  auto_backfill boolean default false
+);
+
+create index if not exists idx_request_invites_repair_id on public.request_invites(repair_id);
+create index if not exists idx_request_invites_provider on public.request_invites(provider_email, provider_type);
+create index if not exists idx_request_invites_status on public.request_invites(status);
+create unique index if not exists idx_request_invites_unique_provider
+  on public.request_invites(repair_id, provider_email, provider_type);
+
 -- Production installs should apply 002_enable_rls.sql immediately after this baseline.
 alter table public.signups enable row level security;
 alter table public.owner_requests enable row level security;
@@ -123,3 +144,4 @@ alter table public.repair_requests enable row level security;
 alter table public.bids enable row level security;
 alter table public.feedbacks enable row level security;
 alter table public.billing_accounts enable row level security;
+alter table public.request_invites enable row level security;

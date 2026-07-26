@@ -685,6 +685,85 @@ function writeInvites(rows) {
   writeJson(REQUEST_INVITES_PATH, rows);
 }
 
+async function listInvites({ repairId, providerEmail, providerType, status } = {}) {
+  if (USE_SUPABASE) {
+    try {
+      const q = ['select=*', 'order=created_at.desc'];
+      if (repairId) q.push(`repair_id=eq.${encodeURIComponent(repairId)}`);
+      if (providerEmail) q.push(`provider_email=eq.${encodeURIComponent(String(providerEmail).toLowerCase())}`);
+      if (providerType) q.push(`provider_type=eq.${encodeURIComponent(normalizeProviderType(providerType))}`);
+      if (status) q.push(`status=eq.${encodeURIComponent(status)}`);
+      return await supabaseRequest(`request_invites?${q.join('&')}`);
+    } catch {}
+  }
+  let rows = readInvites();
+  if (repairId) rows = rows.filter(i => Number(i.repair_id) === Number(repairId));
+  if (providerEmail) rows = rows.filter(i => String(i.provider_email || '').toLowerCase() === String(providerEmail).toLowerCase());
+  if (providerType) rows = rows.filter(i => normalizeProviderType(i.provider_type) === normalizeProviderType(providerType));
+  if (status) rows = rows.filter(i => String(i.status || '').toLowerCase() === String(status).toLowerCase());
+  return rows;
+}
+
+async function replaceInvitesForRepair(repairId, additions = []) {
+  if (USE_SUPABASE) {
+    try {
+      await supabaseRequest(`request_invites?repair_id=eq.${encodeURIComponent(repairId)}`, { method: 'DELETE' });
+      if (!additions.length) return [];
+      return await supabaseRequest('request_invites', { method: 'POST', body: additions });
+    } catch {}
+  }
+  const rows = readInvites();
+  const next = [...rows.filter(r => Number(r.repair_id) !== Number(repairId)), ...additions];
+  writeInvites(next);
+  return additions;
+}
+
+async function appendInvites(additions = []) {
+  if (!Array.isArray(additions) || !additions.length) return [];
+  if (USE_SUPABASE) {
+    try {
+      return await supabaseRequest('request_invites', { method: 'POST', body: additions });
+    } catch {}
+  }
+  const rows = readInvites();
+  writeInvites([...rows, ...additions]);
+  return additions;
+}
+
+async function updateInvite(invite, patch = {}) {
+  if (!invite) return null;
+  if (USE_SUPABASE && invite.id) {
+    try {
+      await supabaseRequest(`request_invites?id=eq.${encodeURIComponent(invite.id)}`, { method: 'PATCH', body: patch });
+      const rows = await listInvites({ repairId: invite.repair_id });
+      return rows.find(i => Number(i.id) === Number(invite.id)) || null;
+    } catch {}
+  }
+  const rows = readInvites();
+  const idx = rows.findIndex(i => (
+    Number(i.repair_id) === Number(invite.repair_id)
+    && String(i.provider_email || '').toLowerCase() === String(invite.provider_email || '').toLowerCase()
+    && normalizeProviderType(i.provider_type) === normalizeProviderType(invite.provider_type)
+    && String(i.created_at || '') === String(invite.created_at || '')
+  ));
+  if (idx >= 0) {
+    rows[idx] = { ...rows[idx], ...patch };
+    writeInvites(rows);
+    return rows[idx];
+  }
+  return null;
+}
+
+async function removeInvitesForRepair(repairId) {
+  if (USE_SUPABASE) {
+    try {
+      await supabaseRequest(`request_invites?repair_id=eq.${encodeURIComponent(repairId)}`, { method: 'DELETE' });
+      return;
+    } catch {}
+  }
+  writeInvites(readInvites().filter(i => Number(i.repair_id) !== Number(repairId)));
+}
+
 async function listProviderPool() {
   const providers = [];
 
@@ -761,11 +840,11 @@ async function createDispatchSnapshot(repair) {
     }
   }
 
-  const rows = readInvites();
+  const repairId = Number(repair.id || repair.Id);
   const now = Date.now();
   const windowMs = getInviteWindowMs(repair?.urgency);
   const additions = invited.map(p => ({
-    repair_id: Number(repair.id || repair.Id),
+    repair_id: repairId,
     provider_email: p.email,
     provider_type: p.providerType,
     status: 'pending',
@@ -773,15 +852,14 @@ async function createDispatchSnapshot(repair) {
     expires_at: new Date(now + windowMs).toISOString(),
     submitted_at: null
   }));
-  writeInvites([...rows.filter(r => Number(r.repair_id) !== Number(repair.id || repair.Id)), ...additions]);
+  await replaceInvitesForRepair(repairId, additions);
 }
 
 async function processInviteExpirations(repairs = []) {
   if (!Array.isArray(repairs) || !repairs.length) return;
-  const rows = readInvites();
+  const rows = await listInvites();
   const pool = await listProviderPool();
   const now = Date.now();
-  let changed = false;
 
   for (const repair of repairs) {
     const repairId = Number(repair.id || repair.Id);
@@ -794,9 +872,9 @@ async function processInviteExpirations(repairs = []) {
       const exp = new Date(inv.expires_at || 0).getTime();
       if (!Number.isFinite(exp) || exp > now) continue;
 
-      inv.status = 'expired';
-      inv.expired_at = new Date(now).toISOString();
-      changed = true;
+      const expiredPatch = { status: 'expired', expired_at: new Date(now).toISOString() };
+      Object.assign(inv, expiredPatch);
+      await updateInvite(inv, expiredPatch);
 
       if (requestIsExpiredForNewInvites(repair)) continue;
 
@@ -806,7 +884,7 @@ async function processInviteExpirations(repairs = []) {
       if (!next) continue;
 
       const windowMs = getInviteWindowMs(repair?.urgency);
-      rows.push({
+      const addition = {
         repair_id: repairId,
         provider_email: next.email,
         provider_type: next.providerType,
@@ -815,21 +893,20 @@ async function processInviteExpirations(repairs = []) {
         expires_at: new Date(now + windowMs).toISOString(),
         submitted_at: null,
         replaced_from: String(inv.provider_email || '').toLowerCase()
-      });
-      changed = true;
+      };
+      rows.push(addition);
+      await appendInvites([addition]);
     }
   }
-
-  if (changed) writeInvites(rows);
 }
 
 async function processInviteEscalations(repairs = []) {
   if (!Array.isArray(repairs) || !repairs.length) return;
 
-  const rows = readInvites();
+  const rows = await listInvites();
   const pool = await listProviderPool();
   const now = Date.now();
-  let changed = false;
+  const additions = [];
 
   async function addWave(repair, wave, additionalCount) {
     const repairId = Number(repair?.id || repair?.Id);
@@ -852,7 +929,7 @@ async function processInviteEscalations(repairs = []) {
     const picks = eligible.slice(0, additionalCount);
     const windowMs = getInviteWindowMs(repair?.urgency);
     for (const p of picks) {
-      rows.push({
+      const addition = {
         repair_id: repairId,
         provider_email: p.email,
         provider_type: p.providerType,
@@ -861,8 +938,9 @@ async function processInviteEscalations(repairs = []) {
         expires_at: new Date(now + windowMs).toISOString(),
         submitted_at: null,
         escalation_wave: wave
-      });
-      changed = true;
+      };
+      rows.push(addition);
+      additions.push(addition);
     }
   }
 
@@ -891,7 +969,7 @@ async function processInviteEscalations(repairs = []) {
     }
   }
 
-  if (changed) writeInvites(rows);
+  await appendInvites(additions);
 }
 
 async function ensureProviderInvitesForOpenRequests(providerEmail, repairs = [], providerTypeHint = 'mechanic', providerServicesHint = '') {
@@ -904,9 +982,9 @@ async function ensureProviderInvitesForOpenRequests(providerEmail, repairs = [],
 
   if (!providerEligibleForInvites(provider)) return;
 
-  const rows = readInvites();
+  const rows = await listInvites();
   const now = Date.now();
-  let changed = false;
+  const additions = [];
 
   for (const repair of repairs) {
     const repairId = Number(repair?.id || repair?.Id);
@@ -923,7 +1001,7 @@ async function ensureProviderInvitesForOpenRequests(providerEmail, repairs = [],
     if (alreadyInvited) continue;
 
     const windowMs = getInviteWindowMs(repair?.urgency);
-    rows.push({
+    const addition = {
       repair_id: repairId,
       provider_email: email,
       provider_type: provider.providerType,
@@ -932,17 +1010,18 @@ async function ensureProviderInvitesForOpenRequests(providerEmail, repairs = [],
       expires_at: new Date(now + windowMs).toISOString(),
       submitted_at: null,
       auto_backfill: true
-    });
-    changed = true;
+    };
+    rows.push(addition);
+    additions.push(addition);
   }
 
-  if (changed) writeInvites(rows);
+  await appendInvites(additions);
 }
 
 async function attachOwnerDispatchSummary(rows = []) {
   if (!Array.isArray(rows) || !rows.length) return rows;
 
-  const invites = readInvites();
+  const invites = await listInvites();
   const byRepair = new Map();
   for (const inv of invites) {
     const rid = Number(inv.repair_id);
@@ -988,7 +1067,7 @@ async function listRepairRequests({ ownerId, status, providerEmail, providerType
       const provider = pool.find(p => String(p.email || '').toLowerCase() === String(providerEmail).toLowerCase());
       const canSeeInvitedFull = providerEligibleForInvites(provider);
       const now = Date.now();
-      const invites = readInvites();
+      const invites = await listInvites({ providerEmail });
       const activeInvites = invites
         .filter(i => String(i.provider_email) === String(providerEmail).toLowerCase())
         .filter(i => String(i.status || 'pending') === 'pending')
@@ -1029,7 +1108,7 @@ async function listRepairRequests({ ownerId, status, providerEmail, providerType
     const provider = pool.find(p => String(p.email || '').toLowerCase() === String(providerEmail).toLowerCase());
     const canSeeInvitedFull = providerEligibleForInvites(provider);
     const now = Date.now();
-    const invites = readInvites();
+    const invites = await listInvites({ providerEmail });
     const activeInvites = invites
       .filter(i => String(i.provider_email) === String(providerEmail).toLowerCase())
       .filter(i => String(i.status || 'pending') === 'pending')
@@ -1640,8 +1719,7 @@ app.post('/api/bids', async (req, res) => {
       return res.status(400).json({ error: 'You already submitted an estimate for this request.' });
     }
 
-    const inviteRows = readInvites();
-    const invites = inviteRows.filter(i => Number(i.repair_id) === Number(requestId));
+    const invites = await listInvites({ repairId: Number(requestId) });
     let matchedInvite = null;
     if (invites.length && providerEmail) {
       matchedInvite = invites.find(i => String(i.provider_email) === providerEmail && normalizeProviderType(i.provider_type) === providerType);
@@ -1690,16 +1768,9 @@ app.post('/api/bids', async (req, res) => {
     });
 
     if (providerEmail) {
-      const rows = readInvites();
-      const idx = rows.findIndex(i => Number(i.repair_id) === Number(requestId) && String(i.provider_email) === providerEmail && normalizeProviderType(i.provider_type) === providerType && String(i.status || 'pending') === 'pending');
-      if (idx >= 0) {
-        rows[idx] = {
-          ...rows[idx],
-          status: 'submitted',
-          submitted_at: new Date().toISOString()
-        };
-        writeInvites(rows);
-      }
+      const rows = await listInvites({ repairId: Number(requestId), providerEmail, providerType, status: 'pending' });
+      const matched = rows[0] || null;
+      if (matched) await updateInvite(matched, { status: 'submitted', submitted_at: new Date().toISOString() });
     }
 
     res.json({ ok: true, bid: sanitizeBidForUser(created, user, { includeProviderContact: true }) });
@@ -1971,7 +2042,7 @@ app.get('/api/admin/repairs', async (req, res) => {
   try {
     const status = req.query.status ? String(req.query.status).toLowerCase() : 'open';
     const repairs = await listRepairRequests({ status });
-    const invites = readInvites();
+    const invites = await listInvites();
 
     const rows = await Promise.all((repairs || []).map(async (r) => {
       const rid = Number(r.id || r.Id);
@@ -2021,7 +2092,7 @@ app.post('/api/admin/repairs/:id/remove', async (req, res) => {
       writeJson(FEEDBACKS_PATH, readJson(FEEDBACKS_PATH, []).filter(f => Number(f.request_id) !== repairId));
     }
 
-    writeInvites(readInvites().filter(i => Number(i.repair_id) !== repairId));
+    await removeInvitesForRepair(repairId);
     res.json({ ok: true, removedRepairId: repairId });
   } catch (e) {
     res.status(500).json({ error: 'Could not remove repair.', detail: String(e?.message || e) });
@@ -2243,7 +2314,7 @@ app.get('/api/admin/ops', async (req, res) => {
   try {
     const repairs = await listRepairRequests({});
     const bids = await listBids({});
-    const invites = readInvites();
+    const invites = await listInvites();
     const openRepairs = repairs.filter(r => String(r.status || '').toLowerCase() === 'open').length;
     const acceptedRepairs = repairs.filter(r => String(r.status || '').toLowerCase() === 'accepted').length;
     const avgBidsPerOpen = openRepairs ? (bids.filter(b => String(b.status || '').toLowerCase() === 'open').length / openRepairs) : 0;

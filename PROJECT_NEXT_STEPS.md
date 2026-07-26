@@ -29,8 +29,8 @@ Goal: move database from service-role-only trust to defense-in-depth policies.
 
 ### Required steps
 - [ ] Run `supabase/schema.sql` for new installs, if needed
-- [ ] Run `supabase/002_enable_rls.sql`
-- [ ] Confirm RLS is enabled on core tables
+- [ ] Run updated `supabase/002_enable_rls.sql` on hosted Supabase to add `request_invites`
+- [ ] Confirm RLS is enabled on core tables, including `request_invites`
 - [ ] Set admin users with Supabase JWT metadata role `admin`
 - [ ] Confirm service-role key is only present in Render, never browser config
 
@@ -90,7 +90,7 @@ Goal: prevent provider invite dead-ends and support churn.
 - [ ] Timezone display remains user-friendly while server uses ISO timestamps
 
 ### Current risk
-- Provider dispatch invites are still stored in `request_invites.json`. This is acceptable for beta smoke testing, but should move to Supabase before serious traffic because file-backed state can reset across deploys/restarts and is not ideal for multi-instance scaling.
+- Provider dispatch invite code is now Supabase-ready with JSON fallback for local dev. Hosted Supabase still needs the updated `002_enable_rls.sql` applied before production can use the `request_invites` table.
 
 ---
 
@@ -111,4 +111,4 @@ Goal: keep commits reviewable and avoid accidental noise.
 1. Confirm Supabase RLS migration is applied in hosted Supabase
 2. Run live Stripe test checkout with Jay-approved test payment flow
 3. Use admin token to verify admin billing/accounts UI and manual access override live
-4. Move `request_invites.json` state into Supabase before broader beta traffic
+4. Confirm hosted `request_invites` table exists, then run admin/provider live invite smoke checks
