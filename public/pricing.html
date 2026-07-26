@@ -12,27 +12,29 @@
   <style>
     :root{--bg:#0b0f18;--card:#111827;--card2:#0f172a;--stroke:#2b3a56;--text:#eef3ff;--muted:#a7b4cf;--orange:#ff7a45;--green:#22c55e;--blue:#60a5fa}
     body{font-family:Inter,Segoe UI,Arial,sans-serif;background:radial-gradient(1100px 360px at 0 -20%,rgba(255,122,69,.18),transparent 62%),radial-gradient(1000px 360px at 100% -10%,rgba(96,165,250,.14),transparent 60%),var(--bg);color:var(--text)}
-    .wrap{max-width:1040px;margin:22px auto 48px;padding:0 16px}
+    .wrap{max-width:1040px;margin:22px auto 48px;padding:0 16px;overflow:hidden}
     .hero{background:linear-gradient(180deg,var(--card),var(--card2));border:1px solid var(--stroke);border-radius:18px;padding:24px}
     .eyebrow{display:inline-block;font-size:12px;color:#cfe2ff;border:1px solid #33507f;background:#0f1e36;padding:5px 9px;border-radius:999px}
     h1{margin:10px 0 8px;font-size:clamp(30px,5vw,50px);line-height:1.04}
     .sub{color:var(--muted);max-width:760px}
-    .grid{display:grid;grid-template-columns:1.1fr .9fr;gap:12px;margin-top:12px}
-    .card{background:linear-gradient(180deg,var(--card),var(--card2));border:1px solid var(--stroke);border-radius:16px;padding:18px}
-    .price{font-size:54px;font-weight:800;letter-spacing:-1px}.price small{font-size:16px;color:var(--muted);font-weight:600}
+    .grid{display:grid;grid-template-columns:minmax(0,1.1fr) minmax(0,.9fr);gap:12px;margin-top:12px}
+    .grid>*{min-width:0}
+    .card{background:linear-gradient(180deg,var(--card),var(--card2));border:1px solid var(--stroke);border-radius:16px;padding:18px;min-width:0;overflow-wrap:anywhere}
+    .price{font-size:54px;font-weight:800;letter-spacing:0}.price small{font-size:16px;color:var(--muted);font-weight:600}
     .muted{color:var(--muted)}
     ul{margin:10px 0 0 18px}.li{margin:6px 0}
     .ok{color:#bbf7d0}.warn{color:#fde68a}.bad{color:#fecaca}
     .sectionTitle{font-size:20px;margin-bottom:8px}
-    .table-wrap{overflow-x:auto;-webkit-overflow-scrolling:touch}
+    .table-wrap{max-width:100%;overflow-x:auto;-webkit-overflow-scrolling:touch}
     .table{width:100%;border-collapse:collapse;margin-top:8px;min-width:620px}
     .table th,.table td{border-bottom:1px solid #23314c;padding:9px;text-align:left;font-size:13px}
     .table th{color:#cde0ff}
     .cta{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px}
-    .btnPro{display:inline-flex;align-items:center;justify-content:center;padding:10px 14px;border-radius:10px;text-decoration:none;font-weight:700}
+    .btnPro{display:inline-flex;align-items:center;justify-content:center;min-height:44px;padding:10px 14px;border-radius:10px;text-decoration:none;font-weight:700;text-align:center}
     .btnPrimary{background:var(--orange);color:#130c08}
     .btnGhost{border:1px solid var(--stroke);background:#0e182b;color:#d9e7ff}
-    @media(max-width:920px){.grid{grid-template-columns:1fr}}
+    @media(max-width:920px){.grid{grid-template-columns:minmax(0,1fr)}}
+    @media(max-width:560px){.wrap{padding:0 12px}.hero,.card{padding:18px}.price{font-size:48px}.table{min-width:0}.table,.table thead,.table tbody,.table tr,.table th,.table td{display:block;width:100%}.table thead{display:none}.table tr{border-bottom:1px solid #23314c;padding:8px 0}.table td{border-bottom:0;padding:7px 0}.table td:first-child::before{content:"Refund applies when";display:block;color:#cde0ff;font-weight:700;margin-bottom:4px}.table td:last-child::before{content:"Refund does not apply when";display:block;color:#cde0ff;font-weight:700;margin-bottom:4px}.cta{display:grid;grid-template-columns:1fr}.btnPro{width:100%}}
   </style>
 </head>
 <body>

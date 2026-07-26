@@ -20,7 +20,7 @@
   <nav class="nav"><div class="logo"><span>SHOPMY</span><span class="orange">REPAIR</span></div><a class="btn btn-dark" href="/" style="text-decoration:none">← Back to Home</a></nav>
   <main class="auth-wrap">
     <h1>Sign in / Sign up</h1>
-    <div class="card grid">
+    <form class="card grid" id="authForm">
       <select id="role"><option value="owner">Car Owner</option><option value="mechanic">Individual Mechanic</option><option value="shop">Mechanic Shop</option></select>
       <input id="name" placeholder="Full name (for sign up)" />
       <input id="email" type="email" placeholder="Email" />
@@ -46,7 +46,7 @@
         <button class="btn btn-orange" id="signUpBtn" type="button">Sign Up</button>
       </div>
       <p id="authStatus" class="sub"></p>
-    </div>
+    </form>
   </main>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="/config.js"></script>
