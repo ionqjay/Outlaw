@@ -191,6 +191,107 @@ test('mechanic billing status allows active billing access', async () => {
   });
 });
 
+test('manual billing override controls estimate access', async () => {
+  const billingAccountsPath = new URL('../billing_accounts.json', import.meta.url);
+
+  await preservingJsonFiles([billingAccountsPath], async () => {
+    fs.writeFileSync(billingAccountsPath, JSON.stringify([
+      {
+        user_id: 'mechanic-manual-active-1',
+        email: 'manual-active@example.com',
+        role: 'mechanic',
+        subscription_status: 'none',
+        manual_access_override: 'active'
+      },
+      {
+        user_id: 'mechanic-manual-disabled-1',
+        email: 'manual-disabled@example.com',
+        role: 'mechanic',
+        stripe_customer_id: 'cus_test_disabled',
+        stripe_subscription_id: 'sub_test_disabled',
+        subscription_status: 'active',
+        manual_access_override: 'disabled'
+      }
+    ], null, 2));
+
+    await withServer(async base => {
+      const active = await fetch(`${base}/api/billing/status`, {
+        headers: {
+          'x-dev-user-id': 'mechanic-manual-active-1',
+          'x-dev-user-email': 'manual-active@example.com',
+          'x-dev-user-role': 'mechanic'
+        }
+      });
+      assert.equal(active.status, 200);
+      const activeData = await active.json();
+      assert.equal(activeData.canSubmitEstimates, true);
+      assert.equal(activeData.manualAccessOverride, 'active');
+
+      const disabled = await fetch(`${base}/api/billing/status`, {
+        headers: {
+          'x-dev-user-id': 'mechanic-manual-disabled-1',
+          'x-dev-user-email': 'manual-disabled@example.com',
+          'x-dev-user-role': 'mechanic'
+        }
+      });
+      assert.equal(disabled.status, 200);
+      const disabledData = await disabled.json();
+      assert.equal(disabledData.hasSubscription, true);
+      assert.equal(disabledData.canSubmitEstimates, false);
+      assert.equal(disabledData.manualAccessOverride, 'disabled');
+    });
+  });
+});
+
+test('owners cannot view bids for another owner repair', async () => {
+  const repairRequestsPath = new URL('../repair_requests.json', import.meta.url);
+  const bidsPath = new URL('../bids.json', import.meta.url);
+
+  await preservingJsonFiles([repairRequestsPath, bidsPath], async () => {
+    fs.writeFileSync(repairRequestsPath, JSON.stringify([
+      {
+        id: 101,
+        owner_id: 'owner-private-1',
+        title: 'Private brake request',
+        issue_details: 'Brake pedal vibration',
+        vehicle_year: '2021',
+        vehicle_make: 'Honda',
+        vehicle_model: 'Accord',
+        city: 'Yonkers',
+        state: 'NY',
+        zip: '10701',
+        status: 'open',
+        created_at: new Date().toISOString()
+      }
+    ], null, 2));
+    fs.writeFileSync(bidsPath, JSON.stringify([
+      {
+        id: 201,
+        request_id: 101,
+        mechanic_id: 'mechanic-private-1',
+        mechanic_name: 'Private Shop',
+        amount: 425,
+        eta_hours: 24,
+        notes: '[META]{"businessName":"Private Shop","businessEmail":"provider@example.com","businessPhone":"5551230000"}[/META] Pads and rotors included.',
+        status: 'open',
+        created_at: new Date().toISOString()
+      }
+    ], null, 2));
+
+    await withServer(async base => {
+      const res = await fetch(`${base}/api/bids?requestId=101`, {
+        headers: {
+          'x-dev-user-id': 'owner-private-2',
+          'x-dev-user-email': 'other-owner@example.com',
+          'x-dev-user-role': 'owner'
+        }
+      });
+
+      assert.equal(res.status, 403);
+    });
+  });
+});
+
 test('repair sanitizer strips owner contact metadata for providers', () => {
   const provider = { id: 'provider-1', email: 'provider@example.com', user_metadata: { role: 'mechanic' } };
   const repair = {
