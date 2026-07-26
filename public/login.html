@@ -22,9 +22,9 @@
     <h1>Sign in / Sign up</h1>
     <form class="card grid" id="authForm">
       <select id="role"><option value="owner">Car Owner</option><option value="mechanic">Individual Mechanic</option><option value="shop">Mechanic Shop</option></select>
-      <input id="name" placeholder="Full name (for sign up)" />
-      <input id="email" type="email" placeholder="Email" />
-      <input id="password" type="password" placeholder="Password" />
+      <input id="name" placeholder="Full name (for sign up)" autocomplete="name" />
+      <input id="email" type="email" placeholder="Email" autocomplete="email" />
+      <input id="password" type="password" placeholder="Password" autocomplete="current-password" />
       <div id="specialtiesWrap" style="display:none">
         <div style="font-size:13px;color:#b7b7c5">Required for mechanic/shop: select your specialties</div>
         <div class="svc-grid" style="margin-top:6px">
