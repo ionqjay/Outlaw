@@ -705,6 +705,21 @@ async function listProviderPool() {
     });
   }
 
+  const billingAccounts = await listBillingAccounts();
+  for (const b of billingAccounts) {
+    const role = String(b?.role || '').toLowerCase();
+    if (!['mechanic', 'shop'].includes(role)) continue;
+    const email = String(b?.email || '').trim().toLowerCase();
+    if (!email) continue;
+    providers.push({
+      email,
+      userId: String(b?.user_id || ''),
+      providerType: role === 'shop' ? 'shop' : 'mechanic',
+      services: '',
+      can_submit_estimates: canSubmitEstimatesFromBilling(b)
+    });
+  }
+
   if (!providers.length) {
     const allSignups = await listSignups();
     for (const x of allSignups) {
@@ -1549,7 +1564,9 @@ app.post('/api/repairs/:id/complete', async (req, res) => {
     const requests = readJson(REPAIR_REQUESTS_PATH, []);
     const st = String(target.status || '').toLowerCase();
     if (!['accepted', 'in_progress', 'completed'].includes(st)) return res.status(400).json({ error: 'Only accepted/in-progress jobs can be completed.' });
-    target.status = 'completed';
+    requests.forEach(r => {
+      if (Number(r.id) === repairId) r.status = 'completed';
+    });
     writeJson(REPAIR_REQUESTS_PATH, requests);
     res.json({ ok: true });
   } catch (e) {

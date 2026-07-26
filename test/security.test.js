@@ -292,6 +292,128 @@ test('owners cannot view bids for another owner repair', async () => {
   });
 });
 
+test('paid invited provider can submit estimate and owner can accept completed review flow', async () => {
+  const repairRequestsPath = new URL('../repair_requests.json', import.meta.url);
+  const bidsPath = new URL('../bids.json', import.meta.url);
+  const billingAccountsPath = new URL('../billing_accounts.json', import.meta.url);
+  const requestInvitesPath = new URL('../request_invites.json', import.meta.url);
+  const feedbacksPath = new URL('../feedbacks.json', import.meta.url);
+
+  await preservingJsonFiles([repairRequestsPath, bidsPath, billingAccountsPath, requestInvitesPath, feedbacksPath], async () => {
+    fs.writeFileSync(repairRequestsPath, JSON.stringify([
+      {
+        id: 301,
+        owner_id: 'owner-paid-loop-1',
+        title: 'Front brake repair',
+        issue_category: 'brakes',
+        issue_details: 'Pads are worn and rotor is grinding',
+        vehicle_year: '2019',
+        vehicle_make: 'Toyota',
+        vehicle_model: 'RAV4',
+        city: 'Yonkers',
+        state: 'NY',
+        zip: '10701',
+        urgency: 'Standard',
+        status: 'open',
+        created_at: new Date().toISOString()
+      }
+    ], null, 2));
+    fs.writeFileSync(bidsPath, JSON.stringify([], null, 2));
+    fs.writeFileSync(feedbacksPath, JSON.stringify([], null, 2));
+    fs.writeFileSync(billingAccountsPath, JSON.stringify([
+      {
+        user_id: 'mechanic-paid-loop-1',
+        email: 'paid-loop@example.com',
+        role: 'mechanic',
+        stripe_customer_id: 'cus_paid_loop',
+        stripe_subscription_id: 'sub_paid_loop',
+        subscription_status: 'active'
+      }
+    ], null, 2));
+    fs.writeFileSync(requestInvitesPath, JSON.stringify([
+      {
+        repair_id: 301,
+        provider_email: 'paid-loop@example.com',
+        provider_type: 'mechanic',
+        status: 'pending',
+        created_at: new Date().toISOString(),
+        expires_at: new Date(Date.now() + 60 * 60 * 1000).toISOString(),
+        submitted_at: null
+      }
+    ], null, 2));
+
+    await withServer(async base => {
+      const mechanicHeaders = {
+        'Content-Type': 'application/json',
+        'x-dev-user-id': 'mechanic-paid-loop-1',
+        'x-dev-user-email': 'paid-loop@example.com',
+        'x-dev-user-role': 'mechanic'
+      };
+      const ownerHeaders = {
+        'Content-Type': 'application/json',
+        'x-dev-user-id': 'owner-paid-loop-1',
+        'x-dev-user-email': 'owner-paid-loop@example.com',
+        'x-dev-user-role': 'owner'
+      };
+
+      const feed = await fetch(`${base}/api/repairs`, { headers: mechanicHeaders });
+      assert.equal(feed.status, 200);
+      const feedData = await feed.json();
+      assert.equal(feedData.repairs.length, 1);
+      assert.equal(feedData.repairs[0].id, 301);
+
+      const bid = await fetch(`${base}/api/bids`, {
+        method: 'POST',
+        headers: mechanicHeaders,
+        body: JSON.stringify({
+          requestId: 301,
+          mechanicName: 'Paid Loop Mechanic',
+          amount: 375,
+          etaHours: 24,
+          notes: '[META]{"providerType":"mechanic","businessName":"Paid Loop Mechanic","businessEmail":"paid-loop@example.com","businessPhone":"5551234567"}[/META] Pads and rotors included with same-day diagnostics.'
+        })
+      });
+      assert.equal(bid.status, 200);
+      const bidData = await bid.json();
+      assert.equal(bidData.ok, true);
+      assert.equal(bidData.bid.amount, 375);
+
+      const ownerBids = await fetch(`${base}/api/bids?requestId=301`, { headers: ownerHeaders });
+      assert.equal(ownerBids.status, 200);
+      const ownerBidsData = await ownerBids.json();
+      assert.equal(ownerBidsData.bids.length, 1);
+      assert.equal(ownerBidsData.bids[0].provider.businessEmail, 'paid-loop@example.com');
+
+      const accept = await fetch(`${base}/api/bids/${bidData.bid.id}/accept`, {
+        method: 'POST',
+        headers: ownerHeaders
+      });
+      assert.equal(accept.status, 200);
+
+      const complete = await fetch(`${base}/api/repairs/301/complete`, {
+        method: 'POST',
+        headers: ownerHeaders
+      });
+      assert.equal(complete.status, 200);
+
+      const feedback = await fetch(`${base}/api/feedbacks`, {
+        method: 'POST',
+        headers: ownerHeaders,
+        body: JSON.stringify({
+          requestId: 301,
+          bidId: bidData.bid.id,
+          rating: 5,
+          text: 'Fast response and clear estimate.'
+        })
+      });
+      assert.equal(feedback.status, 200);
+      const feedbackData = await feedback.json();
+      assert.equal(feedbackData.ok, true);
+      assert.equal(feedbackData.feedback.rating, 5);
+    });
+  });
+});
+
 test('repair sanitizer strips owner contact metadata for providers', () => {
   const provider = { id: 'provider-1', email: 'provider@example.com', user_metadata: { role: 'mechanic' } };
   const repair = {
