@@ -1,21 +1,25 @@
 # Project Next Steps (Execution Plan)
 
-Updated: 2026-03-17
+Updated: 2026-07-26
 
 ## 1) Verify Security Hardening on Deployed Beta (Highest Priority)
 
 Goal: confirm production no longer leaks private marketplace/contact data.
 
 ### Critical smoke checks
-- [ ] Unauthenticated `GET /api/repairs` returns 401 in production
-- [ ] Unauthenticated `GET /api/bids` returns 401 in production
-- [ ] Owner account can only see its own repair requests
-- [ ] Mechanic/shop account can only see invited/sanitized repairs and own bids
-- [ ] Owner email/phone metadata is not present in provider repair responses
-- [ ] Provider email/phone metadata is only shown to authorized owner/admin views
-- [ ] Repair cancel/complete verifies owner or admin authorization
-- [ ] Bid accept verifies owner or admin authorization
-- [ ] Feedback creation verifies owner, completed repair, and accepted bid
+- [x] Unauthenticated `GET /api/repairs` returns 401 in production
+- [x] Unauthenticated `GET /api/bids` returns 401 in production
+- [x] Owner account can only see its own repair requests
+- [x] Mechanic/shop account can only see invited/sanitized repairs and own bids
+- [x] Owner email/phone metadata is not present in provider repair responses
+- [x] Provider email/phone metadata is only shown to authorized owner/admin views
+- [x] Repair cancel/complete verifies owner or admin authorization
+- [x] Bid accept verifies owner or admin authorization
+- [x] Feedback creation verifies owner, completed repair, and accepted bid
+
+### Verified 2026-07-26
+- Local regression suite covers the paid invited-provider flow: provider sees matched repair, submits estimate, owner sees contact details, accepts bid, marks job complete, and leaves feedback.
+- Live smoke checks verified `/api/health` healthy, `/api/repairs` and `/api/bids` return 401 without auth, and admin billing/accounts APIs return 401 without token.
 
 ---
 
@@ -43,7 +47,7 @@ Goal: make the $99/month mechanic/shop subscription gate real.
 - [ ] Set `STRIPE_SECRET_KEY`
 - [ ] Set `STRIPE_WEBHOOK_SECRET`
 - [ ] Set webhook endpoint to `/api/stripe/webhook`
-- [ ] Confirm `/api/health` returns `stripeBillingReady: true`
+- [x] Confirm `/api/health` returns `stripeBillingReady: true`
 
 ---
 
@@ -55,16 +59,16 @@ Goal: ensure admin operations are reliable before adding scope.
 - [ ] Admin billing/accounts screen loads without console errors
 - [ ] Merged auth + billing list renders correctly (no duplicate/missing users)
 - [ ] Ban/unban updates account behavior immediately
-- [ ] Manual access override states work exactly:
-  - [ ] `active` grants access
-  - [ ] `disabled` blocks access
-  - [ ] `null` falls back to normal billing
+- [x] Manual access override states work exactly in regression tests:
+  - [x] `active` grants access
+  - [x] `disabled` blocks access
+  - [x] `null` falls back to normal billing
 - [ ] Table actions still work after sorting/filtering/search
 
 ### API checks
 - [ ] `/api/admin/billing` returns expected fields for UI
 - [ ] `/api/admin/billing/:userId/manual-access` writes and persists state
-- [ ] Admin token gate works (401 when missing/wrong token)
+- [x] Admin token gate works (401 when missing/wrong token)
 
 ---
 
@@ -85,6 +89,9 @@ Goal: prevent provider invite dead-ends and support churn.
 - [ ] Two near-simultaneous replacement paths do not create duplicate active invites
 - [ ] Timezone display remains user-friendly while server uses ISO timestamps
 
+### Current risk
+- Provider dispatch invites are still stored in `request_invites.json`. This is acceptable for beta smoke testing, but should move to Supabase before serious traffic because file-backed state can reset across deploys/restarts and is not ideal for multi-instance scaling.
+
 ---
 
 ## 6) Repo Hygiene
@@ -101,7 +108,7 @@ Goal: keep commits reviewable and avoid accidental noise.
 ---
 
 ## Suggested order for next pass
-1. Apply Supabase RLS migration in hosted Supabase
-2. Configure Stripe test mode env vars on Render
-3. Redeploy and run production API privacy checks
-4. Run full owner/mechanic/admin E2E QA
+1. Confirm Supabase RLS migration is applied in hosted Supabase
+2. Run live Stripe test checkout with Jay-approved test payment flow
+3. Use admin token to verify admin billing/accounts UI and manual access override live
+4. Move `request_invites.json` state into Supabase before broader beta traffic
