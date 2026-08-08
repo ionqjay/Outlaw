@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Owner App — ShopMyRepair</title>
+  <title>Owner App - ShopMyRepair</title>
   <link rel="stylesheet" href="/styles.css" />
   <style>
     :root {
@@ -306,14 +306,14 @@
 </head>
 <body class="app-body">
   <nav class="nav">
-    <div class="logo"><span>SHOPMY</span><span class="orange">REPAIR</span></div>
-    <button class="btn btn-dark" id="logoutBtn">Logout</button>
+    <div class="logo"><span>ShopMy</span><span class="orange">Repair</span></div>
+    <button class="btn btn-secondary" id="logoutBtn">Logout</button>
   </nav>
 
   <main class="dash">
     <section class="hero">
       <h1>Your repairs</h1>
-      <p>Post a repair once, track incoming quotes, and choose the provider you trust.</p>
+      <p>Post a repair once, track incoming quotes, and choose the provider that fits your repair.</p>
       <div class="quick-metrics">
         <div class="chip">Active requests</div>
         <div class="chip">New quotes</div>
@@ -330,7 +330,7 @@
 
     <section id="view-home" class="panel">
       <h2>Welcome back</h2>
-      <p class="subtle">Compare repair estimates confidently and choose the best overall value.</p>
+      <p class="subtle">Compare repair estimates clearly and choose the provider that fits your repair.</p>
 
       <div class="grid2" style="margin-top:10px">
         <div class="list-card"><div class="muted-xs">Open Requests</div><div id="homeOpenRequests" style="font-size:28px;font-weight:700">0</div></div>
@@ -342,8 +342,8 @@
       </div>
 
       <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:10px">
-        <button class="btn btn-orange" data-view="quote">Post a Repair</button>
-        <button class="btn btn-dark" data-view="dashboard">Compare Quotes</button>
+        <button class="btn btn-primary" data-view="quote">Post a Repair</button>
+        <button class="btn btn-secondary" data-view="dashboard">Compare Quotes</button>
       </div>
 
       <div class="list-card" style="margin-top:10px">
@@ -385,58 +385,46 @@
       <p class="subtle">Vehicle, problem, location, then submit. Keep it short and clear.</p>
 
       <div class="grid2" style="margin-top:10px">
-        <input id="title" placeholder="Short title (e.g. Brake replacement)" />
-        <select id="issueCategory">
+        <label class="field">Repair title<span>Short name owners and providers can scan.</span><input id="title" placeholder="Brake replacement" /></label>
+        <label class="field">Issue category<span>Used for provider matching.</span><select id="issueCategory">
           <option value="">Issue category</option>
-          <option>Brakes</option>
-          <option>Engine</option>
-          <option>Tire Replacement</option>
-          <option>Transmission</option>
-          <option>Electrical</option>
-          <option>Diagnostics</option>
-          <option>Suspension</option>
-          <option>A/C & Heating</option>
-          <option>Oil Change / Maintenance</option>
-          <option>Battery / Starter / Alternator</option>
-          <option>Other</option>
-        </select>
+          <option>Brakes</option><option>Engine</option><option>Tire Replacement</option><option>Transmission</option><option>Electrical</option><option>Diagnostics</option><option>Suspension</option><option>A/C & Heating</option><option>Oil Change / Maintenance</option><option>Battery / Starter / Alternator</option><option>Other</option>
+        </select></label>
       </div>
 
       <div class="grid2" style="margin-top:8px">
-        <input id="vehicleYear" placeholder="Year" />
-        <select id="vehicleMake">
+        <label class="field">Vehicle year<span>Example: 2019.</span><input id="vehicleYear" inputmode="numeric" placeholder="2019" /></label>
+        <label class="field">Vehicle make<span>Select the manufacturer.</span><select id="vehicleMake">
           <option value="">Select make</option>
-          <option>Toyota</option><option>Honda</option><option>Ford</option><option>Chevrolet</option><option>Nissan</option>
-          <option>BMW</option><option>Mercedes-Benz</option><option>Audi</option><option>Lexus</option><option>Hyundai</option>
-          <option>Kia</option><option>Jeep</option><option>Dodge</option><option>Subaru</option><option>Mazda</option><option>Other</option>
-        </select>
+          <option>Toyota</option><option>Honda</option><option>Ford</option><option>Chevrolet</option><option>Nissan</option><option>BMW</option><option>Mercedes-Benz</option><option>Audi</option><option>Lexus</option><option>Hyundai</option><option>Kia</option><option>Jeep</option><option>Dodge</option><option>Subaru</option><option>Mazda</option><option>Other</option>
+        </select></label>
       </div>
 
       <div class="grid2" style="margin-top:8px">
-        <select id="vehicleModel"><option value="">Select model</option></select>
-        <select id="urgency"><option>Standard</option><option>Urgent</option><option>Emergency</option></select>
+        <label class="field">Vehicle model<span>Choose model after selecting make.</span><select id="vehicleModel"><option value="">Select model</option></select></label>
+        <label class="field">Urgency<span>How soon you need help.</span><select id="urgency"><option>Standard</option><option>Urgent</option><option>Emergency</option></select></label>
       </div>
 
       <div class="grid2" style="margin-top:8px">
-        <select id="partsPreference">
+        <label class="field">Parts preference<span>Tell providers who should source parts.</span><select id="partsPreference">
           <option value="">Parts preference</option>
           <option value="owner-brings-parts">I will bring my own parts</option>
           <option value="mechanic-provides-parts">I need mechanic/shop to provide parts</option>
-        </select>
+        </select></label>
       </div>
 
       <div class="grid2" style="margin-top:8px">
-        <input id="city" placeholder="City" />
-        <input id="state" value="NY" placeholder="State" />
+        <label class="field">City<span>Where service is needed.</span><input id="city" placeholder="Queens" /></label>
+        <label class="field">State<span>Two-letter state.</span><input id="state" value="NY" placeholder="NY" /></label>
       </div>
 
       <div class="grid2" style="margin-top:8px">
-        <input id="zip" placeholder="ZIP" />
+        <label class="field">ZIP code<span>Used for local matching.</span><input id="zip" inputmode="numeric" placeholder="11375" /></label>
       </div>
 
-      <textarea id="issueDetails" placeholder="Describe the issue (symptoms, noises, warnings)" style="margin-top:8px"></textarea>
+      <label class="field" style="margin-top:8px">Issue details<span>Symptoms, noises, warning lights, and anything already diagnosed.</span><textarea id="issueDetails" placeholder="Describe the issue"></textarea></label>
 
-      <button class="btn btn-orange" id="submitRepairBtn" style="margin-top:10px">Submit Repair</button>
+      <button class="btn btn-primary" id="submitRepairBtn" style="margin-top:10px">Submit Repair</button>
       <p id="ownerStatus" class="status">Ready when you are.</p>
     </section>
 
@@ -457,7 +445,7 @@
       <div class="grid2" style="margin-top:8px">
         <input id="profileZip" placeholder="ZIP" />
       </div>
-      <button class="btn btn-orange" id="saveProfileBtn" style="margin-top:10px">Save Profile</button>
+      <button class="btn btn-primary" id="saveProfileBtn" style="margin-top:10px">Save Profile</button>
       <p id="profileStatus" class="status">Profile not updated yet.</p>
     </section>
   </main>
@@ -468,23 +456,23 @@
       <h3 style="margin-top:0">Leave Feedback</h3>
       <p class="subtle">Rate your completed experience from 1 to 5 stars.</p>
       <div class="stars-row" id="feedbackStars">
-        <button type="button" class="star-btn" data-star="1">1★</button>
-        <button type="button" class="star-btn" data-star="2">2★</button>
-        <button type="button" class="star-btn" data-star="3">3★</button>
-        <button type="button" class="star-btn" data-star="4">4★</button>
-        <button type="button" class="star-btn" data-star="5">5★</button>
+        <button type="button" class="star-btn" data-star="1">1 star</button>
+        <button type="button" class="star-btn" data-star="2">2 star</button>
+        <button type="button" class="star-btn" data-star="3">3 star</button>
+        <button type="button" class="star-btn" data-star="4">4 star</button>
+        <button type="button" class="star-btn" data-star="5">5 star</button>
       </div>
       <textarea id="feedbackNote" placeholder="Add a note about quality, communication, and overall experience."></textarea>
       <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:10px">
-        <button class="btn btn-dark" type="button" id="feedbackCancelBtn">Cancel</button>
-        <button class="btn btn-orange" type="button" id="feedbackSubmitBtn">Submit Feedback</button>
+        <button class="btn btn-secondary" type="button" id="feedbackCancelBtn">Cancel</button>
+        <button class="btn btn-primary" type="button" id="feedbackSubmitBtn">Submit Feedback</button>
       </div>
     </div>
   </div>
 
   <div class="mobile-cta">
-    <button class="btn btn-orange" data-view="quote">Post Request</button>
-    <button class="btn btn-dark" data-view="dashboard">My Estimates</button>
+    <button class="btn btn-primary" data-view="quote">Post Request</button>
+    <button class="btn btn-secondary" data-view="dashboard">My Estimates</button>
   </div>
 
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
@@ -494,3 +482,4 @@
   <script src="/owner-app.js"></script>
 </body>
 </html>
+

@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Mechanic App — ShopMyRepair</title>
+  <title>Mechanic App - ShopMyRepair</title>
   <link rel="stylesheet" href="/styles.css" />
   <style>
     :root {
@@ -237,13 +237,13 @@
 </head>
 <body class="app-body">
   <nav class="nav">
-    <div class="logo"><span>SHOPMY</span><span class="orange">REPAIR</span></div>
-    <button class="btn btn-dark" id="logoutBtn">Logout</button>
+    <div class="logo"><span>ShopMy</span><span class="orange">Repair</span></div>
+    <button class="btn btn-secondary" id="logoutBtn">Logout</button>
   </nav>
 
   <main class="dash">
     <section class="hero">
-      <h1 id="providerDashboardTitle">Mechanic / Shop Dashboard</h1>
+      <h1 id="providerDashboardTitle">Provider Dashboard</h1>
       <p id="providerDashboardSubtitle">Find matched repair opportunities, send quotes, and turn nearby drivers into customers.</p>
       <div class="quick-metrics">
         <div class="chip">Available jobs</div>
@@ -255,7 +255,7 @@
     <div class="tabs">
       <button class="tab-btn active" data-view="home">Home</button>
       <button class="tab-btn" data-view="dashboard">My Pipeline</button>
-      <button class="tab-btn" data-view="repairs">Find Open Repairs</button>
+      <button class="tab-btn" data-view="repairs">Find Repairs</button>
       <button class="tab-btn" data-view="profile">Profile</button>
     </div>
 
@@ -277,8 +277,8 @@
       </div>
 
       <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:10px">
-        <button class="btn btn-orange" data-view="repairs">Find Repair Jobs</button>
-        <button class="btn btn-dark" data-view="profile">Complete Profile</button>
+        <button class="btn btn-primary" data-view="repairs">Find Repair Requests</button>
+        <button class="btn btn-secondary" data-view="profile">Complete Profile</button>
       </div>
 
       <div class="list-card" style="margin-top:10px">
@@ -322,13 +322,13 @@
       <p class="subtle" id="providerProfileSubtitle">Set your profile so owners know who is quoting and what you work on.</p>
 
       <div class="list-card" style="margin-top:10px">
-        <h3 style="margin-top:0">Marketplace Access — $99/month</h3>
+        <h3 style="margin-top:0">Marketplace Access - $99/month</h3>
         <div class="small" id="billingStatus">Checking subscription status...</div>
         <div class="small" style="margin-top:6px">Your subscription unlocks estimate submission on repair requests matched by service fit, location, provider type, and invite timing.</div>
         <div class="small" style="margin-top:6px">Opportunity Guarantee: if you receive zero eligible opportunities to submit an estimate in a billing month, we refund that month. Winning jobs is based on your pricing, speed, and reputation.</div>
         <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:10px">
-          <button class="btn btn-orange" id="startSubscriptionBtn" type="button">Start $99 Subscription</button>
-          <button class="btn btn-dark" id="manageBillingBtn" type="button">Manage Billing</button>
+          <button class="btn btn-primary" id="startSubscriptionBtn" type="button">Start $99 Subscription</button>
+          <button class="btn btn-secondary" id="manageBillingBtn" type="button">Manage Billing</button>
         </div>
         <div id="billingNotice" class="inline-alert"></div>
       </div>
@@ -369,14 +369,14 @@
         <label class="svc-pill"><input type="checkbox" value="other" data-service-specialty /> Other</label>
       </div>
       <textarea id="profileServices" placeholder="Optional: add extra specialties (comma separated)" style="margin-top:8px"></textarea>
-      <button class="btn btn-orange" id="saveMechanicProfileBtn" style="margin-top:10px">Save Profile</button>
+      <button class="btn btn-primary" id="saveMechanicProfileBtn" style="margin-top:10px">Save Profile</button>
       <p id="mechanicProfileStatus" class="status">Profile not updated yet.</p>
     </section>
   </main>
 
   <div class="mobile-cta">
-    <button class="btn btn-orange" data-view="repairs">Find Repairs</button>
-    <button class="btn btn-dark" data-view="dashboard">My Pipeline</button>
+    <button class="btn btn-primary" data-view="repairs">Find Repairs</button>
+    <button class="btn btn-secondary" data-view="dashboard">My Pipeline</button>
   </div>
 
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
@@ -386,3 +386,4 @@
   <script src="/mechanic.js"></script>
 </body>
 </html>
+

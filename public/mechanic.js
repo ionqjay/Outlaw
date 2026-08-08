@@ -223,8 +223,8 @@ async function boot() {
   const profileSubtitle = document.getElementById('providerProfileSubtitle');
   if (dashboardTitle) dashboardTitle.textContent = `${providerTypeLabel} Dashboard`;
   if (dashboardSubtitle) dashboardSubtitle.textContent = isShop
-    ? 'Find matched repair requests, send clear shop quotes, and win more local jobs.'
-    : 'Find matched repair requests, send clear mechanic quotes, and win more local jobs.';
+    ? 'Find matched repair requests, send clear shop quotes, and quote local repair requests.'
+    : 'Find matched repair requests, send clear mechanic quotes, and quote local repair requests.';
   if (profileTitle) profileTitle.textContent = `${providerTypeLabel} Profile`;
   if (profileSubtitle) profileSubtitle.textContent = isShop
     ? 'Set your shop profile so owners understand who is quoting and what your team works on.'
@@ -372,25 +372,25 @@ async function boot() {
             return `
           <div class='estimate-card ${locked ? 'preview-locked' : ''}'>
             <div class='estimate-top'>
-              <strong>#${rep.id} · ${rep.title}</strong>
+              <strong>#${rep.id} - ${rep.title}</strong>
               <span class='pill open'>${locked ? 'preview' : 'open'}</span>
             </div>
-            <div class='small'>${rep.issue_category || ''} · ${rep.city || ''}, ${rep.state || ''} · ${rep.urgency || 'Standard'}</div>
+            <div class='small'>${rep.issue_category || ''} - ${rep.city || ''}, ${rep.state || ''} - ${rep.urgency || 'Standard'}</div>
             <div class='small'>${rep.vehicle_year || ''} ${rep.vehicle_make || ''} ${rep.vehicle_model || ''}</div>
             <div class='small'><b>Repair needed:</b> ${ownerMeta.cleanDetails || 'No description provided.'}</div>
-            ${locked ? "<div class='small'><b>Preview:</b> This shows market activity before subscription. Active subscribers see full details for leads matched by the dispatch algorithm.</div>" : `<div class='small'><b>Estimate window:</b> ${formatInviteCountdown(rep.invite_expires_at)}</div>`}
-            ${locked ? "<button class='btn btn-dark' data-view='profile' style='margin-top:10px'>Unlock Matched Lead System</button>" : `
-            <div class='estimate-kpis'>
-              <div class='kpi-pill'><div class='lbl'>Your estimate (USD)</div><input placeholder='e.g. 325' id='amount-${rep.id}' /></div>
-              <div class='kpi-pill'><div class='lbl'>ETA (hours)</div><input placeholder='24' id='eta-${rep.id}' value='24' /></div>
+            ${locked ? "<div class='small'><b>Preview:</b> This shows market activity before subscription. Active subscribers see full details for leads matched by the matching criteria.</div>" : `<div class='small'><b>Estimate window:</b> ${formatInviteCountdown(rep.invite_expires_at)}</div>`}
+            ${locked ? "<button class='btn btn-secondary' data-view='profile' style='margin-top:10px'>Unlock Matched Lead System</button>" : `
+            <div class='grid2' style='margin-top:10px'>
+              <label class='field'>Estimate amount<span>Total price in USD.</span><input inputmode='decimal' placeholder='325' id='amount-${rep.id}' /></label>
+              <label class='field'>Availability<span>Estimated turnaround in hours.</span><input inputmode='numeric' placeholder='24' id='eta-${rep.id}' value='24' /></label>
             </div>
-            <textarea id='notes-${rep.id}' placeholder='Notes for owner (minimum 15 characters)' style='margin-top:8px'></textarea>
-            <button class='btn btn-orange' data-bid='${rep.id}' style='margin-top:10px'>Submit Estimate</button>`}
+            <label class='field' style='margin-top:8px'>Estimate notes<span>Explain parts, labor, timing, and any assumptions.</span><textarea id='notes-${rep.id}' placeholder='Notes for owner (minimum 15 characters)'></textarea></label>
+            <button class='btn btn-primary' data-bid='${rep.id}' style='margin-top:10px'>Submit Estimate</button>`}
           </div>
         `;
           }).join('')
         : (serviceKeys.size
-            ? "<div class='list-card'><strong>No open repairs right now.</strong><div class='small'>You’ll only see requests you are invited to quote on (based on location/service fit and invite window).</div><div class='small'>Note: subscription is required to <b>submit</b> estimates, not to view invited requests.</div><div class='small'>Check back shortly — new owner demand comes in throughout the day.</div></div>"
+            ? "<div class='list-card'><strong>No open repairs right now.</strong><div class='small'>You will only see requests you are invited to quote on (based on location/service fit and invite window).</div><div class='small'>Note: subscription is required to <b>submit</b> estimates, not to view invited requests.</div><div class='small'>Check back shortly - new owner demand comes in throughout the day.</div></div>"
             : "<div class='list-card'><strong>Add your service specialties first.</strong><div class='small'>Go to Profile and select what you work on (brakes, engine, transmission, etc.).</div><div class='small'>We use this to match you with relevant repair requests.</div></div>");
 
       document.querySelectorAll('#repairFeed [data-view]').forEach(btn => btn.addEventListener('click', () => setView(btn.dataset.view)));
@@ -582,11 +582,11 @@ async function boot() {
             <div class='kpi-pill'><div class='lbl'>Request status</div><div class='val' style='font-size:16px'>${labelForStatus(repStatus)}</div></div>
           </div>
 
-          <div class='small'>${rep?.city || ''}${rep?.city ? ', ' : ''}${rep?.state || ''} · ${rep?.urgency || 'Standard'}</div>
+          <div class='small'>${rep?.city || ''}${rep?.city ? ', ' : ''}${rep?.state || ''} - ${rep?.urgency || 'Standard'}</div>
           <div class='small'><b>Repair needed:</b> ${ownerMeta.cleanDetails || 'Request details unavailable.'}</div>
 
           ${isWon ? `<div class='won-timeline'><span class='done'>Estimate Sent</span><span class='done'>Accepted</span><span class='${repStatus === 'completed' ? 'done' : 'current'}'>${repStatus === 'completed' ? 'Completed' : 'Service Active'}</span></div>` : ''}
-          ${isWon ? `<div class='contact-row'><span class='contact-pill'>Phone: ${ownerMeta.ownerPhone || 'No phone'}</span><span class='contact-pill'>Email: ${ownerMeta.ownerEmail || 'No email'}</span></div>` : ''}
+          ${isWon ? `<div class='contact-row'>${ownerMeta.ownerPhone ? `<a class='contact-pill' href='tel:${String(ownerMeta.ownerPhone).replace(/\D/g, '')}'>Call owner</a>` : ''}${ownerMeta.ownerEmail ? `<a class='contact-pill' href='mailto:${ownerMeta.ownerEmail}'>Email owner</a>` : ''}</div>` : ''}
         </div>`;
       };
 
@@ -594,8 +594,8 @@ async function boot() {
       const active = bids.filter(b => String(b.status || '').toLowerCase() === 'open');
       const other = bids.filter(b => !['accepted', 'open'].includes(String(b.status || '').toLowerCase()));
 
-      wonWrap.innerHTML = won.length ? won.map(renderBidCard).join('') : "<div class='list-card'><strong>No won jobs yet.</strong><div class='small'>Win your first one by responding fast and adding clear notes.</div><button class='btn btn-orange' data-view='repairs' style='margin-top:8px'>Find Open Repairs</button></div>";
-      activeWrap.innerHTML = active.length ? active.map(renderBidCard).join('') : "<div class='list-card'><strong>No active estimates.</strong><div class='small'>Browse open requests and submit competitive estimates.</div><button class='btn btn-orange' data-view='repairs' style='margin-top:8px'>Find Open Repairs</button></div>";
+      wonWrap.innerHTML = won.length ? won.map(renderBidCard).join('') : "<div class='list-card'><strong>No won jobs yet.</strong><div class='small'>Win your first one by responding fast and adding clear notes.</div><button class='btn btn-primary' data-view='repairs' style='margin-top:8px'>Find Repairs</button></div>";
+      activeWrap.innerHTML = active.length ? active.map(renderBidCard).join('') : "<div class='list-card'><strong>No active estimates.</strong><div class='small'>Browse open requests and submit competitive estimates.</div><button class='btn btn-primary' data-view='repairs' style='margin-top:8px'>Find Repairs</button></div>";
       otherWrap.innerHTML = other.length ? other.map(renderBidCard).join('') : '<p>No other repair estimates yet.</p>';
       document.querySelectorAll('#view-dashboard [data-view]').forEach(btn => btn.addEventListener('click', () => setView(btn.dataset.view)));
 
@@ -624,7 +624,7 @@ async function boot() {
       <div class='small'>Progress: <b>${doneCount}/3 complete</b></div>
       <div class='small'>${profileDone ? 'Done' : 'Open'}: Complete your profile</div>
       <div class='small'>${submittedEstimate ? 'Done' : 'Open'}: Submit your first estimate</div>
-      <div class='small'>${wonFirstJob ? 'Done' : 'Open'}: Win your first job</div>
+      <div class='small'>${wonFirstJob ? 'Done' : 'Open'}: Book your first job</div>
     `;
   }
 
@@ -680,3 +680,5 @@ async function boot() {
 }
 
 boot();
+
+

@@ -8,40 +8,19 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="/styles.css" />
-  <style>
-    .auth-wrap{width:min(940px,100%);margin:0 auto;padding:60px var(--space-page) 72px;display:grid;grid-template-columns:.82fr 1fr;gap:48px;align-items:start}
-    .auth-intro p{font-size:18px}
-    .auth-card{background:#fff;border:1px solid var(--color-border);border-radius:16px;padding:24px;box-shadow:var(--shadow-soft);display:grid;gap:12px}
-    .svc-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
-    .svc-pill{display:flex;align-items:center;gap:8px;border:1px solid var(--color-border);border-radius:8px;padding:9px 10px;background:var(--color-surface-soft);font-size:13px;color:var(--color-primary);font-weight:700}
-    .svc-pill input{width:auto;min-height:auto}
-    .auth-actions{display:flex;gap:10px;flex-wrap:wrap}
-    .auth-actions .btn{flex:1}
-    @media(max-width:820px){
-      .auth-wrap{width:100%;max-width:100%;grid-template-columns:1fr;padding:42px 20px 72px;gap:24px;overflow:hidden}
-      .auth-intro{max-width:340px}
-      .auth-intro h1{font-size:36px;line-height:1.04;letter-spacing:-.045em}
-      .auth-intro p{font-size:16px}
-      .auth-card{width:auto;max-width:calc(100vw - 40px);min-width:0;padding:20px;overflow-wrap:anywhere}
-      .auth-actions{display:grid;grid-template-columns:1fr}
-      .svc-grid{grid-template-columns:1fr}
-    }
-  </style>
 </head>
 <body>
   <nav class="nav">
     <a class="logo" href="/"><span>ShopMy</span><span>Repair</span></a>
-    <div class="nav-links">
-      <a href="/">Home</a>
-      <a href="/pricing.html">Pricing</a>
-    </div>
+    <div class="nav-links"><a href="/">Home</a><a href="/pricing.html">Pricing</a></div>
   </nav>
 
   <main class="auth-wrap">
     <section class="auth-intro">
-      <p class="eyebrow">Account access</p>
-      <h1>Sign in to manage repairs and quotes.</h1>
-      <p>Owners can post repairs and compare quotes. Mechanics and shops can manage profiles, matched jobs, and submitted estimates.</p>
+      <span class="badge">Account Access</span>
+      <p class="eyebrow" style="margin-top:18px">Owner and provider portal</p>
+      <h1>Manage repairs, estimates, and provider profiles.</h1>
+      <p>Owners can post repairs and compare estimate details. Mechanics and shops can manage profiles, matched requests, and submitted estimates.</p>
     </section>
 
     <form class="auth-card" id="authForm">
@@ -65,10 +44,7 @@
           <label class="svc-pill"><input type="checkbox" value="other" data-signup-service /> Other</label>
         </div>
       </div>
-      <div class="auth-actions">
-        <button class="btn btn-secondary" id="signInBtn" type="button">Sign In</button>
-        <button class="btn btn-primary" id="signUpBtn" type="button">Create Account</button>
-      </div>
+      <div class="auth-actions"><button class="btn btn-secondary" id="signInBtn" type="button">Sign In</button><button class="btn btn-primary" id="signUpBtn" type="button">Create Account</button></div>
       <p id="authStatus" class="sub"></p>
     </form>
   </main>

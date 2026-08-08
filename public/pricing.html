@@ -4,83 +4,47 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Pricing - ShopMyRepair</title>
-  <meta name="description" content="ShopMyRepair pricing for mechanics and repair shops. $99/month marketplace access with a clear opportunity guarantee." />
+  <meta name="description" content="ShopMyRepair provider pricing for mechanics and repair shops in early market areas." />
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="/styles.css" />
-  <style>
-    .page-wrap{width:min(1040px,100%);margin:0 auto;padding:64px var(--space-page) 72px}
-    .pricing-hero{max-width:780px;margin-bottom:38px}
-    .pricing-grid{display:grid;grid-template-columns:minmax(0,1fr) minmax(280px,.72fr);gap:24px;align-items:start}
-    .policy-card{background:#fff;border:1px solid var(--color-border);border-radius:16px;padding:24px;box-shadow:var(--shadow-soft)}
-    .price{font-size:56px;font-weight:800;letter-spacing:-.05em;color:var(--color-primary-strong);line-height:1}
-    .price small{font-size:16px;letter-spacing:0;color:var(--color-muted);font-weight:700}
-    .plain-list{display:grid;gap:12px;margin:20px 0 0;padding:0;list-style:none;color:var(--color-ink-soft)}
-    .plain-list li{padding-top:12px;border-top:1px solid var(--color-border)}
-    .rule-grid{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-top:18px}
-    .rule-grid div{background:var(--color-surface-soft);border-radius:12px;padding:16px}
-    .rule-grid strong{display:block;margin-bottom:8px;color:var(--color-primary-strong)}
-    .policy-actions{display:flex;gap:10px;flex-wrap:wrap;margin-top:22px}
-    @media(max-width:820px){
-      .page-wrap{width:100%;max-width:100%;padding:44px 20px 72px;overflow:hidden}
-      .pricing-hero{max-width:340px}
-      .pricing-hero h1{font-size:36px;line-height:1.04;letter-spacing:-.045em}
-      .pricing-grid,.rule-grid{grid-template-columns:minmax(0,1fr)}
-      .pricing-grid>*{min-width:0}
-      .policy-card{width:auto;max-width:calc(100vw - 40px);min-width:0;padding:20px;overflow-wrap:anywhere}
-      .price{font-size:48px}
-      .policy-actions{display:grid;grid-template-columns:1fr}
-    }
-  </style>
 </head>
 <body>
   <nav class="nav">
     <a class="logo" href="/"><span>ShopMy</span><span>Repair</span></a>
-    <div class="nav-links">
-      <a href="/">Home</a>
-      <a href="/login.html">Sign In</a>
-      <a class="btn btn-primary" href="/login.html">Start Provider Onboarding</a>
-    </div>
+    <div class="nav-links"><a href="/">Home</a><a href="/login.html">Sign In</a><a class="btn btn-primary" href="/login.html">Start Provider Onboarding</a></div>
   </nav>
 
   <main class="page-wrap">
     <section class="pricing-hero">
-      <p class="eyebrow">Provider pricing</p>
-      <h1>Simple access for mechanics and repair shops.</h1>
-      <p>ShopMyRepair charges providers for access to matched repair opportunities. Car owners can post requests and compare quotes for free.</p>
+      <span class="badge">Early Market Pricing</span>
+      <p class="eyebrow" style="margin-top:18px">Provider pricing</p>
+      <h1>Provider access for early market areas.</h1>
+      <p>ShopMyRepair charges providers for access to matched repair quote opportunities. Car owners can post requests and compare estimate details for free during early access.</p>
     </section>
 
     <section class="pricing-grid">
       <article class="policy-card">
         <p class="eyebrow">Marketplace Access</p>
         <div class="price">$99 <small>/ month</small></div>
-        <p>For individual mechanics and mechanic shops that want to quote local repair jobs.</p>
+        <p>For individual mechanics and repair shops that want to quote repair requests in supported areas.</p>
         <ul class="plain-list">
-          <li>View repair requests matched by service fit, location, provider type, and invite timing.</li>
-          <li>Submit structured quotes with price, ETA, and notes.</li>
+          <li>Review repair requests matched by service fit, location, provider type, and invite timing.</li>
+          <li>Submit structured estimates with price, ETA, and notes.</li>
           <li>Build trust through profile details and owner feedback after completed jobs.</li>
         </ul>
       </article>
 
       <article class="policy-card">
         <p class="eyebrow">Opportunity Guarantee</p>
-        <h2>No eligible opportunities, no monthly fee.</h2>
-        <p>If your account receives zero eligible opportunities to submit a quote during a billing month, we refund that month.</p>
+        <h2>Refundable when no eligible opportunities arrive.</h2>
+        <p>If your subscribed account receives zero eligible quote opportunities during a billing month, that month is refundable.</p>
         <div class="rule-grid">
-          <div>
-            <strong>Refund applies when</strong>
-            <p>No eligible matched opportunities were available for your area and services.</p>
-          </div>
-          <div>
-            <strong>Refund does not apply when</strong>
-            <p>Opportunities existed, quote windows were missed, or quotes were submitted but not selected.</p>
-          </div>
+          <div><strong>Refund applies when</strong><p>No eligible matched quote opportunities were available for your area and services during that billing month.</p></div>
+          <div><strong>Refund does not apply when</strong><p>Opportunities existed, quote windows were missed, or estimates were submitted but not selected.</p></div>
         </div>
-        <div class="policy-actions">
-          <a class="btn btn-primary" href="/login.html">Start Onboarding</a>
-          <a class="btn btn-secondary" href="/">Back Home</a>
-        </div>
+        <div class="policy-actions"><a class="btn btn-primary" href="/login.html">Start Onboarding</a><a class="btn btn-secondary" href="/">Back Home</a></div>
       </article>
     </section>
   </main>

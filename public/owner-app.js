@@ -266,7 +266,7 @@ function renderRequests() {
   const reqWrap = document.getElementById('ownerRequests');
 
   if (!repairsCache.length) {
-    reqWrap.innerHTML = "<div class='list-card'><strong>No requests yet.</strong><div class='muted-xs'>Post your first repair request to start receiving quotes.</div><button class='btn btn-orange' data-view='quote' style='margin-top:8px'>Post a Repair</button></div>";
+    reqWrap.innerHTML = "<div class='list-card'><strong>No requests yet.</strong><div class='muted-xs'>Post your first repair request to start receiving quotes.</div><button class='btn btn-primary' data-view='quote' style='margin-top:8px'>Post a Repair</button></div>";
     return;
   }
 
@@ -289,15 +289,15 @@ function renderRequests() {
 
     return `<div class='list-card'>
       <div class='request-head'>
-        <strong>#${x.id} · ${x.title}</strong>
+        <strong>#${x.id} - ${x.title}</strong>
         <span class='pill ${status}'>${statusLabel}</span>
       </div>
-      <div class='muted-xs'>${x.vehicle_year || ''} ${x.vehicle_make || ''} ${x.vehicle_model || ''} · ${x.city || ''}, ${x.state || ''}</div>
+      <div class='muted-xs'>${x.vehicle_year || ''} ${x.vehicle_make || ''} ${x.vehicle_model || ''} - ${x.city || ''}, ${x.state || ''}</div>
       ${timeline}
-      <div class='muted-xs'>${hasBids ? 'Quotes are arriving. Compare price, provider details, and availability before you choose.' : 'We’re matching your request with eligible local providers.'}</div>
+      <div class='muted-xs'>${hasBids ? 'Quotes are arriving. Compare price, provider details, and availability before you choose.' : 'We are matching your request with eligible local providers.'}</div>
       <div style='display:flex;gap:8px;flex-wrap:wrap;margin-top:8px'>
-        <button class='btn btn-dark' data-view-request='${x.id}' style='padding:8px 12px'>${isSelected ? 'Viewing Quotes' : 'View Quotes'}</button>
-        ${status === 'open' ? `<button class='btn btn-dark' data-cancel-request='${x.id}' style='padding:8px 12px;border-color:#7b3b3b;color:#ffb3b3'>Cancel Request</button>` : ''}
+        <button class='btn btn-secondary' data-view-request='${x.id}' style='padding:8px 12px'>${isSelected ? 'Viewing Quotes' : 'View Quotes'}</button>
+        ${status === 'open' ? `<button class='btn btn-danger' data-cancel-request='${x.id}' style='padding:8px 12px'>Cancel Request</button>` : ''}
       </div>
     </div>`;
   }).join('');
@@ -340,7 +340,7 @@ function renderCompareTray(allBids = []) {
   const cards = comparePinned
     .map(id => byId.get(Number(id)))
     .filter(Boolean)
-    .map(b => `<span class='compare-pill'>#${b.id} · $${b.amount} · ${Number(b.eta_hours || 24)}h</span>`)
+    .map(b => `<span class='compare-pill'>#${b.id} - $${b.amount} - ${Number(b.eta_hours || 24)}h</span>`)
     .join('');
   tray.style.display = 'block';
   items.innerHTML = cards;
@@ -350,7 +350,7 @@ function renderBids() {
   const bidWrap = document.getElementById('ownerBids');
 
   if (!repairsCache.length) {
-    bidWrap.innerHTML = '<p>—</p>';
+    bidWrap.innerHTML = '<p>-</p>';
     return;
   }
 
@@ -360,7 +360,7 @@ function renderBids() {
   const bids = bidsByRequest.get(Number(selected.id)) || [];
   const accepted = bids.find(b => String(b.status || '').toLowerCase() === 'accepted');
 
-  const header = `<div class='muted-xs' style='margin-bottom:8px'>Showing repair estimates for <b>Request #${selected.id}</b> — ${selected.title}</div>`;
+  const header = `<div class='muted-xs' style='margin-bottom:8px'>Showing repair estimates for <b>Request #${selected.id}</b> - ${selected.title}</div>`;
 
   if (!bids.length) {
     bidWrap.innerHTML = `${header}<div class='list-card'>
@@ -369,9 +369,9 @@ function renderBids() {
       <div class='skeleton' style='min-height:18px;margin-top:8px'></div>
       <div class='skeleton' style='min-height:18px;margin-top:8px'></div>
       <div class='muted-xs' style='margin-top:10px'>Status: matching your repair with eligible mechanics and auto shops.</div>
-      <div class='muted-xs'>You’ll get notified here as soon as estimates start coming in.</div>
+      <div class='muted-xs'>You will get notified here as soon as estimates start coming in.</div>
       <div class='muted-xs'>Most requests receive quotes within 24 hours.</div>
-      <button class='btn btn-dark' data-view='quote' style='margin-top:10px'>Update Request Details</button>
+      <button class='btn btn-secondary' data-view='quote' style='margin-top:10px'>Update Request Details</button>
     </div>`;
     document.querySelectorAll('#ownerBids [data-view]').forEach(btn => btn.addEventListener('click', () => setView(btn.dataset.view)));
     return;
@@ -406,13 +406,15 @@ function renderBids() {
     const providerType = String(meta.providerType || '').toLowerCase() === 'shop' ? 'shop' : 'mechanic';
     const providerTypeLabel = meta.providerTypeLabel || (providerType === 'shop' ? 'Mechanic Shop' : 'Individual Mechanic');
     const tags = [];
-    if (status === 'open' && cheapestOpen !== null && Number(b.amount || 0) === cheapestOpen) tags.push("<span class='tag best'>Best Price</span>");
-    if (status === 'open' && fastestOpen !== null && Number(b.eta_hours || 999999) === fastestOpen) tags.push("<span class='tag fast'>Fastest</span>");
-    if (status === 'open' && topRatedOpen && Number(topRatedOpen.id) === Number(b.id) && (getMechanicRating(b.mechanic_id).avg || 0) > 0) tags.push("<span class='tag rated'>Top Rated</span>");
-    if (status === 'open' && bestValueBid && Number(bestValueBid.id) === Number(b.id)) tags.push("<span class='tag rated'>Best Value</span>");
+    if (status === 'open' && cheapestOpen !== null && Number(b.amount || 0) === cheapestOpen) tags.push("<span class='tag best'>Lowest estimate</span>");
+    if (status === 'open' && fastestOpen !== null && Number(b.eta_hours || 999999) === fastestOpen) tags.push("<span class='tag fast'>Soonest availability</span>");
+    if (status === 'open' && topRatedOpen && Number(topRatedOpen.id) === Number(b.id) && (getMechanicRating(b.mechanic_id).avg || 0) > 0) tags.push("<span class='tag rated'>Most reviewed</span>");
+    if (status === 'open' && bestValueBid && Number(bestValueBid.id) === Number(b.id)) tags.push("<span class='tag rated'>Most complete estimate</span>");
 
     const deltaVsBestPrice = cheapestOpen !== null ? Math.max(0, Number(b.amount || 0) - Number(cheapestOpen)) : 0;
     const deltaVsFastest = fastestOpen !== null ? Math.max(0, Number(b.eta_hours || 24) - Number(fastestOpen)) : 0;
+    const phone = String(meta.businessPhone || '').trim();
+    const email = String(meta.businessEmail || '').trim();
 
     return `<div class='estimate-card ${providerType}'>
       <div class='estimate-top'>
@@ -427,18 +429,18 @@ function renderBids() {
         <div class='kpi-pill'><div class='lbl'>ETA</div><div class='val small'>${Number(b.eta_hours || 24)}h</div></div>
       </div>
       <div class='badge-row'>${tags.join('')}</div>
-      ${status === 'open' ? `<div class='muted-xs'>${deltaVsBestPrice === 0 ? 'Cheapest current estimate.' : `$${deltaVsBestPrice} above cheapest`} · ${deltaVsFastest === 0 ? 'Fastest ETA currently.' : `${deltaVsFastest}h slower than fastest`}</div>` : ''}
+      ${status === 'open' ? `<div class='muted-xs'>${deltaVsBestPrice === 0 ? 'Lowest current estimate.' : `$${deltaVsBestPrice} above lowest`} - ${deltaVsFastest === 0 ? 'Soonest availability currently.' : `${deltaVsFastest}h after soonest`}</div>` : ''}
       <div class='muted-xs'>Address: ${meta.businessAddress || 'Address not provided'} ${meta.businessZip || ''}</div>
       <div class='contact-row'>
-        <span class='contact-pill'>Phone: ${meta.businessPhone || 'No phone'}</span>
-        <span class='contact-pill'>Email: ${meta.businessEmail || 'No email'}</span>
+        ${phone ? `<a class='contact-pill' href='tel:${phone.replace(/\D/g, '')}'>Call provider</a>` : ''}
+        ${email ? `<a class='contact-pill' href='mailto:${email}'>Email provider</a>` : ''}
         <span class='contact-pill'>Rating: ${rating} (${reviewCount})</span>
       </div>
       <div class='muted-xs'>Notes: ${parsed.notes ? parsed.notes : 'No additional notes provided.'}</div>
-      <div class='muted-xs'><a href='/provider/${encodeURIComponent(b.mechanic_id)}' target='_blank' style='color:#9fc1ff'>View Provider Public Profile ↗</a></div>
+      <div class='muted-xs'><a href='/provider/${encodeURIComponent(b.mechanic_id)}' target='_blank' style='color:#9fc1ff'>View Provider Public Profile opens in new tab</a></div>
       <div style='display:flex;gap:8px;flex-wrap:wrap;margin-top:10px'>
         ${status === 'open' ? `<button class='btn btn-green' data-accept='${b.id}'>Choose This Provider</button>` : ''}
-        ${status === 'open' ? `<button class='btn btn-dark' data-pin='${b.id}'>${comparePinned.includes(Number(b.id)) ? 'Pinned' : 'Pin to Compare'}</button>` : ''}
+        ${status === 'open' ? `<button class='btn btn-secondary' data-pin='${b.id}'>${comparePinned.includes(Number(b.id)) ? 'Pinned' : 'Pin to Compare'}</button>` : ''}
       </div>
     </div>`;
   }).join('');
@@ -456,11 +458,11 @@ function renderBids() {
   const savings = Math.max(0, highestBid - acceptedAmount);
   const reason = accepted
     ? (bestValueBid && Number(bestValueBid.id) === Number(accepted.id)
-      ? 'Best Value'
+      ? 'Most complete estimate'
       : (fastestOpen !== null && Number(accepted.eta_hours || 999999) === Number(fastestOpen)
-        ? 'Fastest ETA'
+        ? 'Soonest availability ETA'
         : (topRatedOpen && Number(topRatedOpen.id) === Number(accepted.id)
-          ? 'Top Rated'
+          ? 'Most reviewed'
           : 'Selected by you')))
     : '';
   const acceptedInfo = accepted ? `<div class='winner-shell estimate-card ${acceptedProviderType}' style='border-color:#2a9f60;box-shadow:0 0 0 1px rgba(42,159,96,.18) inset'>
@@ -490,17 +492,17 @@ function renderBids() {
     <div class='badge-row'><span class='tag rated'>Selected Provider</span><span class='tag best'>${reason}</span></div>
     <div class='muted-xs'>Address: ${acceptedMeta.businessAddress || 'Address not provided'} ${acceptedMeta.businessZip || ''}</div>
     <div class='contact-row'>
-      <span class='contact-pill'>Phone: ${acceptedMeta.businessPhone || 'No phone'}</span>
-      <span class='contact-pill'>Email: ${acceptedMeta.businessEmail || 'No email'}</span>
+      ${String(acceptedMeta.businessPhone || '').trim() ? `<a class='contact-pill' href='tel:${String(acceptedMeta.businessPhone || '').replace(/\D/g, '')}'>Call provider</a>` : ''}
+      ${String(acceptedMeta.businessEmail || '').trim() ? `<a class='contact-pill' href='mailto:${String(acceptedMeta.businessEmail || '').trim()}'>Email provider</a>` : ''}
       <span class='contact-pill'>Rating: ${acceptedRating.avg ? `${acceptedRating.avg}/5` : 'New'} (${acceptedRating.count} review${acceptedRating.count === 1 ? '' : 's'})</span>
     </div>
     <div class='muted-xs'>Scope: ${acceptedParsed?.notes ? acceptedParsed.notes : 'No additional scope notes provided.'}</div>
-    <div class='muted-xs'><a href='/provider/${encodeURIComponent(accepted.mechanic_id)}' target='_blank' style='color:#9fc1ff'>View Provider Public Profile ↗</a></div>
-    ${existingFeedback ? `<div class='muted-xs'>Your review was submitted: <b>${existingFeedback.rating}/5</b>${existingFeedback.text ? ` — ${existingFeedback.text}` : ''}</div>` : ''}
+    <div class='muted-xs'><a href='/provider/${encodeURIComponent(accepted.mechanic_id)}' target='_blank' style='color:#9fc1ff'>View Provider Public Profile opens in new tab</a></div>
+    ${existingFeedback ? `<div class='muted-xs'>Your review was submitted: <b>${existingFeedback.rating}/5</b>${existingFeedback.text ? ` - ${existingFeedback.text}` : ''}</div>` : ''}
 
     <div class='winner-actions'>
       ${canComplete ? `<button class='btn btn-green' data-complete='${selected.id}'>Mark Job Completed</button>` : ''}
-      ${isCompleted ? `<button class='btn btn-dark' data-feedback='${accepted.id}' data-request='${selected.id}' data-mechanic='${accepted.mechanic_id}'>${existingFeedback ? 'Update Review' : 'Leave Feedback'}</button>` : `<span class='muted-xs'>Review unlocks after job is marked completed.</span>`}
+      ${isCompleted ? `<button class='btn btn-secondary' data-feedback='${accepted.id}' data-request='${selected.id}' data-mechanic='${accepted.mechanic_id}'>${existingFeedback ? 'Update Review' : 'Leave Feedback'}</button>` : `<span class='muted-xs'>Review unlocks after job is marked completed.</span>`}
     </div>
   </div>` : '';
 
@@ -648,7 +650,7 @@ function renderHomeSummary() {
         const meta = parsed.meta || {};
         const r = getMechanicRating(b.mechanic_id);
         const providerTypeLabel = meta.providerTypeLabel || (String(meta.providerType || '').toLowerCase() === 'shop' ? 'Mechanic Shop' : 'Individual Mechanic');
-        return `<div class='muted-xs'>${meta.businessName || b.mechanic_name} (${providerTypeLabel}): <b>$${b.amount}</b> · ${r.avg ? `${r.avg}/5` : 'No rating yet'} (${r.count})</div>`;
+        return `<div class='muted-xs'>${meta.businessName || b.mechanic_name} (${providerTypeLabel}): <b>$${b.amount}</b> - ${r.avg ? `${r.avg}/5` : 'No rating yet'} (${r.count})</div>`;
       });
     topEl.innerHTML = top.length ? top.join('') : 'No estimates to review yet.';
   }
@@ -733,7 +735,7 @@ async function boot() {
       renderBids();
     } catch (err) {
       reqWrap.innerHTML = `<p style='color:#ff9a9a'>${err.message || 'Could not load dashboard.'}</p>`;
-      bidWrap.innerHTML = '<p>—</p>';
+      bidWrap.innerHTML = '<p>-</p>';
     }
   }
 
@@ -828,3 +830,5 @@ async function boot() {
 }
 
 boot();
+
+

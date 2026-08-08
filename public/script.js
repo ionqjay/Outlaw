@@ -8,7 +8,6 @@ const form = document.getElementById('signupForm');
 const success = document.getElementById('success');
 const submitBtn = document.getElementById('submitBtn');
 const signupCount = document.getElementById('signupCount');
-const repairsCounter = document.getElementById('repairsCounter');
 const prefillEmail = document.getElementById('prefillEmail');
 const notifyBtn = document.getElementById('notifyBtn');
 const sendOtpBtn = document.getElementById('sendOtpBtn');
@@ -31,23 +30,22 @@ function showToast(message, type = 'ok') {
 }
 
 let currentTab = 'owner';
-let liveCounter = 847;
 
 const configuredApiBase = window.APP_CONFIG?.API_BASE || '';
 const API_BASE = configuredApiBase.trim().replace(/\/$/, '');
 const api = (path) => `${API_BASE}${path}`;
 
 const variant = {
-  h: 'Your car needs fixing. Let mechanics compete for the job.',
-  s: 'Post your repair and receive quotes from local mechanics and repair shops. Compare price, provider details, and availability before you choose.'
+  h: 'Get clear repair estimates without calling shop after shop.',
+  s: 'Early-access repair estimate workflow.'
 };
 
-function setTab(tab){
+function setTab(tab) {
   currentTab = tab;
-  tabs.forEach(t => t.classList.toggle('active', t.dataset.tab===tab));
+  tabs.forEach(t => t.classList.toggle('active', t.dataset.tab === tab));
   mechOnly.classList.toggle('hidden', tab !== 'mechanic');
-  document.getElementById('modalTitle').textContent = tab === 'mechanic' ? 'Join ShopMyRepair' : 'Get Repair Quotes';
-  submitBtn.textContent = tab === 'mechanic' ? 'Join Provider Waitlist' : 'Notify Me When We Launch';
+  document.getElementById('modalTitle').textContent = tab === 'mechanic' ? 'Join as a Provider' : 'Join Owner Early Access';
+  submitBtn.textContent = tab === 'mechanic' ? 'Join Provider Early Access' : 'Notify Me When Matching Opens';
 }
 
 openBtns.forEach(btn => btn.addEventListener('click', () => {
@@ -59,22 +57,20 @@ if (notifyBtn) {
   notifyBtn.addEventListener('click', () => {
     setTab('owner');
     modal.classList.remove('hidden');
-    if(prefillEmail?.value) form.email.value = prefillEmail.value;
+    if (prefillEmail?.value) form.email.value = prefillEmail.value;
   });
 }
 
-closeModal.addEventListener('click', ()=>modal.classList.add('hidden'));
-closeSuccess.addEventListener('click', ()=>modal.classList.add('hidden'));
-modal.querySelector('.overlay').addEventListener('click', ()=>modal.classList.add('hidden'));
-tabs.forEach(t => t.addEventListener('click', ()=>setTab(t.dataset.tab)));
+closeModal.addEventListener('click', () => modal.classList.add('hidden'));
+closeSuccess.addEventListener('click', () => modal.classList.add('hidden'));
+modal.querySelector('.overlay').addEventListener('click', () => modal.classList.add('hidden'));
+tabs.forEach(t => t.addEventListener('click', () => setTab(t.dataset.tab)));
 
-if (sendOtpBtn) {
-  sendOtpBtn.style.display = 'none';
-}
+if (sendOtpBtn) sendOtpBtn.style.display = 'none';
 
 form.addEventListener('submit', async (e) => {
   e.preventDefault();
-  const rawPhone = (form.phone.value || '').replace(/\D/g,'');
+  const rawPhone = (form.phone.value || '').replace(/\D/g, '');
   if (rawPhone.length !== 10) return alert('Phone must be 10 digits');
 
   const payload = {
@@ -113,11 +109,11 @@ form.addEventListener('submit', async (e) => {
 
   form.classList.add('hidden');
   success.classList.remove('hidden');
-  showToast('Signup complete. You’re on the list!', 'ok');
+  showToast('Signup complete. You are on the list.', 'ok');
   form.reset();
 });
 
-async function loadCounts(){
+async function loadCounts() {
   try {
     const r = await fetch(api('/api/stats'));
     if (!r.ok) throw new Error('stats failed');
@@ -129,13 +125,10 @@ async function loadCounts(){
 }
 loadCounts();
 
-if (repairsCounter) {
-  setInterval(()=>{liveCounter += Math.random() > 0.4 ? 1 : 0; repairsCounter.textContent = liveCounter;}, 3500);
-}
-
 const observer = new IntersectionObserver(entries => {
   entries.forEach(entry => {
-    if(entry.isIntersecting) entry.target.classList.add('show');
+    if (entry.isIntersecting) entry.target.classList.add('show');
   });
-},{threshold:.1});
+}, { threshold: .1 });
 document.querySelectorAll('.reveal').forEach(el => observer.observe(el));
+
