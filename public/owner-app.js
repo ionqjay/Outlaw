@@ -266,7 +266,7 @@ function renderRequests() {
   const reqWrap = document.getElementById('ownerRequests');
 
   if (!repairsCache.length) {
-    reqWrap.innerHTML = "<div class='list-card'><strong>No requests yet.</strong><div class='muted-xs'>Post your first repair request to start receiving estimates.</div><button class='btn btn-orange' data-view='quote' style='margin-top:8px'>Post Repair Request</button></div>";
+    reqWrap.innerHTML = "<div class='list-card'><strong>No requests yet.</strong><div class='muted-xs'>Post your first repair request to start receiving quotes.</div><button class='btn btn-orange' data-view='quote' style='margin-top:8px'>Post a Repair</button></div>";
     return;
   }
 
@@ -294,9 +294,9 @@ function renderRequests() {
       </div>
       <div class='muted-xs'>${x.vehicle_year || ''} ${x.vehicle_make || ''} ${x.vehicle_model || ''} · ${x.city || ''}, ${x.state || ''}</div>
       ${timeline}
-      <div class='muted-xs'>${hasBids ? 'Great — estimates are arriving. Review and compare to choose the best value.' : 'We’re actively matching your request and sending invite waves to eligible providers.'}</div>
+      <div class='muted-xs'>${hasBids ? 'Quotes are arriving. Compare price, provider details, and availability before you choose.' : 'We’re matching your request with eligible local providers.'}</div>
       <div style='display:flex;gap:8px;flex-wrap:wrap;margin-top:8px'>
-        <button class='btn btn-dark' data-view-request='${x.id}' style='padding:8px 12px'>${isSelected ? 'Viewing Repair Estimates' : 'View Repair Estimates'}</button>
+        <button class='btn btn-dark' data-view-request='${x.id}' style='padding:8px 12px'>${isSelected ? 'Viewing Quotes' : 'View Quotes'}</button>
         ${status === 'open' ? `<button class='btn btn-dark' data-cancel-request='${x.id}' style='padding:8px 12px;border-color:#7b3b3b;color:#ffb3b3'>Cancel Request</button>` : ''}
       </div>
     </div>`;
@@ -368,9 +368,9 @@ function renderBids() {
       <div class='skeleton' style='min-height:18px;margin-top:10px'></div>
       <div class='skeleton' style='min-height:18px;margin-top:8px'></div>
       <div class='skeleton' style='min-height:18px;margin-top:8px'></div>
-      <div class='muted-xs' style='margin-top:10px'>Status: dispatching invites to eligible mechanics and auto shops.</div>
+      <div class='muted-xs' style='margin-top:10px'>Status: matching your repair with eligible mechanics and auto shops.</div>
       <div class='muted-xs'>You’ll get notified here as soon as estimates start coming in.</div>
-      <div class='muted-xs'>Most requests receive estimates within 24 hours.</div>
+      <div class='muted-xs'>Most requests receive quotes within 24 hours.</div>
       <button class='btn btn-dark' data-view='quote' style='margin-top:10px'>Update Request Details</button>
     </div>`;
     document.querySelectorAll('#ownerBids [data-view]').forEach(btn => btn.addEventListener('click', () => setView(btn.dataset.view)));
@@ -423,7 +423,7 @@ function renderBids() {
         <span class='pill ${status}'>${labelForStatus(status)}</span>
       </div>
       <div class='estimate-kpis'>
-        <div class='kpi-pill'><div class='lbl'>Repair Estimate</div><div class='val'>$${b.amount}</div></div>
+        <div class='kpi-pill'><div class='lbl'>Quote</div><div class='val'>$${b.amount}</div></div>
         <div class='kpi-pill'><div class='lbl'>ETA</div><div class='val small'>${Number(b.eta_hours || 24)}h</div></div>
       </div>
       <div class='badge-row'>${tags.join('')}</div>
@@ -437,7 +437,7 @@ function renderBids() {
       <div class='muted-xs'>Notes: ${parsed.notes ? parsed.notes : 'No additional notes provided.'}</div>
       <div class='muted-xs'><a href='/provider/${encodeURIComponent(b.mechanic_id)}' target='_blank' style='color:#9fc1ff'>View Provider Public Profile ↗</a></div>
       <div style='display:flex;gap:8px;flex-wrap:wrap;margin-top:10px'>
-        ${status === 'open' ? `<button class='btn btn-green' data-accept='${b.id}'>Accept Repair Estimate</button>` : ''}
+        ${status === 'open' ? `<button class='btn btn-green' data-accept='${b.id}'>Choose This Provider</button>` : ''}
         ${status === 'open' ? `<button class='btn btn-dark' data-pin='${b.id}'>${comparePinned.includes(Number(b.id)) ? 'Pinned' : 'Pin to Compare'}</button>` : ''}
       </div>
     </div>`;
@@ -466,7 +466,7 @@ function renderBids() {
   const acceptedInfo = accepted ? `<div class='winner-shell estimate-card ${acceptedProviderType}' style='border-color:#2a9f60;box-shadow:0 0 0 1px rgba(42,159,96,.18) inset'>
     <div class='winner-hero'>
       <div>
-        <div class='winner-title'>Selected Estimate</div>
+        <div class='winner-title'>Selected Quote</div>
         <div class='estimate-name'>${acceptedMeta.businessName || accepted.mechanic_name}</div>
         <div class='provider-chip ${acceptedProviderType}'>${acceptedProviderTypeLabel}</div>
       </div>
@@ -633,8 +633,8 @@ function renderHomeSummary() {
   const statusEl = document.getElementById('homeStatus');
   if (statusEl) {
     if (!repairsCache.length) statusEl.textContent = 'No active repair requests yet.';
-    else if (newEstimates > 0) statusEl.textContent = `You have ${openRequests} open request(s) and ${newEstimates} repair estimate(s) waiting for review.`;
-    else statusEl.textContent = `You have ${openRequests} open request(s). Next step: monitor new repair estimates.`;
+    else if (newEstimates > 0) statusEl.textContent = `You have ${openRequests} open request(s) and ${newEstimates} quote(s) waiting for review.`;
+    else statusEl.textContent = `You have ${openRequests} open request(s). Next step: monitor incoming quotes.`;
   }
 
   const topEl = document.getElementById('homeTopEstimates');
@@ -804,7 +804,7 @@ async function boot() {
         retryOnNetworkError: true
       });
 
-      setStatus('Request submitted successfully.', 'ok');
+      setStatus('Repair submitted successfully.', 'ok');
       ['title','issueDetails','vehicleYear','vehicleMake','vehicleModel','city','zip'].forEach(id => {
         const el = document.getElementById(id);
         if (el) el.value = '';
@@ -819,7 +819,7 @@ async function boot() {
       setStatus(`${err.message || 'Failed to submit request.'}${suffix}`, 'err');
     } finally {
       btn.disabled = false;
-      btn.textContent = 'Submit Repair Request';
+      btn.textContent = 'Submit Repair';
     }
   });
 

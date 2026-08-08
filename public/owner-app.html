@@ -196,6 +196,94 @@
     .star-btn { background: #12131a; border: 1px solid #333645; color: #c6cad9; border-radius: 10px; padding: 8px 10px; cursor: pointer; }
     .star-btn.active { border-color: #e8441a; color: #fff; background: #2a1a15; }
 
+    body { background: var(--color-bg); color: var(--color-ink); }
+    .dash { max-width: 1120px; margin: 0 auto 52px; padding: 28px var(--space-page) 0; }
+    .hero {
+      background: #fff;
+      border: 1px solid var(--color-border);
+      border-radius: 18px;
+      box-shadow: var(--shadow-soft);
+      padding: clamp(22px, 4vw, 36px);
+      margin: 0 0 18px;
+    }
+    .hero h1 { color: var(--color-primary-strong); font-size: clamp(32px, 4vw, 48px); letter-spacing: -.045em; }
+    .hero p { color: var(--color-ink-soft); font-size: 16px; }
+    .quick-metrics { grid-template-columns: repeat(3,minmax(0,1fr)); gap: 10px; }
+    .quick-metrics .chip {
+      border: 1px solid var(--color-border);
+      border-radius: 8px;
+      background: var(--color-surface-soft);
+      color: var(--color-primary);
+      font-weight: 700;
+    }
+    .tabs { margin: 18px 0; gap: 8px; }
+    .tab-btn {
+      background: transparent;
+      border: 1px solid transparent;
+      color: var(--color-muted);
+      border-radius: 8px;
+      font-weight: 800;
+    }
+    .tab-btn.active { background: var(--color-primary); border-color: var(--color-primary); color: #fff; box-shadow: none; }
+    .panel {
+      background: #fff;
+      border: 1px solid var(--color-border);
+      border-radius: 16px;
+      box-shadow: var(--shadow-soft);
+      padding: clamp(18px, 3vw, 28px);
+    }
+    .panel h2, .panel h3 { color: var(--color-primary-strong); letter-spacing: -.03em; }
+    .subtle, .muted-xs { color: var(--color-muted); }
+    .list-card {
+      background: #fff;
+      border: 1px solid var(--color-border);
+      border-radius: 12px;
+      box-shadow: none;
+    }
+    input, select, textarea {
+      background: #fff;
+      border: 1px solid var(--color-border);
+      color: var(--color-ink);
+      border-radius: 8px;
+    }
+    input:focus, select:focus, textarea:focus {
+      border-color: var(--color-accent);
+      box-shadow: 0 0 0 3px rgba(217,119,6,.18);
+    }
+    .pill { border-color: var(--color-border); color: var(--color-primary); background: var(--color-surface-soft); font-weight: 800; }
+    .pill.open { border-color: #b7cce3; color: var(--color-primary); background: #eff6ff; }
+    .pill.accepted, .pill.completed { border-color: #b9decf; color: var(--color-success); background: #edf8f2; }
+    .pill.in_progress { border-color: #f0c47d; color: #8a4b05; background: #fff8ee; }
+    .provider-chip, .contact-pill, .tag, .compare-pill, .timeline span, .winner-timeline span {
+      border-color: var(--color-border);
+      background: var(--color-surface-soft);
+      color: var(--color-primary);
+      border-radius: 999px;
+      font-weight: 700;
+    }
+    .provider-chip.shop, .provider-chip.mechanic { border-color: var(--color-border); color: var(--color-primary); background: var(--color-surface-soft); }
+    .tag.best, .tag.fast, .tag.rated { border-color: #f0c47d; background: #fff8ee; color: #8a4b05; }
+    .estimate-card, .estimate-card.shop, .estimate-card.mechanic, .winner-shell {
+      background: #fff;
+      border: 1px solid var(--color-border);
+      border-radius: 14px;
+      box-shadow: 0 10px 30px rgba(8,34,61,.06);
+    }
+    .estimate-name { color: var(--color-primary-strong); }
+    .estimate-kpis, .winner-kpi-grid { gap: 10px; }
+    .kpi-pill { background: var(--color-surface-soft); border: 1px solid var(--color-border); border-radius: 10px; }
+    .kpi-pill .lbl { color: var(--color-muted); }
+    .kpi-pill .val { color: var(--color-primary-strong); }
+    .winner-title { color: var(--color-success); }
+    .timeline span.done, .winner-timeline span.done { border-color: #b9decf; color: var(--color-success); background: #edf8f2; }
+    .timeline span.current, .winner-timeline span.current { border-color: #f0c47d; color: #8a4b05; background: #fff8ee; }
+    .compare-tray { background: #fff; border: 1px solid var(--color-border); box-shadow: var(--shadow-soft); }
+    .skeleton { background: var(--color-surface-soft); border: 1px solid var(--color-border); }
+    .feedback-card { background: #fff; border: 1px solid var(--color-border); color: var(--color-ink); }
+    .feedback-overlay { background: rgba(8,34,61,.42); }
+    .star-btn { background: #fff; border: 1px solid var(--color-border); color: var(--color-primary); border-radius: 8px; }
+    .star-btn.active { border-color: var(--color-accent); color: var(--color-accent-strong); background: #fff8ee; }
+
     @media (max-width: 860px) {
       .grid2, .quote-grid, .quick-metrics, .winner-kpi-grid { grid-template-columns: 1fr; }
       .tabs { overflow-x: auto; flex-wrap: nowrap; padding-bottom: 2px; }
@@ -211,12 +299,12 @@
       .contact-row { gap:6px; }
       .contact-pill { font-size:11px; padding:4px 8px; }
       .dash { padding-bottom: 76px; }
-      .mobile-cta { display:flex; position:fixed; left:10px; right:10px; bottom:10px; gap:8px; z-index:90; background:#10131c; border:1px solid #2f3748; border-radius:14px; padding:8px; }
+      .mobile-cta { display:flex; position:fixed; left:10px; right:10px; bottom:10px; gap:8px; z-index:90; background:#fff; border:1px solid var(--color-border); border-radius:14px; padding:8px; box-shadow:var(--shadow-soft); }
       .mobile-cta .btn { flex:1; padding:10px 12px; }
     }
   </style>
 </head>
-<body>
+<body class="app-body">
   <nav class="nav">
     <div class="logo"><span>SHOPMY</span><span class="orange">REPAIR</span></div>
     <button class="btn btn-dark" id="logoutBtn">Logout</button>
@@ -224,19 +312,19 @@
 
   <main class="dash">
     <section class="hero">
-      <h1>Owner Dashboard</h1>
-      <p>Post your repair once and compare local mechanic and shop quotes side-by-side.</p>
+      <h1>Your repairs</h1>
+      <p>Post a repair once, track incoming quotes, and choose the provider you trust.</p>
       <div class="quick-metrics">
-        <div class="chip">Fast quote matching</div>
-        <div class="chip">Compare for best value</div>
-        <div class="chip">Quality-focused decisions</div>
+        <div class="chip">Active requests</div>
+        <div class="chip">New quotes</div>
+        <div class="chip">Repair status</div>
       </div>
     </section>
 
     <div class="tabs">
       <button class="tab-btn active" data-view="home">Home</button>
-      <button class="tab-btn" data-view="dashboard">My Requests & Estimates</button>
-      <button class="tab-btn" data-view="quote">Post Repair Request</button>
+      <button class="tab-btn" data-view="dashboard">Requests & Quotes</button>
+      <button class="tab-btn" data-view="quote">Post a Repair</button>
       <button class="tab-btn" data-view="profile">Profile</button>
     </div>
 
@@ -254,8 +342,8 @@
       </div>
 
       <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:10px">
-        <button class="btn btn-orange" data-view="quote">Get a Repair Estimate</button>
-        <button class="btn btn-dark" data-view="dashboard">View My Repairs</button>
+        <button class="btn btn-orange" data-view="quote">Post a Repair</button>
+        <button class="btn btn-dark" data-view="dashboard">Compare Quotes</button>
       </div>
 
       <div class="list-card" style="margin-top:10px">
@@ -280,10 +368,10 @@
     </section>
 
     <section id="view-dashboard" class="panel" style="display:none">
-      <h2>My Requests & Estimates</h2>
-      <p class="subtle">Track live progress as providers are matched, invited, and estimates arrive.</p>
+      <h2>Requests & Quotes</h2>
+      <p class="subtle">Track each repair and compare quotes without switching between calls and texts.</p>
       <div id="ownerRequests" class="subtle">Loading...</div>
-      <h3 style="margin-top:14px">Current Repair Estimates</h3>
+      <h3 style="margin-top:14px">Quote Comparison</h3>
       <div id="ownerBids" class="subtle">Loading...</div>
       <div id="compareTray" class="compare-tray" style="display:none">
         <div><strong>Compare Estimates</strong></div>
@@ -293,8 +381,8 @@
     </section>
 
     <section id="view-quote" class="panel" style="display:none">
-      <h2>Post Repair Request</h2>
-      <p class="subtle">Simple details, fast matching with quality-focused estimates.</p>
+      <h2>Post a Repair</h2>
+      <p class="subtle">Vehicle, problem, location, then submit. Keep it short and clear.</p>
 
       <div class="grid2" style="margin-top:10px">
         <input id="title" placeholder="Short title (e.g. Brake replacement)" />
@@ -348,7 +436,7 @@
 
       <textarea id="issueDetails" placeholder="Describe the issue (symptoms, noises, warnings)" style="margin-top:8px"></textarea>
 
-      <button class="btn btn-orange" id="submitRepairBtn" style="margin-top:10px">Submit Repair Request</button>
+      <button class="btn btn-orange" id="submitRepairBtn" style="margin-top:10px">Submit Repair</button>
       <p id="ownerStatus" class="status">Ready when you are.</p>
     </section>
 

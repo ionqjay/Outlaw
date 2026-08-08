@@ -223,12 +223,12 @@ async function boot() {
   const profileSubtitle = document.getElementById('providerProfileSubtitle');
   if (dashboardTitle) dashboardTitle.textContent = `${providerTypeLabel} Dashboard`;
   if (dashboardSubtitle) dashboardSubtitle.textContent = isShop
-    ? 'Find qualified repair requests, send competitive shop estimates, and win more local jobs.'
-    : 'Find qualified repair requests, send competitive mechanic estimates, and win more local jobs.';
+    ? 'Find matched repair requests, send clear shop quotes, and win more local jobs.'
+    : 'Find matched repair requests, send clear mechanic quotes, and win more local jobs.';
   if (profileTitle) profileTitle.textContent = `${providerTypeLabel} Profile`;
   if (profileSubtitle) profileSubtitle.textContent = isShop
-    ? 'Set your shop profile so owners clearly see business identity and trust your estimates.'
-    : 'Set your mechanic profile so owners clearly see this is an individual mechanic estimate.';
+    ? 'Set your shop profile so owners understand who is quoting and what your team works on.'
+    : 'Set your mechanic profile so owners understand who is quoting and what you work on.';
 
   const businessNameInput = document.getElementById('profileBusinessName');
   if (businessNameInput) {
@@ -488,7 +488,7 @@ async function boot() {
           });
 
           setInlineAlert('');
-          setStatus(`Repair estimate submitted as ${getProviderTypeLabel(session.role)}.`, 'ok');
+          setStatus(`Quote submitted as ${getProviderTypeLabel(session.role)}.`, 'ok');
           await loadRepairs();
           await loadDashboard();
         } catch (err) {

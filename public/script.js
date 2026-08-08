@@ -37,19 +37,17 @@ const configuredApiBase = window.APP_CONFIG?.API_BASE || '';
 const API_BASE = configuredApiBase.trim().replace(/\/$/, '');
 const api = (path) => `${API_BASE}${path}`;
 
-const variants = [
-  { h: 'Car Repair Quotes, Simplified.', s: 'Post your repair once and compare clear estimates from trusted shops and independent mechanics.' },
-  { h: 'One Request. Multiple Trusted Estimates.', s: 'Review price, ETA, and provider details in one clean place before you choose who to hire.' }
-];
-const variant = variants[Math.random() > 0.5 ? 1 : 0];
-document.getElementById('heroHeadline').textContent = variant.h;
-document.getElementById('heroSubtext').textContent = variant.s;
+const variant = {
+  h: 'Your car needs fixing. Let mechanics compete for the job.',
+  s: 'Post your repair and receive quotes from local mechanics and repair shops. Compare price, provider details, and availability before you choose.'
+};
 
 function setTab(tab){
   currentTab = tab;
   tabs.forEach(t => t.classList.toggle('active', t.dataset.tab===tab));
   mechOnly.classList.toggle('hidden', tab !== 'mechanic');
-  submitBtn.textContent = tab === 'mechanic' ? 'Reserve My Founding Mechanic Spot' : 'Notify Me When We Launch';
+  document.getElementById('modalTitle').textContent = tab === 'mechanic' ? 'Join ShopMyRepair' : 'Get Repair Quotes';
+  submitBtn.textContent = tab === 'mechanic' ? 'Join Provider Waitlist' : 'Notify Me When We Launch';
 }
 
 openBtns.forEach(btn => btn.addEventListener('click', () => {
@@ -57,11 +55,13 @@ openBtns.forEach(btn => btn.addEventListener('click', () => {
   modal.classList.remove('hidden');
 }));
 
-notifyBtn.addEventListener('click', () => {
-  setTab('owner');
-  modal.classList.remove('hidden');
-  if(prefillEmail.value) form.email.value = prefillEmail.value;
-});
+if (notifyBtn) {
+  notifyBtn.addEventListener('click', () => {
+    setTab('owner');
+    modal.classList.remove('hidden');
+    if(prefillEmail?.value) form.email.value = prefillEmail.value;
+  });
+}
 
 closeModal.addEventListener('click', ()=>modal.classList.add('hidden'));
 closeSuccess.addEventListener('click', ()=>modal.classList.add('hidden'));
@@ -129,7 +129,9 @@ async function loadCounts(){
 }
 loadCounts();
 
-setInterval(()=>{liveCounter += Math.random() > 0.4 ? 1 : 0; repairsCounter.textContent = liveCounter;}, 3500);
+if (repairsCounter) {
+  setInterval(()=>{liveCounter += Math.random() > 0.4 ? 1 : 0; repairsCounter.textContent = liveCounter;}, 3500);
+}
 
 const observer = new IntersectionObserver(entries => {
   entries.forEach(entry => {

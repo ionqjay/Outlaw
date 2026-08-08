@@ -3,90 +3,76 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Pricing & Policy — ShopMyRepair</title>
-  <meta name="description" content="Transparent pricing for mechanic shops and independent mechanics. $99/month marketplace access with an opportunity guarantee." />
+  <title>Pricing - ShopMyRepair</title>
+  <meta name="description" content="ShopMyRepair pricing for mechanics and repair shops. $99/month marketplace access with a clear opportunity guarantee." />
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700;800&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="/styles.css" />
   <style>
-    :root{--bg:#0b0f18;--card:#111827;--card2:#0f172a;--stroke:#2b3a56;--text:#eef3ff;--muted:#a7b4cf;--orange:#ff7a45;--green:#22c55e;--blue:#60a5fa}
-    body{font-family:Inter,Segoe UI,Arial,sans-serif;background:radial-gradient(1100px 360px at 0 -20%,rgba(255,122,69,.18),transparent 62%),radial-gradient(1000px 360px at 100% -10%,rgba(96,165,250,.14),transparent 60%),var(--bg);color:var(--text)}
-    .wrap{max-width:1040px;margin:22px auto 48px;padding:0 16px;overflow:hidden}
-    .hero{background:linear-gradient(180deg,var(--card),var(--card2));border:1px solid var(--stroke);border-radius:18px;padding:24px}
-    .eyebrow{display:inline-block;font-size:12px;color:#cfe2ff;border:1px solid #33507f;background:#0f1e36;padding:5px 9px;border-radius:999px}
-    h1{margin:10px 0 8px;font-size:clamp(30px,5vw,50px);line-height:1.04}
-    .sub{color:var(--muted);max-width:760px}
-    .grid{display:grid;grid-template-columns:minmax(0,1.1fr) minmax(0,.9fr);gap:12px;margin-top:12px}
-    .grid>*{min-width:0}
-    .card{background:linear-gradient(180deg,var(--card),var(--card2));border:1px solid var(--stroke);border-radius:16px;padding:18px;min-width:0;overflow-wrap:anywhere}
-    .price{font-size:54px;font-weight:800;letter-spacing:0}.price small{font-size:16px;color:var(--muted);font-weight:600}
-    .muted{color:var(--muted)}
-    ul{margin:10px 0 0 18px}.li{margin:6px 0}
-    .ok{color:#bbf7d0}.warn{color:#fde68a}.bad{color:#fecaca}
-    .sectionTitle{font-size:20px;margin-bottom:8px}
-    .table-wrap{max-width:100%;overflow-x:auto;-webkit-overflow-scrolling:touch}
-    .table{width:100%;border-collapse:collapse;margin-top:8px;min-width:620px}
-    .table th,.table td{border-bottom:1px solid #23314c;padding:9px;text-align:left;font-size:13px}
-    .table th{color:#cde0ff}
-    .cta{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px}
-    .btnPro{display:inline-flex;align-items:center;justify-content:center;min-height:44px;padding:10px 14px;border-radius:10px;text-decoration:none;font-weight:700;text-align:center}
-    .btnPrimary{background:var(--orange);color:#130c08}
-    .btnGhost{border:1px solid var(--stroke);background:#0e182b;color:#d9e7ff}
-    @media(max-width:920px){.grid{grid-template-columns:minmax(0,1fr)}}
-    @media(max-width:560px){.wrap{padding:0 12px}.hero,.card{padding:18px}.price{font-size:48px}.table{min-width:0}.table,.table thead,.table tbody,.table tr,.table th,.table td{display:block;width:100%}.table thead{display:none}.table tr{border-bottom:1px solid #23314c;padding:8px 0}.table td{border-bottom:0;padding:7px 0}.table td:first-child::before{content:"Refund applies when";display:block;color:#cde0ff;font-weight:700;margin-bottom:4px}.table td:last-child::before{content:"Refund does not apply when";display:block;color:#cde0ff;font-weight:700;margin-bottom:4px}.cta{display:grid;grid-template-columns:1fr}.btnPro{width:100%}}
+    .page-wrap{width:min(1040px,100%);margin:0 auto;padding:64px var(--space-page) 72px}
+    .pricing-hero{max-width:780px;margin-bottom:38px}
+    .pricing-grid{display:grid;grid-template-columns:minmax(0,1fr) minmax(280px,.72fr);gap:24px;align-items:start}
+    .policy-card{background:#fff;border:1px solid var(--color-border);border-radius:16px;padding:24px;box-shadow:var(--shadow-soft)}
+    .price{font-size:56px;font-weight:800;letter-spacing:-.05em;color:var(--color-primary-strong);line-height:1}
+    .price small{font-size:16px;letter-spacing:0;color:var(--color-muted);font-weight:700}
+    .plain-list{display:grid;gap:12px;margin:20px 0 0;padding:0;list-style:none;color:var(--color-ink-soft)}
+    .plain-list li{padding-top:12px;border-top:1px solid var(--color-border)}
+    .rule-grid{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-top:18px}
+    .rule-grid div{background:var(--color-surface-soft);border-radius:12px;padding:16px}
+    .rule-grid strong{display:block;margin-bottom:8px;color:var(--color-primary-strong)}
+    .policy-actions{display:flex;gap:10px;flex-wrap:wrap;margin-top:22px}
+    @media(max-width:820px){.pricing-grid,.rule-grid{grid-template-columns:1fr}.page-wrap{padding-top:44px}}
   </style>
 </head>
 <body>
   <nav class="nav">
-    <div class="logo"><span>SHOPMY</span><span class="orange">REPAIR</span></div>
-    <div style="display:flex;gap:8px">
-      <a class="btn btn-dark" href="/" style="text-decoration:none">Home</a>
-      <a class="btn btn-dark" href="/login.html" style="text-decoration:none">Login</a>
+    <a class="logo" href="/"><span>ShopMy</span><span>Repair</span></a>
+    <div class="nav-links">
+      <a href="/">Home</a>
+      <a href="/login.html">Sign In</a>
+      <a class="btn btn-primary" href="/login.html">Start Provider Onboarding</a>
     </div>
   </nav>
 
-  <main class="wrap">
-    <section class="hero">
-      <span class="eyebrow">Mechanic Shops + Independent Mechanics</span>
-      <h1>Simple pricing. Clear rules. No hidden fees.</h1>
-      <p class="sub">Access local repair opportunities for one flat monthly price. You compete on speed, quality, and trust — not on who can buy the most lead credits.</p>
+  <main class="page-wrap">
+    <section class="pricing-hero">
+      <p class="eyebrow">Provider pricing</p>
+      <h1>Simple access for mechanics and repair shops.</h1>
+      <p>ShopMyRepair charges providers for access to matched repair opportunities. Car owners can post requests and compare quotes for free.</p>
     </section>
 
-    <section class="grid">
-      <article class="card">
-        <div class="sectionTitle">Marketplace Access</div>
+    <section class="pricing-grid">
+      <article class="policy-card">
+        <p class="eyebrow">Marketplace Access</p>
         <div class="price">$99 <small>/ month</small></div>
-        <p class="muted">Applies to both individual mechanics and mechanic shops.</p>
-        <ul>
-          <li class="li">Local request feed + estimate submission tools</li>
-          <li class="li">Structured quote workflow (price, ETA, notes)</li>
-          <li class="li">Profile visibility + reputation growth via owner reviews</li>
-          <li class="li">Dispatch cap per request: <b>3 shops + 2 independents</b></li>
+        <p>For individual mechanics and mechanic shops that want to quote local repair jobs.</p>
+        <ul class="plain-list">
+          <li>View repair requests matched by service fit, location, provider type, and invite timing.</li>
+          <li>Submit structured quotes with price, ETA, and notes.</li>
+          <li>Build trust through profile details and owner feedback after completed jobs.</li>
         </ul>
       </article>
 
-      <article class="card">
-        <div class="sectionTitle">Opportunity Guarantee</div>
-        <p>If your account gets <b>zero eligible opportunities</b> to submit an estimate during a billing month, we refund that month’s $99 fee.</p>
-        <div class="table-wrap"><table class="table">
-          <thead><tr><th>Refund applies when</th><th>Refund does not apply when</th></tr></thead>
-          <tbody>
-            <tr><td class="ok">No eligible opportunities were available</td><td class="bad">Opportunities existed but no estimate was submitted</td></tr>
-            <tr><td class="ok">Opportunity matched your area + services</td><td class="warn">Quote windows were missed or profile was incomplete</td></tr>
-            <tr><td class="ok">Request had enough details to quote</td><td class="bad">You submitted quotes but did not win jobs</td></tr>
-          </tbody>
-        </table></div>
+      <article class="policy-card">
+        <p class="eyebrow">Opportunity Guarantee</p>
+        <h2>No eligible opportunities, no monthly fee.</h2>
+        <p>If your account receives zero eligible opportunities to submit a quote during a billing month, we refund that month.</p>
+        <div class="rule-grid">
+          <div>
+            <strong>Refund applies when</strong>
+            <p>No eligible matched opportunities were available for your area and services.</p>
+          </div>
+          <div>
+            <strong>Refund does not apply when</strong>
+            <p>Opportunities existed, quote windows were missed, or quotes were submitted but not selected.</p>
+          </div>
+        </div>
+        <div class="policy-actions">
+          <a class="btn btn-primary" href="/login.html">Start Onboarding</a>
+          <a class="btn btn-secondary" href="/">Back Home</a>
+        </div>
       </article>
-    </section>
-
-    <section class="card" style="margin-top:12px">
-      <div class="sectionTitle">Policy Summary</div>
-      <p class="muted">ShopMyRepair sells access to quote opportunities — not guaranteed job wins. Winning depends on your estimate quality, response speed, and reputation.</p>
-      <div class="cta">
-        <a class="btnPro btnPrimary" href="/login.html">Start Provider Onboarding</a>
-        <a class="btnPro btnGhost" href="/">Back to homepage</a>
-      </div>
     </section>
   </main>
 </body>

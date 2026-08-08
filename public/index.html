@@ -3,153 +3,183 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>ShopMyRepair — Compare Auto Repair Quotes Fast</title>
-  <meta name="description" content="ShopMyRepair helps car owners compare repair quotes from trusted mechanics and shops. Get 3 quotes in 24 hours. Free for owners." />
+  <title>ShopMyRepair - Compare Auto Repair Quotes</title>
+  <meta name="description" content="Post your car repair once. Local mechanics and repair shops send quotes. Compare price, reviews, and availability before you choose." />
   <meta name="robots" content="index,follow" />
   <link rel="canonical" href="https://shopmyrepair.com/" />
-  <meta property="og:title" content="ShopMyRepair — Compare Auto Repair Quotes Fast" />
-  <meta property="og:description" content="Get 3 repair quotes in 24 hours from trusted mechanics and shops. Free for car owners." />
+  <meta property="og:title" content="ShopMyRepair - Compare Auto Repair Quotes" />
+  <meta property="og:description" content="Post your repair once, get quotes from local providers, and choose who works on your car." />
   <meta property="og:type" content="website" />
   <meta property="og:url" content="https://shopmyrepair.com/" />
   <meta name="twitter:card" content="summary_large_image" />
-  <meta name="twitter:title" content="ShopMyRepair — Compare Auto Repair Quotes Fast" />
-  <meta name="twitter:description" content="Get 3 repair quotes in 24 hours from trusted mechanics and shops. Free for car owners." />
+  <meta name="twitter:title" content="ShopMyRepair - Compare Auto Repair Quotes" />
+  <meta name="twitter:description" content="Post your repair once, compare local quotes, and choose your mechanic." />
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=DM+Sans:wght@400;500;700&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="/styles.css" />
 </head>
 <body>
   <nav class="nav">
-    <div class="logo"><span>SHOPMY</span><span class="orange">REPAIR</span></div>
-    <div style="display:flex;gap:8px"><a class="btn btn-dark" href="/pricing.html" style="text-decoration:none">Pricing</a><a class="btn btn-dark" href="/login.html" style="text-decoration:none">Login</a><button class="btn btn-orange open-modal" data-tab="owner">Get Free Quotes →</button></div>
+    <a class="logo" href="/" aria-label="ShopMyRepair home"><span>ShopMy</span><span>Repair</span></a>
+    <div class="nav-links">
+      <a href="#how">How It Works</a>
+      <a href="#mechanics">For Mechanics</a>
+      <a href="/pricing.html">Pricing</a>
+      <a href="/login.html">Sign In</a>
+      <button class="btn btn-primary open-modal" data-tab="owner">Get Repair Quotes</button>
+    </div>
   </nav>
 
   <main>
     <section class="hero reveal">
-      <h1 id="heroHeadline">Car Repair Quotes, Simplified.</h1>
-      <p id="heroSubtext">Tell us what your car needs once. Compare trusted estimates from mechanic shops and independent mechanics in one clean dashboard.</p>
-      <div class="cta-row">
-        <button class="btn btn-orange open-modal" data-tab="owner">Get Early Access →</button>
-        <button class="btn btn-dark open-modal" data-tab="mechanic">Join as Mechanic / Shop</button>
+      <div class="hero-copy">
+        <p class="eyebrow">Auto repair quotes, simplified</p>
+        <h1 id="heroHeadline">Your car needs fixing. Let mechanics compete for the job.</h1>
+        <p id="heroSubtext">Post your repair and receive quotes from local mechanics and repair shops. Compare price, provider details, and availability before you choose.</p>
+        <div class="cta-row">
+          <button class="btn btn-primary open-modal" data-tab="owner">Get Repair Quotes</button>
+          <button class="btn btn-secondary open-modal" data-tab="mechanic">Join as a Mechanic</button>
+        </div>
+        <p class="reassurance">Free for car owners. No obligation to choose a quote.</p>
       </div>
-      <div class="proof-row">
-        <div><span class="mini-icon check" aria-hidden="true"></span>Free for car owners</div><div><span class="mini-icon shop" aria-hidden="true"></span>Shops and independent mechanics</div><div><span class="mini-icon pin" aria-hidden="true"></span>Built for local service matching</div>
+
+      <div class="quote-visual" aria-label="Example repair quote comparison">
+        <div class="phone-shell">
+          <div class="phone-top">
+            <span>Repair request</span>
+            <span>Open</span>
+          </div>
+          <div class="request-preview">
+            <strong>2019 Honda Accord</strong>
+            <span>Front brakes need replacing</span>
+          </div>
+          <div class="quote-card featured">
+            <div>
+              <strong>Northside Auto</strong>
+              <span>Tomorrow morning</span>
+            </div>
+            <b>$385</b>
+          </div>
+          <div class="quote-card">
+            <div>
+              <strong>Mobile Brake Pro</strong>
+              <span>Today after 4 PM</span>
+            </div>
+            <b>$420</b>
+          </div>
+          <div class="quote-card">
+            <div>
+              <strong>Queens Repair Shop</strong>
+              <span>2 days</span>
+            </div>
+            <b>$450</b>
+          </div>
+        </div>
       </div>
-      <div class="live-pill"><span class="dot"></span><span id="repairsCounter">847</span> drivers already on the waitlist this week</div>
     </section>
 
-    <section class="stats reveal">
-      <div><strong>1</strong><span>REQUEST POSTED</span></div>
-      <div><strong>5</strong><span>TARGET ESTIMATES (3 SHOP + 2 MECHANIC)</span></div>
-      <div><strong>100%</strong><span>OWNER CONTROL ON WHO TO HIRE</span></div>
-      <div><strong>$0</strong><span>TO POST AS A CAR OWNER</span></div>
-    </section>
-
-    <section class="email-banner reveal">
-      <h2>Get Early Access</h2>
-      <p>Join the launch list to be first in line when quote matching opens in your area.</p>
-      <div class="inline-form">
-        <input id="prefillEmail" type="email" placeholder="Enter your email" />
-        <button class="btn btn-orange" id="notifyBtn">Join Early Access →</button>
+    <section class="process reveal" id="how">
+      <div class="section-head">
+        <p class="eyebrow">How it works</p>
+        <h2>Car repair without the runaround.</h2>
+      </div>
+      <div class="step-grid">
+        <article>
+          <span>1</span>
+          <h3>Tell us what your car needs</h3>
+          <p>Add your vehicle, describe the problem, and share where service is needed.</p>
+        </article>
+        <article>
+          <span>2</span>
+          <h3>Get quotes</h3>
+          <p>Local mechanics and repair shops can send pricing, notes, and availability.</p>
+        </article>
+        <article>
+          <span>3</span>
+          <h3>Choose your mechanic</h3>
+          <p>Compare options in one place and choose the provider that works for you.</p>
+        </article>
       </div>
     </section>
 
-    <section class="how reveal">
-      <h2>How It Works</h2>
-      <div class="grid-4">
-        <article class="card"><span class="num">01</span><h3>Post Your Repair</h3></article>
-        <article class="card"><span class="num">02</span><h3>Mechanics Compete</h3></article>
-        <article class="card"><span class="num">03</span><h3>Compare and Choose</h3></article>
-        <article class="card"><span class="num">04</span><h3>Get It Fixed</h3></article>
-      </div>
-    </section>
-
-    <section class="trust reveal">
-      <h2>Why Drivers Choose ShopMyRepair</h2>
-      <div class="grid-3">
-        <article class="card feature-card"><span class="feature-icon doc" aria-hidden="true"></span><h3>Clear Estimate Details</h3><p>See price, ETA, and notes in a clean side-by-side view.</p></article>
-        <article class="card feature-card"><span class="feature-icon shop" aria-hidden="true"></span><h3>Balanced Provider Mix</h3><p>Get estimates from both mechanic shops and individual mechanics.</p></article>
-        <article class="card feature-card"><span class="feature-icon shield" aria-hidden="true"></span><h3>Owner-First Experience</h3><p>You stay in control from request to final hire decision.</p></article>
-      </div>
-    </section>
-
-    <section class="mechanic-banner reveal">
+    <section class="split-section reveal">
       <div>
-        <span class="tag">For Mechanics & Shops</span>
-        <h2>Consistent Local Repair Opportunities.</h2>
-        <p>Create a profile, send structured estimates fast, and grow your customer pipeline.</p>
-        <p><b>$99/month Marketplace Access.</b> If you receive zero eligible opportunities to submit an estimate in a billing month, we refund that month. Winning jobs depends on your estimate quality, speed, and reputation.</p>
-        <button class="btn btn-gold open-modal" data-tab="mechanic">Join Provider Waitlist</button>
+        <p class="eyebrow">Why use it</p>
+        <h2>One request beats five phone calls.</h2>
       </div>
-      <div class="tiers">
-        <div class="tier gold">Individual Mechanic<br/><small>Mobile and independent</small></div>
-        <div class="tier blue">Mechanic Shop<br/><small>Business storefront profile</small></div>
-        <div class="tier green">Owner Reviews<br/><small>Ratings after completed jobs</small></div>
-        <div class="tier orange">Public Profile<br/><small>Trust and visibility</small></div>
-      </div>
-    </section>
-
-    <section class="trust reveal">
-      <h2>Built for a Better Repair Experience</h2>
-      <div class="grid-3">
-        <article class="card feature-card"><span class="feature-icon search" aria-hidden="true"></span><h3>Transparent Comparison</h3><p>No guesswork. Review every estimate with the same clean structure.</p></article>
-        <article class="card feature-card"><span class="feature-icon chart" aria-hidden="true"></span><h3>Smarter Decision Making</h3><p>Spot best value, fastest ETA, and top-rated providers quickly.</p></article>
-        <article class="card feature-card"><span class="feature-icon message" aria-hidden="true"></span><h3>Feedback That Matters</h3><p>Owner reviews are tied to completed jobs to keep quality high.</p></article>
+      <div class="value-list">
+        <div>
+          <h3>Compare your options</h3>
+          <p>See multiple quotes instead of relying on one estimate.</p>
+        </div>
+        <div>
+          <h3>Save time</h3>
+          <p>Explain the repair once and let local providers respond.</p>
+        </div>
+        <div>
+          <h3>Choose confidently</h3>
+          <p>Review pricing, provider information, and owner feedback together.</p>
+        </div>
       </div>
     </section>
 
-    <section class="how reveal">
-      <h2>Request Lifecycle</h2>
-      <div class="grid-4">
-        <article class="card"><span class="num">01</span><h3>Submitted</h3></article>
-        <article class="card"><span class="num">02</span><h3>Bids Arrive</h3></article>
-        <article class="card"><span class="num">03</span><h3>Owner Accepts</h3></article>
-        <article class="card"><span class="num">04</span><h3>Job Complete</h3></article>
+    <section class="trust-band reveal">
+      <div class="section-head compact">
+        <p class="eyebrow">Built for trust</p>
+        <h2>Transparent quotes. Clear provider profiles. Secure accounts.</h2>
+      </div>
+      <div class="trust-grid">
+        <div><strong>Provider profiles</strong><span>Business details and specialties help owners understand who is quoting.</span></div>
+        <div><strong>Structured estimates</strong><span>Price, ETA, and notes are shown in the same format for easier comparison.</span></div>
+        <div><strong>Owner reviews</strong><span>Feedback is tied to completed jobs inside the platform.</span></div>
       </div>
     </section>
 
-    <section class="testimonials reveal">
-      <h2>What Early Drivers Are Saying</h2>
-      <div class="grid-3">
-        <article class="card"><div class="stars">★★★★★</div><p><i>“Saved $620 on my brake job in one day. Wild.”</i></p><div class="avatar">JM</div><small>J. Mendez — Queens</small></article>
-        <article class="card"><div class="stars">★★★★★</div><p><i>“Finally got straight quotes with no games.”</i></p><div class="avatar">RT</div><small>R. Torres — Bronx</small></article>
-        <article class="card"><div class="stars">★★★★★</div><p><i>“Best deal I’ve gotten in NYC, hands down.”</i></p><div class="avatar">AL</div><small>A. Lewis — Brooklyn</small></article>
+    <section class="mechanic-section reveal" id="mechanics">
+      <div>
+        <p class="eyebrow">For mechanics and shops</p>
+        <h2>More repair jobs. Less time chasing customers.</h2>
+        <p>ShopMyRepair connects providers with nearby drivers actively looking for repair quotes. Create a profile, review matched opportunities, and send clear estimates.</p>
+      </div>
+      <div class="pricing-panel">
+        <span>Marketplace Access</span>
+        <strong>$99/month</strong>
+        <p>If you receive zero eligible opportunities to submit an estimate in a billing month, we refund that month.</p>
+        <a class="btn btn-secondary" href="/pricing.html">View Pricing</a>
+        <button class="btn btn-primary open-modal" data-tab="mechanic">Join ShopMyRepair</button>
       </div>
     </section>
 
-    <section class="reveal">
-      <h2>FAQ</h2>
-      <div class="grid-3">
-        <article class="card"><h3>Is ShopMyRepair free for car owners?</h3><p>Yes. Owners can post requests and compare quotes for free.</p></article>
-        <article class="card"><h3>How fast do I get quotes?</h3><p>Most requests receive up to 3 quotes within 24 hours.</p></article>
-        <article class="card"><h3>Who can join as a pro?</h3><p>Independent mechanics and shop owners can both join and bid on jobs.</p></article>
-      </div>
+    <section class="final-cta reveal">
+      <h2>Post once. Compare quotes. Choose your mechanic.</h2>
+      <button class="btn btn-primary open-modal" data-tab="owner">Get Repair Quotes</button>
     </section>
   </main>
 
   <div class="mobile-cta">
-    <button class="btn btn-orange open-modal" data-tab="owner">Get Early Access</button>
+    <button class="btn btn-primary open-modal" data-tab="owner">Get Repair Quotes</button>
   </div>
 
   <div id="modal" class="modal hidden">
     <div class="overlay"></div>
     <div class="modal-card">
-      <button class="close" id="closeModal">✕</button>
-      <span class="badge">Launching Soon — Get Early Access</span>
-      <h2 id="modalTitle">Get Early Access</h2>
-      <p><span class="dot"></span> <span id="signupCount">0</span> total signups</p>
+      <button class="close" id="closeModal" aria-label="Close">x</button>
+      <span class="badge">Early Access</span>
+      <h2 id="modalTitle">Get Repair Quotes</h2>
+      <p class="modal-copy">Join the launch list. We will contact you when quote matching opens in your area.</p>
+      <p class="signup-counter"><span id="signupCount">0</span> total signups</p>
       <div class="tabs">
-        <button class="tab active" data-tab="owner">I Own a Car</button>
-        <button class="tab" data-tab="mechanic">I’m a Mechanic</button>
+        <button class="tab active" data-tab="owner">I own a car</button>
+        <button class="tab" data-tab="mechanic">I’m a mechanic</button>
       </div>
 
       <form id="signupForm">
         <input name="name" placeholder="Full name" required />
-        <input name="email" type="email" placeholder="Best email for quote updates" required />
+        <input name="email" type="email" placeholder="Email address" required />
         <input name="phone" placeholder="Mobile number" required />
-        <input name="zip" placeholder="ZIP code where the vehicle is located" required />
-        <input name="repairAddress" placeholder="Service location (street address, parking lot, or landmark)" required />
+        <input name="zip" placeholder="ZIP code" required />
+        <input name="repairAddress" placeholder="Service location" required />
         <select name="borough" required>
           <option value="">Service area</option>
           <option>Queens</option><option>Long Island</option><option>Bronx</option><option>Brooklyn</option><option>Manhattan</option><option>Staten Island</option><option>Westchester</option><option>Other</option>
@@ -157,7 +187,7 @@
 
         <div id="mechOnly" class="hidden">
           <select name="experience">
-            <option value="">Years of Experience</option>
+            <option value="">Years of experience</option>
             <option>0-2</option><option>3-5</option><option>6-10</option><option>10+</option>
           </select>
           <select name="hasShop">
@@ -166,10 +196,10 @@
           </select>
         </div>
 
-        <p class="sub" style="margin:4px 0 0;color:#aeb7cc">No SMS verification required right now. We’ll contact you by email.</p>
+        <p class="sub">No SMS verification required right now. We’ll contact you by email.</p>
 
         <input type="hidden" name="turnstileToken" id="turnstileToken" />
-        <button class="btn btn-orange" id="submitBtn">Notify Me When We Launch</button>
+        <button class="btn btn-primary" id="submitBtn">Notify Me When We Launch</button>
       </form>
 
       <div id="success" class="hidden">
@@ -179,7 +209,7 @@
           <li>Founding member perks by email</li>
           <li>Priority access for early signups</li>
         </ul>
-        <button class="btn btn-green" id="closeSuccess">Close</button>
+        <button class="btn btn-secondary" id="closeSuccess">Close</button>
       </div>
     </div>
   </div>
@@ -190,8 +220,8 @@
       "@type": "FAQPage",
       "mainEntity": [
         {"@type":"Question","name":"Is ShopMyRepair free for car owners?","acceptedAnswer":{"@type":"Answer","text":"Yes. Owners can post requests and compare quotes for free."}},
-        {"@type":"Question","name":"How fast do I get quotes?","acceptedAnswer":{"@type":"Answer","text":"Most requests receive up to 3 quotes within 24 hours."}},
-        {"@type":"Question","name":"Who can join as a pro?","acceptedAnswer":{"@type":"Answer","text":"Independent mechanics and shop owners can both join and bid on jobs."}}
+        {"@type":"Question","name":"Who can join as a provider?","acceptedAnswer":{"@type":"Answer","text":"Independent mechanics and mechanic shops can both join and submit estimates on matched jobs."}},
+        {"@type":"Question","name":"How does ShopMyRepair help compare quotes?","acceptedAnswer":{"@type":"Answer","text":"Quotes are shown with price, ETA, provider details, and notes in one place."}}
       ]
     }
   </script>
