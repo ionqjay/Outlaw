@@ -22,7 +22,16 @@
     .rule-grid div{background:var(--color-surface-soft);border-radius:12px;padding:16px}
     .rule-grid strong{display:block;margin-bottom:8px;color:var(--color-primary-strong)}
     .policy-actions{display:flex;gap:10px;flex-wrap:wrap;margin-top:22px}
-    @media(max-width:820px){.pricing-grid,.rule-grid{grid-template-columns:1fr}.page-wrap{padding-top:44px}}
+    @media(max-width:820px){
+      .page-wrap{width:100%;max-width:100%;padding:44px 20px 72px;overflow:hidden}
+      .pricing-hero{max-width:340px}
+      .pricing-hero h1{font-size:36px;line-height:1.04;letter-spacing:-.045em}
+      .pricing-grid,.rule-grid{grid-template-columns:minmax(0,1fr)}
+      .pricing-grid>*{min-width:0}
+      .policy-card{width:auto;max-width:calc(100vw - 40px);min-width:0;padding:20px;overflow-wrap:anywhere}
+      .price{font-size:48px}
+      .policy-actions{display:grid;grid-template-columns:1fr}
+    }
   </style>
 </head>
 <body>

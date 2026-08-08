@@ -144,6 +144,6 @@ textarea{resize:vertical}
   .nav-links .btn{min-height:40px;padding:10px 12px;font-size:13px}
   .phone-shell{border-radius:20px;padding:14px}
   .trust-band{margin-left:-16px;margin-right:-16px;padding:48px 16px}
-  .mobile-cta{display:block;position:fixed;left:0;right:0;bottom:0;z-index:90;padding:10px 14px calc(10px + env(safe-area-inset-bottom));background:linear-gradient(180deg,rgba(247,249,252,0),rgba(247,249,252,.96) 35%,var(--color-bg))}
+  .mobile-cta{display:none}
   .mobile-cta .btn{width:100%}
 }

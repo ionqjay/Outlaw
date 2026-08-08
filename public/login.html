@@ -17,7 +17,15 @@
     .svc-pill input{width:auto;min-height:auto}
     .auth-actions{display:flex;gap:10px;flex-wrap:wrap}
     .auth-actions .btn{flex:1}
-    @media(max-width:820px){.auth-wrap{grid-template-columns:1fr;padding-top:42px;gap:24px}.svc-grid{grid-template-columns:1fr}}
+    @media(max-width:820px){
+      .auth-wrap{width:100%;max-width:100%;grid-template-columns:1fr;padding:42px 20px 72px;gap:24px;overflow:hidden}
+      .auth-intro{max-width:340px}
+      .auth-intro h1{font-size:36px;line-height:1.04;letter-spacing:-.045em}
+      .auth-intro p{font-size:16px}
+      .auth-card{width:auto;max-width:calc(100vw - 40px);min-width:0;padding:20px;overflow-wrap:anywhere}
+      .auth-actions{display:grid;grid-template-columns:1fr}
+      .svc-grid{grid-template-columns:1fr}
+    }
   </style>
 </head>
 <body>
