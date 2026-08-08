@@ -1437,7 +1437,7 @@ app.post('/api/signup', async (req, res) => {
     await addToMailchimp(String(email).trim().toLowerCase(), String(name).trim(), [type, String(borough).trim()]);
   } catch {}
   try {
-    await sendSms(cleanPhone, `You're in 🎉 ShopMyRepair launch updates are on. We'll text you when quotes open in your area.`);
+    await sendSms(cleanPhone, `You're on the ShopMyRepair launch list. We'll text you when quotes open in your area.`);
   } catch {}
 
   const all = await listSignups();
@@ -2846,7 +2846,7 @@ app.get('/admin', async (req, res) => {
 if (process.env.NODE_ENV !== 'test') {
 app.listen(PORT, () => {
   if (!isAdminConfigValid()) {
-    console.warn('⚠️ Admin routes disabled: set ADMIN_TOKEN to a strong non-default value.');
+    console.warn('Admin routes disabled: set ADMIN_TOKEN to a strong non-default value.');
   }
   console.log(`Live: http://localhost:${PORT}`);
 });

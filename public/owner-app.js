@@ -364,12 +364,12 @@ function renderBids() {
 
   if (!bids.length) {
     bidWrap.innerHTML = `${header}<div class='list-card'>
-      <strong>🔎 Matching your request with nearby providers...</strong>
+      <strong>Matching your request with nearby providers...</strong>
       <div class='skeleton' style='min-height:18px;margin-top:10px'></div>
       <div class='skeleton' style='min-height:18px;margin-top:8px'></div>
       <div class='skeleton' style='min-height:18px;margin-top:8px'></div>
-      <div class='muted-xs' style='margin-top:10px'>⏱️ Status: dispatching invites to eligible mechanics and auto shops.</div>
-      <div class='muted-xs'>✅ You’ll get notified here as soon as estimates start coming in.</div>
+      <div class='muted-xs' style='margin-top:10px'>Status: dispatching invites to eligible mechanics and auto shops.</div>
+      <div class='muted-xs'>You’ll get notified here as soon as estimates start coming in.</div>
       <div class='muted-xs'>Most requests receive estimates within 24 hours.</div>
       <button class='btn btn-dark' data-view='quote' style='margin-top:10px'>Update Request Details</button>
     </div>`;
@@ -406,10 +406,10 @@ function renderBids() {
     const providerType = String(meta.providerType || '').toLowerCase() === 'shop' ? 'shop' : 'mechanic';
     const providerTypeLabel = meta.providerTypeLabel || (providerType === 'shop' ? 'Mechanic Shop' : 'Individual Mechanic');
     const tags = [];
-    if (status === 'open' && cheapestOpen !== null && Number(b.amount || 0) === cheapestOpen) tags.push("<span class='tag best'>💸 Best Price</span>");
-    if (status === 'open' && fastestOpen !== null && Number(b.eta_hours || 999999) === fastestOpen) tags.push("<span class='tag fast'>⚡ Fastest</span>");
-    if (status === 'open' && topRatedOpen && Number(topRatedOpen.id) === Number(b.id) && (getMechanicRating(b.mechanic_id).avg || 0) > 0) tags.push("<span class='tag rated'>⭐ Top Rated</span>");
-    if (status === 'open' && bestValueBid && Number(bestValueBid.id) === Number(b.id)) tags.push("<span class='tag rated'>🏆 Best Value</span>");
+    if (status === 'open' && cheapestOpen !== null && Number(b.amount || 0) === cheapestOpen) tags.push("<span class='tag best'>Best Price</span>");
+    if (status === 'open' && fastestOpen !== null && Number(b.eta_hours || 999999) === fastestOpen) tags.push("<span class='tag fast'>Fastest</span>");
+    if (status === 'open' && topRatedOpen && Number(topRatedOpen.id) === Number(b.id) && (getMechanicRating(b.mechanic_id).avg || 0) > 0) tags.push("<span class='tag rated'>Top Rated</span>");
+    if (status === 'open' && bestValueBid && Number(bestValueBid.id) === Number(b.id)) tags.push("<span class='tag rated'>Best Value</span>");
 
     const deltaVsBestPrice = cheapestOpen !== null ? Math.max(0, Number(b.amount || 0) - Number(cheapestOpen)) : 0;
     const deltaVsFastest = fastestOpen !== null ? Math.max(0, Number(b.eta_hours || 24) - Number(fastestOpen)) : 0;
@@ -418,7 +418,7 @@ function renderBids() {
       <div class='estimate-top'>
         <div>
           <div class='estimate-name'>${meta.businessName || b.mechanic_name}</div>
-          <div class='provider-chip ${providerType}'>${providerType === 'shop' ? '🏪' : '🧰'} ${providerTypeLabel}</div>
+          <div class='provider-chip ${providerType}'>${providerTypeLabel}</div>
         </div>
         <span class='pill ${status}'>${labelForStatus(status)}</span>
       </div>
@@ -428,11 +428,11 @@ function renderBids() {
       </div>
       <div class='badge-row'>${tags.join('')}</div>
       ${status === 'open' ? `<div class='muted-xs'>${deltaVsBestPrice === 0 ? 'Cheapest current estimate.' : `$${deltaVsBestPrice} above cheapest`} · ${deltaVsFastest === 0 ? 'Fastest ETA currently.' : `${deltaVsFastest}h slower than fastest`}</div>` : ''}
-      <div class='muted-xs'>📍 ${meta.businessAddress || 'Address not provided'} ${meta.businessZip || ''}</div>
+      <div class='muted-xs'>Address: ${meta.businessAddress || 'Address not provided'} ${meta.businessZip || ''}</div>
       <div class='contact-row'>
-        <span class='contact-pill'>📞 ${meta.businessPhone || 'No phone'}</span>
-        <span class='contact-pill'>✉️ ${meta.businessEmail || 'No email'}</span>
-        <span class='contact-pill'>⭐ ${rating} (${reviewCount})</span>
+        <span class='contact-pill'>Phone: ${meta.businessPhone || 'No phone'}</span>
+        <span class='contact-pill'>Email: ${meta.businessEmail || 'No email'}</span>
+        <span class='contact-pill'>Rating: ${rating} (${reviewCount})</span>
       </div>
       <div class='muted-xs'>Notes: ${parsed.notes ? parsed.notes : 'No additional notes provided.'}</div>
       <div class='muted-xs'><a href='/provider/${encodeURIComponent(b.mechanic_id)}' target='_blank' style='color:#9fc1ff'>View Provider Public Profile ↗</a></div>
@@ -466,9 +466,9 @@ function renderBids() {
   const acceptedInfo = accepted ? `<div class='winner-shell estimate-card ${acceptedProviderType}' style='border-color:#2a9f60;box-shadow:0 0 0 1px rgba(42,159,96,.18) inset'>
     <div class='winner-hero'>
       <div>
-        <div class='winner-title'>✅ Selected Estimate</div>
+        <div class='winner-title'>Selected Estimate</div>
         <div class='estimate-name'>${acceptedMeta.businessName || accepted.mechanic_name}</div>
-        <div class='provider-chip ${acceptedProviderType}'>${acceptedProviderType === 'shop' ? '🏪' : '🧰'} ${acceptedProviderTypeLabel}</div>
+        <div class='provider-chip ${acceptedProviderType}'>${acceptedProviderTypeLabel}</div>
       </div>
       <span class='pill accepted'>Accepted</span>
     </div>
@@ -487,16 +487,16 @@ function renderBids() {
       <span class='${isCompleted ? 'done' : 'current'}'>${isCompleted ? 'Completed' : 'In Progress'}</span>
     </div>
 
-    <div class='badge-row'><span class='tag rated'>✅ Selected Provider</span><span class='tag best'>${reason}</span></div>
-    <div class='muted-xs'>📍 ${acceptedMeta.businessAddress || 'Address not provided'} ${acceptedMeta.businessZip || ''}</div>
+    <div class='badge-row'><span class='tag rated'>Selected Provider</span><span class='tag best'>${reason}</span></div>
+    <div class='muted-xs'>Address: ${acceptedMeta.businessAddress || 'Address not provided'} ${acceptedMeta.businessZip || ''}</div>
     <div class='contact-row'>
-      <span class='contact-pill'>📞 ${acceptedMeta.businessPhone || 'No phone'}</span>
-      <span class='contact-pill'>✉️ ${acceptedMeta.businessEmail || 'No email'}</span>
-      <span class='contact-pill'>⭐ ${acceptedRating.avg ? `${acceptedRating.avg}/5` : 'New'} (${acceptedRating.count} review${acceptedRating.count === 1 ? '' : 's'})</span>
+      <span class='contact-pill'>Phone: ${acceptedMeta.businessPhone || 'No phone'}</span>
+      <span class='contact-pill'>Email: ${acceptedMeta.businessEmail || 'No email'}</span>
+      <span class='contact-pill'>Rating: ${acceptedRating.avg ? `${acceptedRating.avg}/5` : 'New'} (${acceptedRating.count} review${acceptedRating.count === 1 ? '' : 's'})</span>
     </div>
     <div class='muted-xs'>Scope: ${acceptedParsed?.notes ? acceptedParsed.notes : 'No additional scope notes provided.'}</div>
     <div class='muted-xs'><a href='/provider/${encodeURIComponent(accepted.mechanic_id)}' target='_blank' style='color:#9fc1ff'>View Provider Public Profile ↗</a></div>
-    ${existingFeedback ? `<div class='muted-xs'>✅ Your review was submitted: <b>${existingFeedback.rating}/5</b>${existingFeedback.text ? ` — ${existingFeedback.text}` : ''}</div>` : ''}
+    ${existingFeedback ? `<div class='muted-xs'>Your review was submitted: <b>${existingFeedback.rating}/5</b>${existingFeedback.text ? ` — ${existingFeedback.text}` : ''}</div>` : ''}
 
     <div class='winner-actions'>
       ${canComplete ? `<button class='btn btn-green' data-complete='${selected.id}'>Mark Job Completed</button>` : ''}
@@ -548,7 +548,7 @@ function renderBids() {
       await loadDashboardData(window.__ownerSession);
       renderRequests();
       renderBids();
-      alert('Job marked as completed ✅ You can now leave a review.');
+      alert('Job marked as completed. You can now leave a review.');
     } catch (err) {
       alert(err.message || 'Could not mark job completed.');
     }
@@ -607,9 +607,9 @@ function renderOwnerChecklist({ allBids = [] } = {}) {
   const doneCount = [profileDone, postedRequest, reviewedEstimate].filter(Boolean).length;
   el.innerHTML = `
     <div class='muted-xs'>Progress: <b>${doneCount}/3 complete</b></div>
-    <div class='muted-xs'>${profileDone ? '✅' : '⬜'} Complete profile (name, email, phone)</div>
-    <div class='muted-xs'>${postedRequest ? '✅' : '⬜'} Post your first repair request</div>
-    <div class='muted-xs'>${reviewedEstimate ? '✅' : '⬜'} Review your first estimate</div>
+    <div class='muted-xs'>${profileDone ? 'Done' : 'Open'}: Complete profile (name, email, phone)</div>
+    <div class='muted-xs'>${postedRequest ? 'Done' : 'Open'}: Post your first repair request</div>
+    <div class='muted-xs'>${reviewedEstimate ? 'Done' : 'Open'}: Review your first estimate</div>
   `;
 }
 
@@ -657,9 +657,9 @@ function renderHomeSummary() {
   if (recentEl) {
     const recent = allBids.slice(0, 4).map(b => {
       const st = String(b.status || 'open').toLowerCase();
-      if (st === 'accepted') return `✅ You accepted an estimate from ${b.mechanic_name}.`;
-      if (st === 'open') return `🕒 New estimate received from ${b.mechanic_name}.`;
-      return `ℹ️ Estimate ${st} from ${b.mechanic_name}.`;
+      if (st === 'accepted') return `You accepted an estimate from ${b.mechanic_name}.`;
+      if (st === 'open') return `New estimate received from ${b.mechanic_name}.`;
+      return `Estimate ${st} from ${b.mechanic_name}.`;
     });
     recentEl.innerHTML = recent.length ? recent.map(x => `<div class='muted-xs'>${x}</div>`).join('') : 'No recent activity yet.';
   }
@@ -699,7 +699,7 @@ async function boot() {
       closeFeedbackModal();
       await loadDashboardData(window.__ownerSession);
       renderBids();
-      alert('Review submitted successfully ✅');
+      alert('Review submitted successfully.');
     } catch (err) {
       alert(err.message || 'Could not submit review.');
     }

@@ -571,7 +571,7 @@ async function boot() {
         return `<div class='estimate-card ${isWon ? 'won-job' : ''}'>
           <div class='estimate-top'>
             <div>
-              ${isWon ? `<div class='won-title'>🏆 Won Job</div>` : ''}
+              ${isWon ? `<div class='won-title'>Won Job</div>` : ''}
               <strong>${rep?.title ? rep.title : `Request #${b.request_id}`}</strong>
             </div>
             <span class='pill ${status}'>${labelForStatus(status)}</span>
@@ -586,7 +586,7 @@ async function boot() {
           <div class='small'><b>Repair needed:</b> ${ownerMeta.cleanDetails || 'Request details unavailable.'}</div>
 
           ${isWon ? `<div class='won-timeline'><span class='done'>Estimate Sent</span><span class='done'>Accepted</span><span class='${repStatus === 'completed' ? 'done' : 'current'}'>${repStatus === 'completed' ? 'Completed' : 'Service Active'}</span></div>` : ''}
-          ${isWon ? `<div class='contact-row'><span class='contact-pill'>📞 ${ownerMeta.ownerPhone || 'No phone'}</span><span class='contact-pill'>✉️ ${ownerMeta.ownerEmail || 'No email'}</span></div>` : ''}
+          ${isWon ? `<div class='contact-row'><span class='contact-pill'>Phone: ${ownerMeta.ownerPhone || 'No phone'}</span><span class='contact-pill'>Email: ${ownerMeta.ownerEmail || 'No email'}</span></div>` : ''}
         </div>`;
       };
 
@@ -622,9 +622,9 @@ async function boot() {
 
     el.innerHTML = `
       <div class='small'>Progress: <b>${doneCount}/3 complete</b></div>
-      <div class='small'>${profileDone ? '✅' : '⬜'} Complete your profile</div>
-      <div class='small'>${submittedEstimate ? '✅' : '⬜'} Submit your first estimate</div>
-      <div class='small'>${wonFirstJob ? '✅' : '⬜'} Win your first job</div>
+      <div class='small'>${profileDone ? 'Done' : 'Open'}: Complete your profile</div>
+      <div class='small'>${submittedEstimate ? 'Done' : 'Open'}: Submit your first estimate</div>
+      <div class='small'>${wonFirstJob ? 'Done' : 'Open'}: Win your first job</div>
     `;
   }
 
@@ -661,9 +661,9 @@ async function boot() {
 
     const recent = bids.slice(0, 4).map(b => {
       const st = String(b.status || 'open').toLowerCase();
-      if (st === 'accepted') return `✅ Estimate accepted for request #${b.request_id}`;
-      if (st === 'open') return `🕒 Estimate pending for request #${b.request_id}`;
-      return `ℹ️ Estimate ${st} for request #${b.request_id}`;
+      if (st === 'accepted') return `Estimate accepted for request #${b.request_id}`;
+      if (st === 'open') return `Estimate pending for request #${b.request_id}`;
+      return `Estimate ${st} for request #${b.request_id}`;
     });
     document.getElementById('homeActivity').innerHTML = recent.length ? recent.map(x => `<div class='small'>${x}</div>`).join('') : 'No recent activity yet.';
   }
