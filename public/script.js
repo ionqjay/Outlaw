@@ -44,7 +44,7 @@ function setTab(tab) {
   currentTab = tab;
   tabs.forEach(t => t.classList.toggle('active', t.dataset.tab === tab));
   mechOnly.classList.toggle('hidden', tab !== 'mechanic');
-  document.getElementById('modalTitle').textContent = tab === 'mechanic' ? 'Join as a Provider' : 'Join Owner Early Access';
+  document.getElementById('modalTitle').textContent = tab === 'mechanic' ? 'Join as a Provider' : 'Get Repair Quotes';
   submitBtn.textContent = tab === 'mechanic' ? 'Join Provider Early Access' : 'Notify Me When Matching Opens';
 }
 
