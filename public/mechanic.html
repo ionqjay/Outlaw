@@ -234,6 +234,7 @@
       .mobile-cta .btn { flex:1; padding:10px 12px; }
     }
   </style>
+<script src="/vendor/purify.min.js"></script>
 </head>
 <body class="app-body">
   <nav class="nav">
@@ -259,7 +260,7 @@
       <button class="tab-btn" data-view="profile">Profile</button>
     </div>
 
-    <section id="view-home" class="panel">
+    <section id="view-home" class="panel"><details class="notification-panel"><summary>Notifications</summary><ul id="notificationsList" class="notice-list">Loading updates…</ul></details>
       <h2>Welcome back</h2>
       <p class="subtle">Prioritize matched requests, clear quotes, and fast customer follow-up.</p>
 
@@ -324,7 +325,7 @@
       <div class="list-card" style="margin-top:10px">
         <h3 style="margin-top:0">Marketplace Access - $99/month</h3>
         <div class="small" id="billingStatus">Checking subscription status...</div>
-        <div class="small" style="margin-top:6px">Your subscription unlocks estimate submission on repair requests matched by service fit, location, provider type, and invite timing.</div>
+        <div class="small" style="margin-top:6px">Complete your specialties, ZIP code, and service radius before subscribing. Matching uses approximate ZIP-to-ZIP distance, not driving distance.</div>
         <div class="small" style="margin-top:6px">Opportunity Guarantee: if you receive zero eligible opportunities to submit an estimate in a billing month, we refund that month. Winning jobs is based on your pricing, speed, and reputation.</div>
         <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:10px">
           <button class="btn btn-primary" id="startSubscriptionBtn" type="button">Start $99 Subscription</button>
@@ -332,7 +333,9 @@
         </div>
         <div id="billingNotice" class="inline-alert"></div>
       </div>
-      <div class="row2" style="margin-top:10px">
+      <details class="list-card"><summary>Request an opportunity-guarantee refund</summary><p>After a billing month ends, use Manage Billing to find your invoice ID. Submit it here for review. Missed invitations and unsuccessful estimates do not qualify.</p><form id="refundForm"><label>Stripe invoice ID<input name="invoiceId" placeholder="in_…" required></label><button class="btn btn-secondary">Request review</button><p id="refundStatus" role="status"></p></form></details>
+<details class="list-card"><summary>Business verification</summary><p>Submit references for manual review. Do not include passwords, Social Security numbers, or payment details.</p><form id="verificationForm"><label>Business or professional name<input name="business_name" required maxlength="500"></label><label>License or registration reference<input name="license_reference" required maxlength="500"></label><label>Insurance provider and policy reference<input name="insurance_reference" required maxlength="500"></label><button class="btn btn-secondary">Submit for review</button><p id="verificationStatus" role="status"></p></form></details>
+<div class="row2" style="margin-top:10px">
         <input id="profileBusinessName" placeholder="Shop or business name" />
         <input id="profileName" placeholder="Contact name" />
       </div>
@@ -379,11 +382,12 @@
     <button class="btn btn-secondary" data-view="dashboard">My Pipeline</button>
   </div>
 
-  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="/vendor/supabase.js"></script>
   <script src="/config.js"></script>
   <script src="/supabase-client.js"></script>
   <script src="/app-auth.js"></script>
   <script src="/mechanic.js"></script>
+<script src="/operations-ui.js"></script>
 </body>
 </html>
 
