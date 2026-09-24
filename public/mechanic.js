@@ -3,7 +3,11 @@ const sameOriginApiBase = /^(localhost|127\.0\.0\.1)$|\.onrender\.com$/i.test(lo
   ? location.origin
   : '';
 
-const API_BASES = [sameOriginApiBase && ['localhost','127.0.0.1'].includes(location.hostname) ? sameOriginApiBase : (configuredApiBase || sameOriginApiBase || location.origin)];
+const API_BASES = [
+  configuredApiBase,
+  sameOriginApiBase,
+  'https://outlaw-ba9s.onrender.com'
+].filter(Boolean).filter((v, i, a) => a.indexOf(v) === i);
 
 let workingApiBase = configuredApiBase || sameOriginApiBase || 'https://outlaw-ba9s.onrender.com';
 let billingState = { canSubmitEstimates: false, hasStripeCustomer: false, status: 'none' };
@@ -33,10 +37,9 @@ async function fetchJson(path, options = {}) {
       }
 
       workingApiBase = base;
-      if (!res.ok) { const error = new Error(data.error || data.message || `Request failed (${res.status})`); error.httpStatus = res.status; throw error; }
+      if (!res.ok) throw new Error(data.error || data.message || `Request failed (${res.status})`);
       return data;
     } catch (err) {
-      if (err.httpStatus || (options.method && options.method !== 'GET')) throw err;
       lastErr = err;
     }
   }
@@ -338,7 +341,7 @@ async function boot() {
   async function loadRepairs() {
     const wrap = document.getElementById('repairFeed');
     setInlineAlert('');
-    wrap.innerHTML = DOMPurify.sanitize("<div class='skeleton'></div><div class='skeleton'></div>");
+    wrap.innerHTML = "<div class='skeleton'></div><div class='skeleton'></div>";
 
     try {
       const profile = await window.smrAuth.getMechanicProfile();
@@ -362,7 +365,7 @@ async function boot() {
         setInlineAlert('Tip: Select your specialties in Profile (brakes, engine, etc.) so matching prioritizes the right requests.');
       }
 
-      wrap.innerHTML = DOMPurify.sanitize(filteredRepairs.length
+      wrap.innerHTML = filteredRepairs.length
         ? filteredRepairs.map(rep => {
             const ownerMeta = parseOwnerMeta(rep.issue_details);
             const locked = !!rep.__preview_locked;
@@ -388,7 +391,7 @@ async function boot() {
           }).join('')
         : (serviceKeys.size
             ? "<div class='list-card'><strong>No open repairs right now.</strong><div class='small'>You will only see requests you are invited to quote on (based on location/service fit and invite window).</div><div class='small'>Note: subscription is required to <b>submit</b> estimates, not to view invited requests.</div><div class='small'>Check back shortly - new owner demand comes in throughout the day.</div></div>"
-            : "<div class='list-card'><strong>Add your service specialties first.</strong><div class='small'>Go to Profile and select what you work on (brakes, engine, transmission, etc.).</div><div class='small'>We use this to match you with relevant repair requests.</div></div>"));
+            : "<div class='list-card'><strong>Add your service specialties first.</strong><div class='small'>Go to Profile and select what you work on (brakes, engine, transmission, etc.).</div><div class='small'>We use this to match you with relevant repair requests.</div></div>");
 
       document.querySelectorAll('#repairFeed [data-view]').forEach(btn => btn.addEventListener('click', () => setView(btn.dataset.view)));
 
@@ -498,7 +501,7 @@ async function boot() {
         }
       }));
     } catch (err) {
-      wrap.innerHTML = DOMPurify.sanitize(`<p style='color:#ff9a9a'>${err.message || 'Could not load repairs.'}</p>`);
+      wrap.innerHTML = `<p style='color:#ff9a9a'>${err.message || 'Could not load repairs.'}</p>`;
       setStatus('Could not load open repairs.', 'err');
     }
   }
@@ -544,9 +547,9 @@ async function boot() {
     const activeWrap = document.getElementById('mechBidsActive');
     const otherWrap = document.getElementById('mechBidsOther');
     const skeleton = "<div class='skeleton'></div><div class='skeleton'></div>";
-    wonWrap.innerHTML = DOMPurify.sanitize(skeleton);
-    activeWrap.innerHTML = DOMPurify.sanitize(skeleton);
-    otherWrap.innerHTML = DOMPurify.sanitize(skeleton);
+    wonWrap.innerHTML = skeleton;
+    activeWrap.innerHTML = skeleton;
+    otherWrap.innerHTML = skeleton;
 
     try {
       const [bidsData, repairsData] = await Promise.all([
@@ -591,17 +594,17 @@ async function boot() {
       const active = bids.filter(b => String(b.status || '').toLowerCase() === 'open');
       const other = bids.filter(b => !['accepted', 'open'].includes(String(b.status || '').toLowerCase()));
 
-      wonWrap.innerHTML = DOMPurify.sanitize(won.length ? won.map(renderBidCard).join('') : "<div class='list-card'><strong>No won jobs yet.</strong><div class='small'>Win your first one by responding fast and adding clear notes.</div><button class='btn btn-primary' data-view='repairs' style='margin-top:8px'>Find Repairs</button></div>");
-      activeWrap.innerHTML = DOMPurify.sanitize(active.length ? active.map(renderBidCard).join('') : "<div class='list-card'><strong>No active estimates.</strong><div class='small'>Browse open requests and submit competitive estimates.</div><button class='btn btn-primary' data-view='repairs' style='margin-top:8px'>Find Repairs</button></div>");
-      otherWrap.innerHTML = DOMPurify.sanitize(other.length ? other.map(renderBidCard).join('') : '<p>No other repair estimates yet.</p>');
+      wonWrap.innerHTML = won.length ? won.map(renderBidCard).join('') : "<div class='list-card'><strong>No won jobs yet.</strong><div class='small'>Win your first one by responding fast and adding clear notes.</div><button class='btn btn-primary' data-view='repairs' style='margin-top:8px'>Find Repairs</button></div>";
+      activeWrap.innerHTML = active.length ? active.map(renderBidCard).join('') : "<div class='list-card'><strong>No active estimates.</strong><div class='small'>Browse open requests and submit competitive estimates.</div><button class='btn btn-primary' data-view='repairs' style='margin-top:8px'>Find Repairs</button></div>";
+      otherWrap.innerHTML = other.length ? other.map(renderBidCard).join('') : '<p>No other repair estimates yet.</p>';
       document.querySelectorAll('#view-dashboard [data-view]').forEach(btn => btn.addEventListener('click', () => setView(btn.dataset.view)));
 
       await loadHomeMetrics({ bids, repairs, won, active });
     } catch (err) {
       const msg = `<p style='color:#ff9a9a'>${err.message || 'Could not load bids.'}</p>`;
-      wonWrap.innerHTML = DOMPurify.sanitize(msg);
-      activeWrap.innerHTML = DOMPurify.sanitize(msg);
-      otherWrap.innerHTML = DOMPurify.sanitize(msg);
+      wonWrap.innerHTML = msg;
+      activeWrap.innerHTML = msg;
+      otherWrap.innerHTML = msg;
     }
   }
 
@@ -617,12 +620,12 @@ async function boot() {
     const wonFirstJob = won.length > 0;
     const doneCount = [profileDone, submittedEstimate, wonFirstJob].filter(Boolean).length;
 
-    el.innerHTML = DOMPurify.sanitize(`
+    el.innerHTML = `
       <div class='small'>Progress: <b>${doneCount}/3 complete</b></div>
       <div class='small'>${profileDone ? 'Done' : 'Open'}: Complete your profile</div>
       <div class='small'>${submittedEstimate ? 'Done' : 'Open'}: Submit your first estimate</div>
       <div class='small'>${wonFirstJob ? 'Done' : 'Open'}: Book your first job</div>
-    `);
+    `;
   }
 
   async function loadHomeMetrics({ bids = [], repairs = [], won = [], active = [] } = {}) {
@@ -662,7 +665,7 @@ async function boot() {
       if (st === 'open') return `Estimate pending for request #${b.request_id}`;
       return `Estimate ${st} for request #${b.request_id}`;
     });
-    document.getElementById('homeActivity').innerHTML = DOMPurify.sanitize(recent.length ? recent.map(x => `<div class='small'>${x}</div>`).join('') : 'No recent activity yet.');
+    document.getElementById('homeActivity').innerHTML = recent.length ? recent.map(x => `<div class='small'>${x}</div>`).join('') : 'No recent activity yet.';
   }
 
   await loadProfile();

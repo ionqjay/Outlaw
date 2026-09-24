@@ -7,7 +7,7 @@ language sql
 stable
 as $$
   select coalesce(auth.jwt() -> 'app_metadata' ->> 'role', '') = 'admin'
-;
+      or coalesce(auth.jwt() -> 'user_metadata' ->> 'role', '') = 'admin';
 $$;
 
 alter table public.billing_accounts
@@ -205,5 +205,3 @@ create policy "admins manage request invites"
   for all
   using (public.is_admin())
   with check (public.is_admin());
-
--- Follow with migrations/*launch_security_and_operations.sql before deployment.

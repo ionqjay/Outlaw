@@ -303,7 +303,6 @@
       .mobile-cta .btn { flex:1; padding:10px 12px; }
     }
   </style>
-<script src="/vendor/purify.min.js"></script>
 </head>
 <body class="app-body">
   <nav class="nav">
@@ -329,7 +328,7 @@
       <button class="tab-btn" data-view="profile">Profile</button>
     </div>
 
-    <section id="view-home" class="panel"><details class="notification-panel"><summary>Notifications</summary><ul id="notificationsList" class="notice-list">Loading updates…</ul></details>
+    <section id="view-home" class="panel">
       <h2>Welcome back</h2>
       <p class="subtle">Compare repair estimates clearly and choose the provider that fits your repair.</p>
 
@@ -476,12 +475,11 @@
     <button class="btn btn-secondary" data-view="dashboard">My Estimates</button>
   </div>
 
-  <script src="/vendor/supabase.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="/config.js"></script>
   <script src="/supabase-client.js"></script>
   <script src="/app-auth.js"></script>
   <script src="/owner-app.js"></script>
-<script src="/operations-ui.js"></script>
 </body>
 </html>
 

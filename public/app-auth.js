@@ -11,7 +11,7 @@ async function getActiveSession() {
     const zip = s.user.user_metadata?.zip || '';
     const contactEmail = s.user.user_metadata?.email || '';
     const services = s.user.user_metadata?.services || '';
-    return { ...s.user.user_metadata, id: s.user.id, email: s.user.email || '', contactEmail, role, name, phone, city, state, zip, services };
+    return { id: s.user.id, email: s.user.email || '', contactEmail, role, name, phone, city, state, zip, services };
   }
   const local = JSON.parse(localStorage.getItem('smr_session') || 'null');
   return local;
@@ -43,7 +43,7 @@ async function requireRole(requiredRole) {
   const session = await getActiveSession();
   const allowedRoles = Array.isArray(requiredRole) ? requiredRole : [requiredRole];
   if (!session?.id || !allowedRoles.includes(session.role)) {
-    window.location.href = '/login.html?next=' + encodeURIComponent(location.pathname + location.search);
+    window.location.href = '/login.html';
     return null;
   }
   return session;
@@ -62,12 +62,12 @@ async function saveOwnerProfile(profile = {}) {
     zip: String(profile.zip || '').trim()
   };
 
+  localStorage.setItem(`smr_owner_profile_${session.id}`, JSON.stringify(clean));
+
   if (window.smrSupabaseReady && window.smrSupabase) {
-    const { error } = await window.smrSupabase.auth.updateUser({ data: clean });
-    if (error) throw error;
+    await window.smrSupabase.auth.updateUser({ data: clean });
   }
 
-  localStorage.setItem(`smr_owner_profile_${session.id}`, JSON.stringify(clean));
   return clean;
 }
 
@@ -115,15 +115,12 @@ async function saveMechanicProfile(profile = {}) {
     certifications: String(profile.certifications || '').trim()
   };
 
-  if (!/^\d{5}$/.test(clean.zip)) throw new Error('Enter a five-digit ZIP code.');
-  const radius = Number(clean.serviceRadiusMiles);
-  if (!Number.isFinite(radius) || radius < 1 || radius > 100) throw new Error('Choose a service radius between 1 and 100 miles.');
+  localStorage.setItem(`smr_mechanic_profile_${session.id}`, JSON.stringify(clean));
+
   if (window.smrSupabaseReady && window.smrSupabase) {
-    const { error } = await window.smrSupabase.auth.updateUser({ data: clean });
-    if (error) throw error;
+    await window.smrSupabase.auth.updateUser({ data: clean });
   }
 
-  localStorage.setItem(`smr_mechanic_profile_${session.id}`, JSON.stringify(clean));
   return clean;
 }
 
@@ -133,8 +130,8 @@ async function getMechanicProfile() {
 
   const local = JSON.parse(localStorage.getItem(`smr_mechanic_profile_${session.id}`) || '{}');
   return {
-    businessName: local.businessName || session.businessName || '',
-    businessAddress: local.businessAddress || session.businessAddress || '',
+    businessName: local.businessName || '',
+    businessAddress: local.businessAddress || '',
     name: local.name || session.name || '',
     email: local.email || session.contactEmail || session.email || '',
     phone: local.phone || session.phone || '',
@@ -142,8 +139,8 @@ async function getMechanicProfile() {
     state: local.state || session.state || 'NY',
     zip: local.zip || session.zip || '',
     services: local.services || session.services || '',
-    serviceRadiusMiles: local.serviceRadiusMiles || session.serviceRadiusMiles || '',
-    certifications: local.certifications || session.certifications || ''
+    serviceRadiusMiles: local.serviceRadiusMiles || '',
+    certifications: local.certifications || ''
   };
 }
 

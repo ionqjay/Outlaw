@@ -325,7 +325,6 @@ test('paid invited provider can submit estimate and owner can accept completed r
         user_id: 'mechanic-paid-loop-1',
         email: 'paid-loop@example.com',
         role: 'mechanic',
-        zip: '10701', serviceRadiusMiles: 25, services: 'brakes',
         stripe_customer_id: 'cus_paid_loop',
         stripe_subscription_id: 'sub_paid_loop',
         subscription_status: 'active'

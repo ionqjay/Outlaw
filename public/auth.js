@@ -8,9 +8,7 @@ function getUsers() { return JSON.parse(localStorage.getItem('smr_users') || '[]
 function saveUsers(users) { localStorage.setItem('smr_users', JSON.stringify(users)); }
 function go(role) {
   const normalized = String(role || '').toLowerCase();
-  const requested = new URLSearchParams(location.search).get('next');
-  const allowedNext = normalized === 'owner' && requested === '/owner-app.html?view=quote';
-  window.location.href = allowedNext ? requested : (normalized === 'mechanic' || normalized === 'shop') ? '/mechanic.html' : '/owner-app.html';
+  window.location.href = (normalized === 'mechanic' || normalized === 'shop') ? '/mechanic.html' : '/owner-app.html';
 }
 
 function allowLocalDevAuth() {
@@ -39,7 +37,7 @@ async function signUpSupabase({ name, email, password, role, services }) {
   const { data, error } = await window.smrSupabase.auth.signUp({
     email,
     password,
-    options: { emailRedirectTo: location.origin + '/login.html', data: { role, name, services: (services || []).join(', ') } }
+    options: { data: { role, name, services: (services || []).join(', ') } }
   });
   if (error) throw error;
   const user = data?.user;
@@ -63,7 +61,6 @@ async function signInSupabase({ email, password }) {
 signUpBtn.addEventListener('click', async () => {
   const { name, email, password, role, services } = values();
   if (!name || !email || !password) return statusEl.textContent = 'Name, email, and password are required.';
-  if (password.length < 12) return statusEl.textContent = 'Use at least 12 characters for your password.';
   if ((role === 'mechanic' || role === 'shop') && (!services || !services.length)) {
     return statusEl.textContent = 'Please select at least one specialty.';
   }
@@ -118,19 +115,3 @@ if (allowLocalDevAuth()) {
 } else if (!window.smrSupabaseReady) {
   statusEl.textContent = 'Supabase Auth is required for production login.';
 }
-
-const requestedRole = new URLSearchParams(location.search).get('role');
-if (['owner','mechanic','shop'].includes(requestedRole)) { roleEl.value = requestedRole; syncSpecialtiesVisibility(); }
-document.getElementById('authForm').addEventListener('submit', event => { event.preventDefault(); signInBtn.click(); });
-document.getElementById('forgotPasswordBtn').addEventListener('click', async () => {
-  const email = values().email;
-  if (!email || !document.getElementById('email').checkValidity()) { statusEl.textContent = 'Enter your email above first.'; return; }
-  if (!window.smrSupabaseReady) { statusEl.textContent = 'Password recovery is temporarily unavailable.'; return; }
-  const button = document.getElementById('forgotPasswordBtn'); button.disabled = true;
-  try {
-    const { error } = await window.smrSupabase.auth.resetPasswordForEmail(email, { redirectTo: location.origin + '/reset-password.html' });
-    if (error) throw error;
-    statusEl.textContent = 'If an account exists for that email, a recovery link is on its way. Check your inbox and spam folder.';
-  } catch (error) { statusEl.textContent = error.message || 'Could not request a recovery email.'; }
-  finally { button.disabled = false; }
-});
