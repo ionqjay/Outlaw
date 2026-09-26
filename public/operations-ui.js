@@ -32,6 +32,37 @@
       status.textContent = verification ? `Review: ${verification.status}. ${verification.review_note || ''}` : 'Submit your business details for a manual review. Approval is not a guarantee of repair quality.';
     } catch (error) { status.textContent = error.message; }
   }
+  async function loadRefundInvoices() {
+    const select = document.getElementById('refundInvoiceSelect');
+    if (!select) return;
+    try {
+      const data = await api('/api/billing/invoices');
+      select.replaceChildren();
+      if (!data.invoices.length) {
+        const option = document.createElement('option');
+        option.value = '';
+        option.textContent = 'No completed billing months available';
+        select.append(option);
+        return;
+      }
+      for (const invoice of data.invoices) {
+        const option = document.createElement('option');
+        option.value = invoice.id;
+        const start = new Date(invoice.period_start).toLocaleDateString();
+        const end = new Date(invoice.period_end).toLocaleDateString();
+        const amount = `${(invoice.amount_paid / 100).toFixed(2)} ${String(invoice.currency || '').toUpperCase()}`;
+        option.textContent = `${start} - ${end}: ${amount}${invoice.refund_status ? ` (${invoice.refund_status})` : ''}`;
+        option.disabled = ['pending', 'approved', 'submitted', 'refunded'].includes(invoice.refund_status);
+        select.append(option);
+      }
+    } catch (error) {
+      select.replaceChildren();
+      const option = document.createElement('option');
+      option.value = '';
+      option.textContent = error.message;
+      select.append(option);
+    }
+  }
   document.getElementById('verificationForm')?.addEventListener('submit', async event => {
     event.preventDefault();
     const status = document.getElementById('verificationStatus');
@@ -49,9 +80,10 @@
     try {
       const data = await api('/api/billing/refund-requests', Object.fromEntries(new FormData(event.target)));
       status.textContent = `Request #${data.request.id}: ${data.request.status}. Your billing period and eligible opportunities will be reviewed.`;
+      await loadRefundInvoices();
     } catch (error) { status.textContent = error.message; }
     finally { button.disabled = false; }
   });
-  window.smrAuth.getActiveSession().then(session => { if (session) { notifications(); verificationStatus(); } });
+  window.smrAuth.getActiveSession().then(session => { if (session) { notifications(); verificationStatus(); loadRefundInvoices(); } });
   setInterval(() => { if (!document.hidden) notifications(); }, 60000);
 })();
