@@ -232,12 +232,15 @@ grant execute on function public.accept_marketplace_bid(bigint,text,boolean) to 
 create or replace function public.create_marketplace_bid(p_bid jsonb)
 returns setof public.bids language plpgsql security invoker set search_path = '' as $$
 declare r public.repair_requests;
+declare provider_type text := lower(coalesce(p_bid->>'provider_type',''));
 begin
   select * into r from public.repair_requests where id=(p_bid->>'request_id')::bigint for update;
   if not found or r.status<>'open' or r.created_at<now()-interval '24 hours' then raise exception 'Request is closed'; end if;
   if (p_bid->>'amount')::numeric<=0 or (p_bid->>'eta_hours')::integer<=0 then raise exception 'Invalid amount or availability'; end if;
   if exists(select 1 from public.bids where request_id=r.id and mechanic_id=p_bid->>'mechanic_id' and status<>'declined') then raise exception 'Estimate already submitted'; end if;
   if (select count(*) from public.bids where request_id=r.id and status='open') >=5 then raise exception 'Estimate limit reached'; end if;
+  if provider_type='shop' and (select count(*) from public.bids where request_id=r.id and status='open' and notes like '%"providerType":"shop"%') >=3 then raise exception 'Shop estimate limit reached'; end if;
+  if provider_type='mechanic' and (select count(*) from public.bids where request_id=r.id and status='open' and notes like '%"providerType":"mechanic"%') >=2 then raise exception 'Mechanic estimate limit reached'; end if;
   return query insert into public.bids(request_id,mechanic_id,mechanic_name,amount,eta_hours,notes,status)
     values(r.id,p_bid->>'mechanic_id',p_bid->>'mechanic_name',(p_bid->>'amount')::numeric,(p_bid->>'eta_hours')::integer,p_bid->>'notes','open') returning *;
 end $$;

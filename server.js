@@ -107,7 +107,12 @@ function billingConfigReady() {
 const ops = operationsStore({ database: USE_SUPABASE, request: supabaseRequest, directory: path.join(__dirname, '.local-data') });
 async function notifyUser(userId, eventKey, title, body, href) {
   if (!userId) return;
-  return ops.save('notifications', { user_id: String(userId), event_key: eventKey, title, body, href }, 'event_key', true);
+  try {
+    return await ops.save('notifications', { user_id: String(userId), event_key: eventKey, title, body, href }, 'event_key', true);
+  } catch (error) {
+    console.error('Notification delivery failed:', String(eventKey || ''), error.name);
+    return null;
+  }
 }
 async function recordInvites(invites) {
   if (!invites.length) return;
@@ -117,6 +122,35 @@ async function recordInvites(invites) {
     const provider = pool.find(p => p.email === invite.provider_email);
     if (provider?.userId) await notifyUser(provider.userId, `invite:${invite.repair_id}:${provider.userId}`, 'A local repair matches your services', 'Review the request and send an estimate before its invitation window closes.', '/mechanic.html');
   }
+}
+
+async function reconcileBidNotifications({ apply = false } = {}) {
+  const [bids, repairs, notifications] = await Promise.all([
+    listBids({}),
+    listRepairRequests({}),
+    ops.list('notifications').catch(() => [])
+  ]);
+  const existing = new Set(notifications.map(n => String(n.event_key || '')));
+  const missing = [];
+  for (const bid of bids) {
+    const key = `bid:${bid.id}`;
+    if (existing.has(key)) continue;
+    const repair = repairs.find(r => Number(r.id) === Number(bid.request_id));
+    if (!repair?.owner_id) continue;
+    missing.push({
+      userId: repair.owner_id,
+      eventKey: key,
+      title: 'A new repair estimate arrived',
+      body: 'Open your dashboard to compare price, availability, and provider details.',
+      href: '/owner-app.html'
+    });
+  }
+  if (apply) {
+    for (const item of missing) {
+      await notifyUser(item.userId, item.eventKey, item.title, item.body, item.href);
+    }
+  }
+  return { missingBidNotifications: missing.length, applied: apply ? missing.length : 0 };
 }
 
 const STANDARD_INVITE_WINDOW_MS = 2 * 60 * 60 * 1000; // 2h
@@ -755,9 +789,18 @@ async function appendInvites(additions = []) {
     } catch (error) { throw error; }
   }
   const rows = readInvites();
-  writeInvites([...rows, ...additions]);
-  await recordInvites(additions);
-  return additions;
+  const existing = new Set(rows.map(r => `${Number(r.repair_id)}:${String(r.provider_email || '').toLowerCase()}:${normalizeProviderType(r.provider_type)}`));
+  const unique = [];
+  for (const addition of additions) {
+    const key = `${Number(addition.repair_id)}:${String(addition.provider_email || '').toLowerCase()}:${normalizeProviderType(addition.provider_type)}`;
+    if (existing.has(key)) continue;
+    existing.add(key);
+    unique.push(addition);
+  }
+  if (!unique.length) return [];
+  writeInvites([...rows, ...unique]);
+  await recordInvites(unique);
+  return unique;
 }
 
 async function updateInvite(invite, patch = {}) {
@@ -1786,6 +1829,7 @@ route('post', '/api/bids', async (req, res) => {
       amount: Number(amount),
       eta_hours: Number(etaHours),
       notes: cleanNotes,
+      provider_type: providerType,
       status: 'open',
       created_at: new Date().toISOString()
     });
@@ -2351,6 +2395,7 @@ route('get', '/api/admin/ops', async (req, res) => {
     const repairs = await listRepairRequests({});
     const bids = await listBids({});
     const invites = await listInvites();
+    const reconciliation = await reconcileBidNotifications({ apply: false });
     const openRepairs = repairs.filter(r => String(r.status || '').toLowerCase() === 'open').length;
     const acceptedRepairs = repairs.filter(r => String(r.status || '').toLowerCase() === 'accepted').length;
     const avgBidsPerOpen = openRepairs ? (bids.filter(b => String(b.status || '').toLowerCase() === 'open').length / openRepairs) : 0;
@@ -2363,11 +2408,22 @@ route('get', '/api/admin/ops', async (req, res) => {
         totalBids: bids.length,
         openBids: bids.filter(b => String(b.status || '').toLowerCase() === 'open').length,
         avgBidsPerOpen: Math.round(avgBidsPerOpen * 10) / 10,
-        totalInvites: invites.length
+        totalInvites: invites.length,
+        missingBidNotifications: reconciliation.missingBidNotifications
       }
     });
   } catch (e) {
     res.status(500).json({ error: 'Could not load ops data' });
+  }
+});
+
+route('post', '/api/admin/ops/reconcile-notifications', async (req, res) => {
+  { const blocked = guardAdminApi(req, res); if (blocked) return; }
+  try {
+    const out = await reconcileBidNotifications({ apply: true });
+    res.json({ ok: true, ...out });
+  } catch {
+    res.status(500).json({ error: 'Could not reconcile notifications.' });
   }
 });
 
@@ -2388,6 +2444,7 @@ route('get', '/admin/ops', async (req, res) => {
   @media(max-width:980px){.k{grid-template-columns:repeat(2,minmax(0,1fr))}}
   </style></head><body><div class='wrap'><div class='top'><div><h1>ShopMyRepair Ops Dashboard</h1><div class='hint'>Live marketplace health and delivery metrics</div></div><div><a href='/admin?token=${encodeURIComponent(String(req.query.token||''))}'>← Back to Signups Admin</a></div></div>
   <div id='k' class='k'><div class='card'>Loading...</div></div>
+  <div style='margin-top:12px'><button id='reconcileNotifications' class='card' style='color:var(--text);cursor:pointer'>Reconcile missing bid notifications</button></div>
   <script src="/vendor/purify.min.js"></script><script>
     fetch('/api/admin/ops?token=${encodeURIComponent(String(req.query.token||''))}').then(r=>r.json()).then(d=>{
       const k=d.kpis||{};
@@ -2398,10 +2455,21 @@ route('get', '/admin/ops', async (req, res) => {
         ['Total Estimates',k.totalBids,'All estimates submitted'],
         ['Open Estimates',k.openBids,'Awaiting owner action'],
         ['Avg Estimates / Open Repair',k.avgBidsPerOpen,'Supply depth indicator'],
-        ['Dispatch Invites',k.totalInvites,'Providers invited to jobs']
+        ['Dispatch Invites',k.totalInvites,'Providers invited to jobs'],
+        ['Missing Bid Notifications',k.missingBidNotifications,'Run reconciliation before launch']
       ];
       document.getElementById('k').innerHTML=DOMPurify.sanitize(entries.map(([l,v,h])=>'<div class="card"><div class="lbl">'+l+'</div><div class="val">'+(v??0)+'</div><div class="hint">'+h+'</div></div>').join(''));
     }).catch(()=>{ document.getElementById('k').innerHTML=DOMPurify.sanitize('<div class="card">Could not load ops data.</div>'); });
+    document.getElementById('reconcileNotifications').addEventListener('click', async () => {
+      const button = document.getElementById('reconcileNotifications');
+      button.disabled = true;
+      try {
+        const res = await fetch('/api/admin/ops/reconcile-notifications?token=${encodeURIComponent(String(req.query.token||''))}', { method: 'POST' });
+        const data = await res.json();
+        button.textContent = res.ok ? ('Reconciled ' + (data.applied || 0) + ' missing notifications') : (data.error || 'Reconciliation failed');
+      } catch { button.textContent = 'Reconciliation failed'; }
+      finally { button.disabled = false; }
+    });
   </script></div></body></html>`);
 });
 

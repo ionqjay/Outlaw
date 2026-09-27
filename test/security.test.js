@@ -4,6 +4,7 @@ import fs from 'node:fs';
 
 process.env.NODE_ENV = 'test';
 process.env.ALLOW_DEV_AUTH = 'true';
+process.env.ADMIN_TOKEN = 'test-admin-token';
 
 const { app, sanitizeRepairForUser, sanitizeBidForUser } = await import('../server.js');
 
@@ -411,6 +412,63 @@ test('paid invited provider can submit estimate and owner can accept completed r
       const feedbackData = await feedback.json();
       assert.equal(feedbackData.ok, true);
       assert.equal(feedbackData.feedback.rating, 5);
+    });
+  });
+});
+
+test('ops reconciliation backfills missing bid notifications without failing saved bids', async () => {
+  const repairRequestsPath = new URL('../repair_requests.json', import.meta.url);
+  const bidsPath = new URL('../bids.json', import.meta.url);
+  const notificationsPath = new URL('../.local-data/notifications.json', import.meta.url);
+
+  await preservingJsonFiles([repairRequestsPath, bidsPath, notificationsPath], async () => {
+    fs.writeFileSync(repairRequestsPath, JSON.stringify([
+      {
+        id: 401,
+        owner_id: 'owner-missing-notification-1',
+        title: 'Brake estimate notification',
+        issue_category: 'brakes',
+        issue_details: 'Grinding brakes',
+        vehicle_year: '2020',
+        vehicle_make: 'Honda',
+        vehicle_model: 'Civic',
+        city: 'Yonkers',
+        state: 'NY',
+        zip: '10701',
+        status: 'open',
+        created_at: new Date().toISOString()
+      }
+    ], null, 2));
+    fs.writeFileSync(bidsPath, JSON.stringify([
+      {
+        id: 501,
+        request_id: 401,
+        mechanic_id: 'mechanic-missing-notification-1',
+        mechanic_name: 'Notification Shop',
+        amount: 300,
+        eta_hours: 24,
+        notes: '[META]{"providerType":"mechanic"}[/META] Can repair tomorrow.',
+        status: 'open',
+        created_at: new Date().toISOString()
+      }
+    ], null, 2));
+    if (fs.existsSync(notificationsPath)) fs.unlinkSync(notificationsPath);
+
+    await withServer(async base => {
+      const headers = { 'x-admin-token': 'test-admin-token' };
+      const before = await fetch(`${base}/api/admin/ops`, { headers });
+      assert.equal(before.status, 200);
+      const beforeData = await before.json();
+      assert.equal(beforeData.kpis.missingBidNotifications, 1);
+
+      const reconcile = await fetch(`${base}/api/admin/ops/reconcile-notifications`, { method: 'POST', headers });
+      assert.equal(reconcile.status, 200);
+      const reconcileData = await reconcile.json();
+      assert.equal(reconcileData.applied, 1);
+
+      const after = await fetch(`${base}/api/admin/ops`, { headers });
+      const afterData = await after.json();
+      assert.equal(afterData.kpis.missingBidNotifications, 0);
     });
   });
 });
