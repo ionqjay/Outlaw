@@ -6,7 +6,10 @@ import axios from 'axios';
 import cors from 'cors';
 import Stripe from 'stripe';
 import { operationsStore, registerOperations } from './lib/operations.js';
-import { withinServiceArea, validZip, trustedRole, subscriptionPeriodEnd } from './lib/matching.js';
+import { withinServiceArea, providerDistanceMiles, validZip, trustedRole, subscriptionPeriodEnd } from './lib/matching.js';
+
+import { rankInviteCandidates, initialInviteCandidates, createDispatchQueue } from './lib/invite-ranking.js';
+const runDispatchExclusive = createDispatchQueue();
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -746,12 +749,18 @@ function writeInvites(rows) {
 async function listInvites({ repairId, providerEmail, providerType, status } = {}) {
   if (USE_SUPABASE) {
     try {
-      const q = ['select=*', 'order=created_at.desc'];
+      const q = ['select=*', 'order=created_at.desc,id.desc'];
       if (repairId) q.push(`repair_id=eq.${encodeURIComponent(repairId)}`);
       if (providerEmail) q.push(`provider_email=eq.${encodeURIComponent(String(providerEmail).toLowerCase())}`);
       if (providerType) q.push(`provider_type=eq.${encodeURIComponent(normalizeProviderType(providerType))}`);
       if (status) q.push(`status=eq.${encodeURIComponent(status)}`);
-      return await supabaseRequest(`request_invites?${q.join('&')}`);
+      const all = [];
+      for (let offset = 0; ; ) {
+        const batch = await supabaseRequest(`request_invites?${q.join('&')}&limit=1000&offset=${offset}`);
+        if (!batch.length) return all;
+        all.push(...batch);
+        offset += batch.length;
+      }
     } catch (error) { throw error; }
   }
   let rows = readInvites();
@@ -864,7 +873,7 @@ async function listProviderPool() {
     const role = String(b?.role || '').toLowerCase();
     if (!['mechanic', 'shop'].includes(role)) continue;
     const email = String(b?.email || '').trim().toLowerCase();
-    if (!email) continue;
+    if (!email || await isBannedEmail(email)) continue;
     providers.push({
       email,
       userId: String(b?.user_id || ''),
@@ -897,25 +906,24 @@ async function listProviderPool() {
   });
 }
 
+function eligibleRankedProviders(pool, history, repair, now) {
+  return rankInviteCandidates(pool
+    .filter(providerEligibleForInvites)
+    .filter(provider => providerSupportsRepair(provider, repair))
+    .map(provider => ({ ...provider, distanceMiles: providerDistanceMiles(provider, repair) })),
+  history, repair, now);
+}
+
 async function createDispatchSnapshot(repair) {
-  const mechanics = (await listProviderPool())
-    .filter(x => providerEligibleForInvites(x))
-    .filter(x => providerSupportsRepair(x, repair));
+  return runDispatchExclusive(() => createDispatchSnapshotUnlocked(repair));
+}
 
-  const shops = mechanics.filter(x => x.providerType === 'shop').slice(0, 3);
-  const inds = mechanics.filter(x => x.providerType === 'mechanic').slice(0, 2);
-  let invited = [...shops, ...inds];
-
-  if (invited.length < 5) {
-    const used = new Set(invited.map(x => `${x.email}:${x.providerType}`));
-    for (const p of mechanics) {
-      const key = `${p.email}:${p.providerType}`;
-      if (used.has(key)) continue;
-      invited.push(p);
-      used.add(key);
-      if (invited.length >= 5) break;
-    }
-  }
+async function createDispatchSnapshotUnlocked(repair) {
+  if (repair.status !== 'open' || requestIsExpiredForNewInvites(repair)) return;
+  const history = await listInvites();
+  if (history.some(invite => Number(invite.repair_id) === Number(repair.id || repair.Id))) return;
+  const pool = await listProviderPool();
+  const invited = initialInviteCandidates(eligibleRankedProviders(pool, history, repair, Date.now()));
 
   const repairId = Number(repair.id || repair.Id);
   const now = Date.now();
@@ -929,7 +937,7 @@ async function createDispatchSnapshot(repair) {
     expires_at: new Date(now + windowMs).toISOString(),
     submitted_at: null
   }));
-  await replaceInvitesForRepair(repairId, additions);
+  await appendInvites(additions);
 }
 
 async function processInviteExpirations(repairs = []) {
@@ -957,7 +965,7 @@ async function processInviteExpirations(repairs = []) {
 
       const type = normalizeProviderType(inv.provider_type);
       const used = new Set(rInvites.map(x => `${String(x.provider_email || '').toLowerCase()}:${normalizeProviderType(x.provider_type)}`));
-      const next = pool.find(p => p.providerType === type && providerEligibleForInvites(p) && providerSupportsRepair(p, repair) && !used.has(`${p.email}:${p.providerType}`));
+      const next = eligibleRankedProviders(pool, rows, repair, now).find(p => p.providerType === type && providerEligibleForInvites(p) && providerSupportsRepair(p, repair) && !used.has(`${p.email}:${p.providerType}`));
       if (!next) continue;
 
       const windowMs = getInviteWindowMs(repair?.urgency);
@@ -971,8 +979,9 @@ async function processInviteExpirations(repairs = []) {
         submitted_at: null,
         replaced_from: String(inv.provider_email || '').toLowerCase()
       };
-      rows.push(addition);
-      await appendInvites([addition]);
+      const inserted = await appendInvites([addition]);
+      rows.push(...inserted);
+      rInvites.push(...inserted);
     }
   }
 }
@@ -996,9 +1005,7 @@ async function processInviteEscalations(repairs = []) {
       .filter(r => Number(r.repair_id) === repairId)
       .map(r => `${String(r.provider_email || '').toLowerCase()}:${normalizeProviderType(r.provider_type)}`));
 
-    const eligible = pool
-      .filter(p => providerEligibleForInvites(p))
-      .filter(p => providerSupportsRepair(p, repair))
+    const eligible = eligibleRankedProviders(pool, rows, repair, now)
       .filter(p => !used.has(`${p.email}:${p.providerType}`));
 
     if (!eligible.length) return;
@@ -1049,50 +1056,18 @@ async function processInviteEscalations(repairs = []) {
   await appendInvites(additions);
 }
 
-async function ensureProviderInvitesForOpenRequests(providerEmail, repairs = [], providerTypeHint = 'mechanic', providerServicesHint = '') {
-  const email = String(providerEmail || '').trim().toLowerCase();
-  if (!email) return;
-
-  const pool = await listProviderPool();
-  const provider = pool.find(p => String(p.email || '').toLowerCase() === email)
-    || { email, providerType: normalizeProviderType(providerTypeHint), services: String(providerServicesHint || '').trim().toLowerCase(), can_submit_estimates: false };
-
-  if (!providerEligibleForInvites(provider)) return;
-
-  const rows = await listInvites();
-  const now = Date.now();
-  const additions = [];
-
-  for (const repair of repairs) {
-    const repairId = Number(repair?.id || repair?.Id);
-    if (!repairId) continue;
-    if (String(repair?.status || '').toLowerCase() !== 'open') continue;
-    if (requestIsExpiredForNewInvites(repair)) continue;
-    if (!providerSupportsRepair(provider, repair)) continue;
-
-    const alreadyInvited = rows.some(i => (
-      Number(i.repair_id) === repairId
-      && String(i.provider_email || '').toLowerCase() === email
-      && normalizeProviderType(i.provider_type) === provider.providerType
-    ));
-    if (alreadyInvited) continue;
-
-    const windowMs = getInviteWindowMs(repair?.urgency);
-    const addition = {
-      repair_id: repairId,
-      provider_email: email,
-      provider_type: provider.providerType,
-      status: 'pending',
-      created_at: new Date(now).toISOString(),
-      expires_at: new Date(now + windowMs).toISOString(),
-      submitted_at: null,
-      auto_backfill: true
-    };
-    rows.push(addition);
-    additions.push(addition);
-  }
-
-  await appendInvites(additions);
+async function refreshDispatch(repairs) {
+  return runDispatchExclusive(async () => {
+    // Recover repairs whose initial dispatch failed or had no eligible providers.
+    // Every candidate is selected by the same queue, independent of who views it.
+    const history = await listInvites();
+    const dispatched = new Set(history.map(invite => Number(invite.repair_id)));
+    for (const repair of repairs) {
+      if (!dispatched.has(Number(repair.id || repair.Id))) await createDispatchSnapshotUnlocked(repair);
+    }
+    await processInviteExpirations(repairs);
+    await processInviteEscalations(repairs);
+  });
 }
 
 async function attachOwnerDispatchSummary(rows = []) {
@@ -1136,10 +1111,8 @@ async function listRepairRequests({ ownerId, status, providerEmail, providerType
     if (ownerId) q.push(`owner_id=eq.${encodeURIComponent(ownerId)}`);
     if (status) q.push(`status=eq.${encodeURIComponent(status)}`);
     let rows = await supabaseRequest(`repair_requests?${q.join('&')}`);
-    try { await processInviteExpirations(rows); } catch {}
-    try { await processInviteEscalations(rows); } catch {}
+    try { await refreshDispatch(rows); } catch (error) { console.error('Dispatch retry needed:', error.name); }
     if (providerEmail) {
-      try { await ensureProviderInvitesForOpenRequests(providerEmail, rows, providerType, providerServices); } catch {}
       const pool = await listProviderPool();
       const provider = pool.find(p => String(p.email || '').toLowerCase() === String(providerEmail).toLowerCase());
       const canSeeInvitedFull = providerEligibleForInvites(provider);
@@ -1177,10 +1150,8 @@ async function listRepairRequests({ ownerId, status, providerEmail, providerType
   let data = readJson(REPAIR_REQUESTS_PATH, []);
   if (ownerId) data = data.filter(x => String(x.owner_id) === String(ownerId));
   if (status) data = data.filter(x => String(x.status) === String(status));
-  try { await processInviteExpirations(data); } catch {}
-  try { await processInviteEscalations(data); } catch {}
+  try { await refreshDispatch(data); } catch (error) { console.error('Dispatch retry needed:', error.name); }
   if (providerEmail) {
-    try { await ensureProviderInvitesForOpenRequests(providerEmail, data, providerType, providerServices); } catch {}
     const pool = await listProviderPool();
     const provider = pool.find(p => String(p.email || '').toLowerCase() === String(providerEmail).toLowerCase());
     const canSeeInvitedFull = providerEligibleForInvites(provider);
@@ -2962,8 +2933,7 @@ const dispatchTimer = setInterval(async () => {
   dispatchRunning = true;
   try {
     const repairs = await supabaseRequest('repair_requests?select=*&status=eq.open');
-    await processInviteExpirations(repairs);
-    await processInviteEscalations(repairs);
+    await refreshDispatch(repairs);
   } catch (error) { console.error('Dispatch retry needed:', error.name); }
   finally { dispatchRunning = false; }
 }, 60000);
