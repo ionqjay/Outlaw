@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>ShopMyRepair - Compare Auto Repair Estimates</title>
-  <meta name="description" content="Join early access for ShopMyRepair. Describe your repair once and compare structured estimate details from local mechanics and repair shops as matching opens in your area." />
+  <meta name="description" content="Post a repair request and compare estimates from nearby mechanics and repair shops. Free for car owners. Launching in Westchester, NY." />
   <meta name="robots" content="index,follow" />
   <link rel="canonical" href="https://shopmyrepair.com/" />
   <meta property="og:title" content="ShopMyRepair - Compare Auto Repair Estimates" />
@@ -22,13 +22,14 @@
 <body>
   <nav class="nav">
     <a class="logo" href="/" aria-label="ShopMyRepair home"><span>ShopMy</span><span>Repair</span></a>
-    <div class="nav-links">
+    <button class="menu-toggle" type="button" aria-label="Open navigation" aria-expanded="false" aria-controls="mainNavigation">Menu</button>
+    <div class="nav-links" id="mainNavigation">
       <a href="#how">How It Works</a>
       <a href="#owners">For Owners</a>
       <a href="#providers">For Providers</a>
       <a href="/pricing.html">Pricing</a>
       <a href="/login.html">Sign In</a>
-      <button class="btn btn-primary open-modal" data-tab="owner">Get Repair Quotes</button>
+      <a class="btn btn-primary " href="/login.html?role=owner&amp;next=%2Fowner-app.html%3Fview%3Dquote">Get Repair Quotes</a>
     </div>
   </nav>
 
@@ -37,12 +38,12 @@
       <div class="hero-copy">
         <span class="badge">Early Access</span>
         <p class="eyebrow" style="margin-top:18px">Auto repair estimates, organized</p>
-        <h1 id="heroHeadline">Get clear repair estimates without calling shop after shop.</h1>
-        <p id="heroSubtext">Tell us what your car needs. As ShopMyRepair opens in your area, we help you share the request with nearby mechanics and repair shops so you can compare estimate details in one place.</p>
+        <h1 id="heroHeadline">Describe your repair. Compare local quotes.</h1>
+        <p id="heroSubtext">Post your repair once. Nearby mechanics and shops can respond with prices, availability, and repair details. You choose who to contact. Starting in Westchester, NY; response times depend on local provider availability.</p>
         <div class="cta-row">
-          <button class="btn btn-primary btn-lg open-modal" data-tab="owner">Get Repair Quotes</button>
+          <a class="btn btn-primary btn-lg " href="/login.html?role=owner&amp;next=%2Fowner-app.html%3Fview%3Dquote">Get Repair Quotes</a>
         </div>
-        <p class="reassurance">Free for car owners during early access. No obligation to accept an estimate.</p>
+        <p class="reassurance">Free for car owners. No obligation to accept an estimate.</p>
         <div class="trust-points" aria-label="ShopMyRepair trust signals">
           <span>No phone tag</span>
           <span>Comparable estimate details</span>
@@ -68,7 +69,7 @@
       <div class="step-grid">
         <article><span>1</span><h3>Describe the repair</h3><p>Add your vehicle, symptoms, location, and timing.</p></article>
         <article><span>2</span><h3>We prepare the request</h3><p>We structure the details so providers can understand the job quickly.</p></article>
-        <article><span>3</span><h3>Compare responses</h3><p>When matching opens in your area, review estimate details, provider information, and availability in one place.</p></article>
+        <article><span>3</span><h3>Compare responses</h3><p>Review estimates from providers whose specialties and service areas match your request. Quotes depend on provider availability and are not guaranteed.</p></article>
       </div>
     </section>
 
@@ -104,62 +105,19 @@
         <strong>$99/month</strong>
         <p>If your subscribed account receives zero eligible quote opportunities during a billing month, that month is refundable.</p>
         <a class="btn btn-secondary" href="/pricing.html">View Pricing</a>
-        <button class="btn btn-primary open-modal" data-tab="mechanic">Join as a Provider</button>
+        <a class="btn btn-primary " href="/login.html?role=mechanic">Join as a Provider</a>
       </div>
     </section>
 
     <section class="final-cta reveal">
-      <h2>Start with a clear request. Compare estimates when matching opens.</h2>
-      <button class="btn btn-primary btn-lg open-modal" data-tab="owner">Get Repair Quotes</button>
+      <h2>Your next repair starts with one request.</h2>
+      <a class="btn btn-primary btn-lg " href="/login.html?role=owner&amp;next=%2Fowner-app.html%3Fview%3Dquote">Get Repair Quotes</a>
     </section>
   </main>
 
-  <div class="mobile-cta"><button class="btn btn-primary open-modal" data-tab="owner">Get Repair Quotes</button></div>
+  <div class="mobile-cta"><a class="btn btn-primary " href="/login.html?role=owner&amp;next=%2Fowner-app.html%3Fview%3Dquote">Get Repair Quotes</a></div>
 
-  <div id="modal" class="modal hidden">
-    <div class="overlay"></div>
-    <div class="modal-card">
-      <button class="close" id="closeModal" aria-label="Close">x</button>
-      <span class="badge">Early Access</span>
-      <h2 id="modalTitle">Get Repair Quotes</h2>
-      <p class="modal-copy">Join the launch list. We will contact you when quote matching opens in your area.</p>
-      <p class="signup-counter"><span id="signupCount">0</span> early-access signups</p>
-      <div class="tabs">
-        <button class="tab active" data-tab="owner">I own a car</button>
-        <button class="tab" data-tab="mechanic">I am a provider</button>
-      </div>
 
-      <form id="signupForm">
-        <input name="name" placeholder="Full name" required />
-        <input name="email" type="email" placeholder="Email address" required />
-        <input name="phone" placeholder="Mobile number" required />
-        <input name="zip" placeholder="ZIP code" required />
-        <input name="repairAddress" placeholder="Service location" required />
-        <select name="borough" required>
-          <option value="">Service area</option>
-          <option>Queens</option><option>Long Island</option><option>Bronx</option><option>Brooklyn</option><option>Manhattan</option><option>Staten Island</option><option>Westchester</option><option>Other</option>
-        </select>
-        <div id="mechOnly" class="hidden">
-          <select name="experience"><option value="">Years of experience</option><option>0-2</option><option>3-5</option><option>6-10</option><option>10+</option></select>
-          <select name="hasShop"><option value="">Do you have a shop?</option><option value="Yes">Yes</option><option value="No">No</option></select>
-        </div>
-        <p class="sub">No SMS verification required right now. We will contact you by email.</p>
-        <input type="hidden" name="turnstileToken" id="turnstileToken" />
-        <button class="btn btn-primary" id="submitBtn">Notify Me When Matching Opens</button>
-      </form>
-
-      <div id="success" class="hidden">
-        <h3>You are on the launch list</h3>
-        <ul><li>Email alert when matching opens</li><li>Early access updates by email</li><li>Area launch details when available</li></ul>
-        <button class="btn btn-secondary" id="closeSuccess">Close</button>
-      </div>
-    </div>
-  </div>
-
-  <script type="application/ld+json">
-    {"@context":"https://schema.org","@type":"FAQPage","mainEntity":[{"@type":"Question","name":"Is ShopMyRepair free for car owners?","acceptedAnswer":{"@type":"Answer","text":"Yes. Owners can join early access and compare estimates for free during early access."}},{"@type":"Question","name":"Who can join as a provider?","acceptedAnswer":{"@type":"Answer","text":"Independent mechanics and mechanic shops can both join and submit estimates on matched jobs when provider quoting is available in their area."}},{"@type":"Question","name":"How does ShopMyRepair help compare estimates?","acceptedAnswer":{"@type":"Answer","text":"Estimates are shown with price, ETA, provider details, and notes in one place."}}]}
-  </script>
-  <script src="/config.js"></script>
-  <script src="/script.js"></script>
+<script src="/navigation.js"></script>
 </body>
 </html>

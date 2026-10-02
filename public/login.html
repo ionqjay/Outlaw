@@ -12,7 +12,8 @@
 <body>
   <nav class="nav">
     <a class="logo" href="/"><span>ShopMy</span><span>Repair</span></a>
-    <div class="nav-links"><a href="/">Home</a><a href="/pricing.html">Pricing</a></div>
+    <button class="menu-toggle" type="button" aria-label="Open navigation" aria-expanded="false" aria-controls="mainNavigation">Menu</button>
+    <div class="nav-links" id="mainNavigation"><a href="/">Home</a><a href="/pricing.html">Pricing</a></div>
   </nav>
 
   <main class="auth-wrap">
@@ -24,10 +25,10 @@
     </section>
 
     <form class="auth-card" id="authForm">
-      <select id="role"><option value="owner">Car Owner</option><option value="mechanic">Individual Mechanic</option><option value="shop">Mechanic Shop</option></select>
-      <input id="name" placeholder="Full name (for sign up)" autocomplete="name" />
-      <input id="email" type="email" placeholder="Email" autocomplete="email" />
-      <input id="password" type="password" placeholder="Password" autocomplete="current-password" />
+      <label for="role">Account type</label><select id="role"><option value="owner">Car Owner</option><option value="mechanic">Individual Mechanic</option><option value="shop">Mechanic Shop</option></select>
+      <label for="name">Full name (new accounts)</label><input id="name" placeholder="Full name (for sign up)" autocomplete="name" />
+      <label for="email">Email</label><input id="email" type="email" placeholder="Email" autocomplete="email" />
+      <label for="password">Password</label><input id="password" type="password" placeholder="Password" autocomplete="current-password" />
       <div id="specialtiesWrap" style="display:none">
         <div class="sub">Required for mechanics and shops: select your specialties.</div>
         <div class="svc-grid" style="margin-top:8px">
@@ -45,12 +46,13 @@
         </div>
       </div>
       <div class="auth-actions"><button class="btn btn-secondary" id="signInBtn" type="button">Sign In</button><button class="btn btn-primary" id="signUpBtn" type="button">Create Account</button></div>
-      <p id="authStatus" class="sub"></p>
+      <button class="btn btn-secondary" id="forgotPasswordBtn" type="button">Forgot password?</button><p id="authStatus" class="sub" role="status" aria-live="polite"></p>
     </form>
   </main>
-  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="/vendor/supabase.js"></script>
   <script src="/config.js"></script>
   <script src="/supabase-client.js"></script>
   <script src="/auth.js"></script>
+<script src="/navigation.js"></script>
 </body>
 </html>

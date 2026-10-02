@@ -28,3 +28,14 @@ ec.html
 .tmp_*.js
 _mkt.*
 _rss.mjs
+
+# Local development data (never commit customer records)
+.local-data/
+owner_requests.json
+repair_requests.json
+bids.json
+request_invites.json
+feedbacks.json
+billing_accounts.json
+banned_accounts.json
+supabase/.temp/
