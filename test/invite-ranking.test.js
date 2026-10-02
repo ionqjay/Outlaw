@@ -91,21 +91,22 @@ test('100 equally eligible shops rotate across 100 initial requests', () => {
   assert.equal(Math.max(...counts), 3);
 });
 
-test('initial quotas never fill a missing provider type with unusable quote slots', () => {
+test('initial invites select shops only and do not fill with mechanics', () => {
   const shops = Array.from({ length: 8 }, (_, i) => provider(i));
   const mechanics = Array.from({ length: 8 }, (_, i) => provider(`m${i}`, 'mechanic'));
   assert.equal(initialInviteCandidates(shops).length, 3);
-  assert.equal(initialInviteCandidates(mechanics).length, 2);
-  assert.equal(initialInviteCandidates([...shops, ...mechanics]).length, 5);
+  assert.equal(initialInviteCandidates(mechanics).length, 0);
+  assert.equal(initialInviteCandidates([...shops, ...mechanics]).length, 3);
+  assert.ok(initialInviteCandidates([...shops, ...mechanics]).every(p => p.providerType === 'shop'));
 });
 
-test('real dispatch filters service, distance, and access before picking 3 shops and 2 mechanics', async () => {
+test('real dispatch filters service, distance, access, and mechanics before picking 3 shops', async () => {
   const pool = [provider('unpaid', 'shop', { can_submit_estimates: false }), provider('far', 'shop', { distanceMiles: 100 }), provider('wrong-service', 'shop', { services: 'tires' }), ...Array.from({ length: 10 }, (_, i) => provider(i)), ...Array.from({ length: 5 }, (_, i) => provider(`m${i}`, 'mechanic'))];
   const h = harness(pool);
   await h.context.createDispatchSnapshot(repair());
-  assert.equal(h.rows.length, 5);
+  assert.equal(h.rows.length, 3);
   assert.equal(h.rows.filter(i => i.provider_type === 'shop').length, 3);
-  assert.equal(h.rows.filter(i => i.provider_type === 'mechanic').length, 2);
+  assert.equal(h.rows.filter(i => i.provider_type === 'mechanic').length, 0);
   assert.ok(h.rows.every(i => !/unpaid|far|wrong-service/.test(i.provider_email)));
 });
 

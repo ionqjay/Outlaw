@@ -908,6 +908,7 @@ async function listProviderPool() {
 
 function eligibleRankedProviders(pool, history, repair, now) {
   return rankInviteCandidates(pool
+    .filter(p => p.providerType === 'shop')
     .filter(providerEligibleForInvites)
     .filter(provider => providerSupportsRepair(provider, repair))
     .map(provider => ({ ...provider, distanceMiles: providerDistanceMiles(provider, repair) })),
