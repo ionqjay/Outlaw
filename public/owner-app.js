@@ -3,11 +3,7 @@ const sameOriginApiBase = /^(localhost|127\.0\.0\.1)$|\.onrender\.com$/i.test(lo
   ? location.origin
   : '';
 
-const API_BASES = [
-  configuredApiBase,
-  sameOriginApiBase,
-  'https://outlaw-ba9s.onrender.com'
-].filter(Boolean).filter((v, i, a) => a.indexOf(v) === i);
+const API_BASES = [sameOriginApiBase && ['localhost','127.0.0.1'].includes(location.hostname) ? sameOriginApiBase : (configuredApiBase || sameOriginApiBase || location.origin)];
 
 let workingApiBase = configuredApiBase || location.origin;
 let selectedRequestId = null;
@@ -170,9 +166,9 @@ function initVehicleSelectors() {
   const rebuildModels = () => {
     const make = String(makeEl.value || '').trim();
     const models = MODELS_BY_MAKE[make] || [];
-    modelEl.innerHTML = '<option value="">Select model</option>';
+    modelEl.innerHTML = DOMPurify.sanitize('<option value="">Select model</option>');
     if (!models.length) {
-      modelEl.innerHTML += '<option value="Other">Other</option>';
+      modelEl.innerHTML += DOMPurify.sanitize('<option value="Other">Other</option>');
       return;
     }
     models.forEach(m => {
@@ -266,11 +262,11 @@ function renderRequests() {
   const reqWrap = document.getElementById('ownerRequests');
 
   if (!repairsCache.length) {
-    reqWrap.innerHTML = "<div class='list-card'><strong>No requests yet.</strong><div class='muted-xs'>Post your first repair request to start receiving quotes.</div><button class='btn btn-primary' data-view='quote' style='margin-top:8px'>Post a Repair</button></div>";
+    reqWrap.innerHTML = DOMPurify.sanitize("<div class='list-card'><strong>No requests yet.</strong><div class='muted-xs'>Post your first repair request to start receiving quotes.</div><button class='btn btn-primary' data-view='quote' style='margin-top:8px'>Post a Repair</button></div>");
     return;
   }
 
-  reqWrap.innerHTML = repairsCache.map(x => {
+  reqWrap.innerHTML = DOMPurify.sanitize(repairsCache.map(x => {
     const status = String(x.status || 'open').toLowerCase();
     const statusLabel = labelForStatus(status);
     const isSelected = Number(selectedRequestId) === Number(x.id);
@@ -300,7 +296,7 @@ function renderRequests() {
         ${status === 'open' ? `<button class='btn btn-danger' data-cancel-request='${x.id}' style='padding:8px 12px'>Cancel Request</button>` : ''}
       </div>
     </div>`;
-  }).join('');
+  }).join(''));
 
   document.querySelectorAll('[data-view-request]').forEach(btn => btn.addEventListener('click', () => {
     selectedRequestId = Number(btn.dataset.viewRequest);
@@ -332,7 +328,7 @@ function renderCompareTray(allBids = []) {
 
   if (!comparePinned.length) {
     tray.style.display = 'none';
-    items.innerHTML = '';
+    items.innerHTML = DOMPurify.sanitize('');
     return;
   }
 
@@ -343,14 +339,14 @@ function renderCompareTray(allBids = []) {
     .map(b => `<span class='compare-pill'>#${b.id} - $${b.amount} - ${Number(b.eta_hours || 24)}h</span>`)
     .join('');
   tray.style.display = 'block';
-  items.innerHTML = cards;
+  items.innerHTML = DOMPurify.sanitize(cards);
 }
 
 function renderBids() {
   const bidWrap = document.getElementById('ownerBids');
 
   if (!repairsCache.length) {
-    bidWrap.innerHTML = '<p>-</p>';
+    bidWrap.innerHTML = DOMPurify.sanitize('<p>-</p>');
     return;
   }
 
@@ -363,7 +359,7 @@ function renderBids() {
   const header = `<div class='muted-xs' style='margin-bottom:8px'>Showing repair estimates for <b>Request #${selected.id}</b> - ${selected.title}</div>`;
 
   if (!bids.length) {
-    bidWrap.innerHTML = `${header}<div class='list-card'>
+    bidWrap.innerHTML = DOMPurify.sanitize(`${header}<div class='list-card'>
       <strong>Matching your request with nearby providers...</strong>
       <div class='skeleton' style='min-height:18px;margin-top:10px'></div>
       <div class='skeleton' style='min-height:18px;margin-top:8px'></div>
@@ -372,7 +368,7 @@ function renderBids() {
       <div class='muted-xs'>You will get notified here as soon as estimates start coming in.</div>
       <div class='muted-xs'>Most requests receive quotes within 24 hours.</div>
       <button class='btn btn-secondary' data-view='quote' style='margin-top:10px'>Update Request Details</button>
-    </div>`;
+    </div>`);
     document.querySelectorAll('#ownerBids [data-view]').forEach(btn => btn.addEventListener('click', () => setView(btn.dataset.view)));
     return;
   }
@@ -419,7 +415,7 @@ function renderBids() {
     return `<div class='estimate-card ${providerType}'>
       <div class='estimate-top'>
         <div>
-          <div class='estimate-name'>${meta.businessName || b.mechanic_name}</div>
+          <div class='estimate-name'>${meta.businessName || b.mechanic_name}</div>${b.verificationStatus === 'approved' ? "<span class='pill'>Business details reviewed</span>" : ''}
           <div class='provider-chip ${providerType}'>${providerTypeLabel}</div>
         </div>
         <span class='pill ${status}'>${labelForStatus(status)}</span>
@@ -506,7 +502,7 @@ function renderBids() {
     </div>
   </div>` : '';
 
-  bidWrap.innerHTML = `${header}${acceptedInfo}${cards}`;
+  bidWrap.innerHTML = DOMPurify.sanitize(`${header}${acceptedInfo}${cards}`);
   renderCompareTray(bids);
 
   document.querySelectorAll('[data-accept]').forEach(btn => btn.addEventListener('click', async () => {
@@ -607,12 +603,12 @@ function renderOwnerChecklist({ allBids = [] } = {}) {
   const reviewedEstimate = allBids.length > 0;
 
   const doneCount = [profileDone, postedRequest, reviewedEstimate].filter(Boolean).length;
-  el.innerHTML = `
+  el.innerHTML = DOMPurify.sanitize(`
     <div class='muted-xs'>Progress: <b>${doneCount}/3 complete</b></div>
     <div class='muted-xs'>${profileDone ? 'Done' : 'Open'}: Complete profile (name, email, phone)</div>
     <div class='muted-xs'>${postedRequest ? 'Done' : 'Open'}: Post your first repair request</div>
     <div class='muted-xs'>${reviewedEstimate ? 'Done' : 'Open'}: Review your first estimate</div>
-  `;
+  `);
 }
 
 function renderHomeSummary() {
@@ -652,7 +648,7 @@ function renderHomeSummary() {
         const providerTypeLabel = meta.providerTypeLabel || (String(meta.providerType || '').toLowerCase() === 'shop' ? 'Mechanic Shop' : 'Individual Mechanic');
         return `<div class='muted-xs'>${meta.businessName || b.mechanic_name} (${providerTypeLabel}): <b>$${b.amount}</b> - ${r.avg ? `${r.avg}/5` : 'No rating yet'} (${r.count})</div>`;
       });
-    topEl.innerHTML = top.length ? top.join('') : 'No estimates to review yet.';
+    topEl.innerHTML = DOMPurify.sanitize(top.length ? top.join('') : 'No estimates to review yet.');
   }
 
   const recentEl = document.getElementById('homeRecentActivity');
@@ -663,13 +659,14 @@ function renderHomeSummary() {
       if (st === 'open') return `New estimate received from ${b.mechanic_name}.`;
       return `Estimate ${st} from ${b.mechanic_name}.`;
     });
-    recentEl.innerHTML = recent.length ? recent.map(x => `<div class='muted-xs'>${x}</div>`).join('') : 'No recent activity yet.';
+    recentEl.innerHTML = DOMPurify.sanitize(recent.length ? recent.map(x => `<div class='muted-xs'>${x}</div>`).join('') : 'No recent activity yet.');
   }
 }
 
 async function boot() {
   const session = await window.smrAuth.requireRole('owner');
   if (!session) return;
+  if (new URLSearchParams(location.search).get('view') === 'quote') setView('quote');
   initVehicleSelectors();
 
   document.getElementById('logoutBtn').addEventListener('click', () => window.smrAuth.logoutToLogin());
@@ -725,8 +722,8 @@ async function boot() {
   async function refreshDashboard() {
     const reqWrap = document.getElementById('ownerRequests');
     const bidWrap = document.getElementById('ownerBids');
-    reqWrap.innerHTML = "<div class='skeleton'></div><div class='skeleton'></div>";
-    bidWrap.innerHTML = "<div class='skeleton'></div><div class='skeleton'></div>";
+    reqWrap.innerHTML = DOMPurify.sanitize("<div class='skeleton'></div><div class='skeleton'></div>");
+    bidWrap.innerHTML = DOMPurify.sanitize("<div class='skeleton'></div><div class='skeleton'></div>");
 
     try {
       await loadDashboardData(session);
@@ -734,8 +731,8 @@ async function boot() {
       renderRequests();
       renderBids();
     } catch (err) {
-      reqWrap.innerHTML = `<p style='color:#ff9a9a'>${err.message || 'Could not load dashboard.'}</p>`;
-      bidWrap.innerHTML = '<p>-</p>';
+      reqWrap.innerHTML = DOMPurify.sanitize(`<p style='color:#ff9a9a'>${err.message || 'Could not load dashboard.'}</p>`);
+      bidWrap.innerHTML = DOMPurify.sanitize('<p>-</p>');
     }
   }
 
