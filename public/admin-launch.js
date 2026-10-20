@@ -17,7 +17,7 @@
     const data = await api('/api/admin/launch');
     const verificationQueue = document.getElementById('verificationQueue'); verificationQueue.replaceChildren();
     for (const row of data.verifications) {
-      const card = cardFor(verificationQueue, `${row.business_name} — ${row.status}. License reference: ${row.license_reference}. Insurance reference: ${row.insurance_reference}. ${row.review_note || ''}`);
+      const card = cardFor(verificationQueue, `${row.business_name} — ${row.status}. Registration: ${row.registration_reference || "missing"}. Address: ${row.business_address || "missing"}. License reference: ${row.license_reference}. Insurance reference: ${row.insurance_reference}. ${row.review_note || ''}`);
       for (const decision of ['approved', 'rejected']) addButton(card, decision === 'approved' ? 'Approve review' : 'Reject review', async () => { const note = prompt('Record your verification evidence or rejection reason:'); if (!note) return; await api(`/api/admin/verification/${encodeURIComponent(row.user_id)}`, { status: decision, note }); });
     }
     const refundQueue = document.getElementById('refundQueue'); refundQueue.replaceChildren();

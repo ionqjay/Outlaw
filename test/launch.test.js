@@ -77,7 +77,7 @@ test('notifications are private to their recipient and events are idempotent', (
 }));
 
 test('provider review cannot be self-approved and reviewed status survives reload', () => withOperations(async ({store,call}) => {
-  await call('/api/provider/verification',{business_name:'Example Garage',license_reference:'TEST',insurance_reference:'TEST',status:'approved'});
+  await call('/api/provider/verification',{business_name:'Example Garage',license_reference:'TEST',insurance_reference:'TEST',registration_reference:'NY test registration',business_address:'123 Test Street',status:'approved',business_type:'registered_shop'});
   assert.equal((await store.list('provider_verifications'))[0].status,'pending');
   assert.equal((await call('/api/admin/verification/alice',{status:'approved',note:'Checked supporting evidence'})).status,401);
   assert.equal((await call('/api/admin/verification/alice',{status:'approved',note:'Checked supporting evidence'},'admin',true)).status,200);

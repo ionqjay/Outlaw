@@ -201,6 +201,7 @@ test('invitation history pagination does not truncate at the API row limit', asy
 
 test('banned providers cannot re-enter through the billing-account fallback', async () => {
   const ctx = vm.createContext({
+    ops: { list: async () => [] }, subscribedShop: () => false,
     listAuthUsers: async () => [{ id: 'banned', email: 'banned@example.test', user_metadata: { role: 'shop' } }],
     trustedRole: u => u.user_metadata.role,
     isBannedEmail: async email => email === 'banned@example.test',

@@ -334,7 +334,7 @@
         <div id="billingNotice" class="inline-alert"></div>
       </div>
       <details class="list-card"><summary>Request an opportunity-guarantee refund</summary><p>After a billing month ends, choose the paid billing month you want reviewed. Missed invitations and unsuccessful estimates do not qualify.</p><form id="refundForm"><label>Billing month<select name="invoiceId" id="refundInvoiceSelect" required><option value="">Loading paid billing months...</option></select></label><button class="btn btn-secondary">Request review</button><p id="refundStatus" role="status"></p></form></details>
-<details class="list-card"><summary>Business verification</summary><p>Submit references for manual review. Do not include passwords, Social Security numbers, or payment details.</p><form id="verificationForm"><label>Business or professional name<input name="business_name" required maxlength="500"></label><label>License or registration reference<input name="license_reference" required maxlength="500"></label><label>Insurance provider and policy reference<input name="insurance_reference" required maxlength="500"></label><button class="btn btn-secondary">Submit for review</button><p id="verificationStatus" role="status"></p></form></details>
+<details class="list-card"><summary>Business verification</summary><p>Submit references for manual review. Do not include passwords, Social Security numbers, or payment details.</p><form id="verificationForm"><label>Registered business name<input name="business_name" required maxlength="500"></label><label>Business registration reference (jurisdiction and number)<input name="registration_reference" required maxlength="500"></label><label>Registered business address<input name="business_address" required maxlength="500"></label><label>Repair license reference<input name="license_reference" required maxlength="500"></label><label>Insurance provider and policy reference<input name="insurance_reference" required maxlength="500"></label><button class="btn btn-secondary">Submit for review</button><p id="verificationStatus" role="status"></p></form></details>
 <div class="row2" style="margin-top:10px">
         <input id="profileBusinessName" placeholder="Shop or business name" />
         <input id="profileName" placeholder="Contact name" />
@@ -353,7 +353,7 @@
       </div>
       <div id="individualOnlyFields" style="display:none">
         <div class="row2" style="margin-top:8px">
-          <input id="profileServiceRadius" placeholder="Mobile service radius (miles)" />
+          <input id="profileServiceRadius" placeholder="Service radius (1–100 miles)" />
           <input id="profileCertifications" placeholder="Certifications (ASE, etc.)" />
         </div>
       </div>

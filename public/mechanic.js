@@ -232,7 +232,8 @@ async function boot() {
     businessNameInput.placeholder = isShop ? 'Shop name' : 'Public display name';
   }
   const individualOnlyFields = document.getElementById('individualOnlyFields');
-  if (individualOnlyFields) individualOnlyFields.style.display = isShop ? 'none' : 'block';
+  if (individualOnlyFields) individualOnlyFields.style.display = 'block';
+  if (!isShop && dashboardSubtitle) dashboardSubtitle.textContent = 'Legacy account: existing history and billing remain available. New leads and subscriptions are for approved registered repair shops only.';
 
   async function refreshBillingStatus() {
     const el = document.getElementById('billingStatus');

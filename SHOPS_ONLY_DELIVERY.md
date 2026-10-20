@@ -1,0 +1,33 @@
+# Registered-shops-only slice — 2026-10-20
+
+## Scope and preserved behavior
+Owners remain free. Existing mechanic identities, subscriptions, billing portal access, quotes and history are preserved, not converted or deleted. New UI registrations and legacy signup API accept owner/shop only. Direct Supabase Auth signup may still create arbitrary metadata: this is not eligibility and grants no lead/quote/checkout access. Blocking raw Auth registration roles also requires a reviewed Supabase Auth hook; none was installed.
+
+Server-owned provider_verifications records must explicitly say approved + registered_shop. Existing approvals are not grandfathered. Admin review requires registration reference and business address plus existing license/insurance references. A provider cannot self-set approval or business_type. Legacy approved records may resubmit evidence for review. Review is manual: the application does not validate government registries automatically.
+
+New leads/quotes additionally require active subscription, subscription ID, future paid-period end, and no disabled override. Trialing and manual-active overrides do not grant access. User metadata is profile input, never verification. Current billing status is webhook-backed cache; webhook delays can delay revocation until cached period expiry. Live lifecycle verification remains required.
+
+## Deployment dependency — DO NOT deploy automatically
+No push was performed: GitHub reported a connected Vercel production deployment, and actual branch/Render auto-deploy settings could not be verified. Inspect hosting integration triggers before any push. No hosted settings, database or Stripe operations were performed.
+
+Review and test supabase/migrations/20261020170000_registered_shops_only.sql on a separate staging database after the existing launch migration. It adds nullable review fields and a new create_shop_bid RPC; retains all data; expands signup constraint to preserve legacy mechanic records; revokes service-role EXECUTE on the old quote RPC. New RPC rechecks approval, subscription, invitation and ban under a repair-row lock and counts ALL quotes, including declined/legacy quotes. Existing requests with >=3 quotes retain them but cannot add more.
+
+Coordinate a write-maintenance window: migration-first blocks old backend quote writes; code-first fails closed because the new RPC is absent. Missing new business_type denies approval/access. Do not silently fall back to old RPC. Existing subscriptions continue billing; communicate legacy account transition and offer existing billing portal cancellation. Do not cancel or convert automatically.
+
+Before deployment: snapshot/backup and restoration drill; inspect real grants and RLS; verify service_role can read auth.users as required by the RPC; execute concurrent database tests; confirm migrations on staging. Transaction rollback protects migration application, but an application rollback alone does not restore old RPC permission. Do not re-enable insecure writes merely to recover availability.
+
+Configure STRIPE_PRICE_SHOP_MONTHLY to an active USD 9900 recurring monthly price. No mechanic price fallback. Existing portal access remains. Verify test-mode checkout, signed webhook retries/payment failure/cancellation, and actual price against Stripe in staging before production.
+
+## Tests and boundaries
+npm run check runs Node syntax and tests. Tests use local persistence/mocked integrations; added policy, unauthorized endpoint, forged quote metadata, and local concurrent max-three coverage. SQL tests inspect source contracts only, NOT PostgreSQL execution. No claim of production RLS, real SQL concurrency, live Stripe or mobile browser validation.
+
+## Remaining pilot blockers
+- Staging Supabase SQL/RLS/concurrency and Stripe lifecycle evidence; production backup/rollback verification.
+- Westchester explicit ZIP pilot boundary; recruit and manually approve 5–10 registered shops.
+- Vehicle photo uploads, secure in-app messages, complete work-status/dispute workflows.
+- Individually authenticated admins/action audit, rate-limit hardening, comprehensive input validation.
+- Browser/mobile accessibility and visual QA; CI gate and deployment isolation.
+- Shared cross-replica dispatch locking and reliable operational monitoring.
+- Review guarantees/refund language, legacy subscriptions, and zero-quote support process.
+
+Pilot metrics: eligible requests, first-quote p50/time-to-quote, >=1 quote by 24h (suggested >=80%), quote acceptance/completion, opportunities per shop, failed payments, support and refunds. Hard invariant: <=3 total quotes. Human review of every zero-quote request within one business day. Daily operations review and weekly shop interviews. The platform is NOT ready for an unassisted Westchester pilot from this slice alone.

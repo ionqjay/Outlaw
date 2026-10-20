@@ -158,7 +158,7 @@ test('mechanic billing status reports portal availability', async () => {
   });
 });
 
-test('mechanic billing status allows active billing access', async () => {
+test('legacy mechanic retains billing visibility but cannot submit new estimates', async () => {
   const billingAccountsPath = new URL('../billing_accounts.json', import.meta.url);
 
   await preservingJsonFiles([billingAccountsPath], async () => {
@@ -187,12 +187,12 @@ test('mechanic billing status allows active billing access', async () => {
       assert.equal(data.ok, true);
       assert.equal(data.hasStripeCustomer, true);
       assert.equal(data.status, 'active');
-      assert.equal(data.canSubmitEstimates, true);
+      assert.equal(data.canSubmitEstimates, false);
     });
   });
 });
 
-test('manual billing override controls estimate access', async () => {
+test('manual override never grants legacy mechanic estimate access', async () => {
   const billingAccountsPath = new URL('../billing_accounts.json', import.meta.url);
 
   await preservingJsonFiles([billingAccountsPath], async () => {
@@ -225,7 +225,7 @@ test('manual billing override controls estimate access', async () => {
       });
       assert.equal(active.status, 200);
       const activeData = await active.json();
-      assert.equal(activeData.canSubmitEstimates, true);
+      assert.equal(activeData.canSubmitEstimates, false);
       assert.equal(activeData.manualAccessOverride, 'active');
 
       const disabled = await fetch(`${base}/api/billing/status`, {
@@ -300,7 +300,10 @@ test('paid invited provider can submit estimate and owner can accept completed r
   const requestInvitesPath = new URL('../request_invites.json', import.meta.url);
   const feedbacksPath = new URL('../feedbacks.json', import.meta.url);
 
-  await preservingJsonFiles([repairRequestsPath, bidsPath, billingAccountsPath, requestInvitesPath, feedbacksPath], async () => {
+  const verificationPath = new URL('../.local-data/provider_verifications.json', import.meta.url);
+  fs.mkdirSync(new URL('../.local-data/', import.meta.url), { recursive: true });
+  await preservingJsonFiles([verificationPath, repairRequestsPath, bidsPath, billingAccountsPath, requestInvitesPath, feedbacksPath], async () => {
+    fs.writeFileSync(verificationPath, JSON.stringify([{ user_id: 'mechanic-paid-loop-1', status: 'approved', business_type: 'registered_shop', business_name: 'Verified Garage' }]));
     fs.writeFileSync(repairRequestsPath, JSON.stringify([
       {
         id: 301,
@@ -325,18 +328,18 @@ test('paid invited provider can submit estimate and owner can accept completed r
       {
         user_id: 'mechanic-paid-loop-1',
         email: 'paid-loop@example.com',
-        role: 'mechanic',
+        role: 'shop',
         zip: '10701', serviceRadiusMiles: 25, services: 'brakes',
         stripe_customer_id: 'cus_paid_loop',
         stripe_subscription_id: 'sub_paid_loop',
-        subscription_status: 'active'
+        subscription_status: 'active', current_period_end: new Date(Date.now()+86400000).toISOString()
       }
     ], null, 2));
     fs.writeFileSync(requestInvitesPath, JSON.stringify([
       {
         repair_id: 301,
         provider_email: 'paid-loop@example.com',
-        provider_type: 'mechanic',
+        provider_type: 'shop',
         status: 'pending',
         created_at: new Date().toISOString(),
         expires_at: new Date(Date.now() + 60 * 60 * 1000).toISOString(),
@@ -349,7 +352,7 @@ test('paid invited provider can submit estimate and owner can accept completed r
         'Content-Type': 'application/json',
         'x-dev-user-id': 'mechanic-paid-loop-1',
         'x-dev-user-email': 'paid-loop@example.com',
-        'x-dev-user-role': 'mechanic'
+        'x-dev-user-role': 'shop'
       };
       const ownerHeaders = {
         'Content-Type': 'application/json',
@@ -372,13 +375,15 @@ test('paid invited provider can submit estimate and owner can accept completed r
           mechanicName: 'Paid Loop Mechanic',
           amount: 375,
           etaHours: 24,
-          notes: '[META]{"providerType":"mechanic","businessName":"Paid Loop Mechanic","businessEmail":"paid-loop@example.com","businessPhone":"5551234567"}[/META] Pads and rotors included with same-day diagnostics.'
+          notes: '[META]{"providerType":"mechanic","businessName":"Spoofed Name","businessEmail":"paid-loop@example.com","businessPhone":"5551234567"}[/META] Pads and rotors included with same-day diagnostics.'
         })
       });
       assert.equal(bid.status, 200);
       const bidData = await bid.json();
       assert.equal(bidData.ok, true);
       assert.equal(bidData.bid.amount, 375);
+      assert.equal(bidData.bid.mechanic_name, 'Verified Garage');
+      assert.equal(bidData.bid.provider.type, 'shop');
 
       const ownerBids = await fetch(`${base}/api/bids?requestId=301`, { headers: ownerHeaders });
       assert.equal(ownerBids.status, 200);
@@ -518,4 +523,16 @@ test('bid sanitizer strips provider private metadata unless explicitly allowed',
   assert.equal(authorizedOut.mechanic_id, 'provider-1');
   assert.equal(authorizedOut.provider.businessEmail, 'shop@example.com');
   assert.equal(authorizedOut.provider.businessPhone, '5559990000');
+});
+
+test('legacy mechanics and self-selected unapproved shops cannot access leads, bid or subscribe', async () => {
+  await withServer(async base => {
+    for (const role of ['mechanic', 'shop']) {
+      const headers = { 'Content-Type':'application/json', 'x-dev-user-id':'unapproved-'+role, 'x-dev-user-email':role+'@example.test', 'x-dev-user-role':role };
+      for (const [url,method] of [['/api/repairs?previewLeads=true','GET'], ['/api/bids','POST'], ['/api/billing/create-checkout-session','POST']]) {
+        const response = await fetch(base+url,{method,headers,...(method==='POST'?{body:JSON.stringify({notes:'[META]{"providerType":"shop","status":"approved"}[/META]'})}:{})});
+        assert.equal(response.status,403,role+' '+url);
+      }
+    }
+  });
 });

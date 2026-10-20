@@ -1,4 +1,5 @@
 import express from 'express';
+import { approvedShop, subscribedShop } from './lib/shop-eligibility.js';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import fs from 'fs';
@@ -84,7 +85,6 @@ if (process.env.NODE_ENV === 'production' && !USE_SUPABASE) {
 const STRIPE_SECRET_KEY = process.env.STRIPE_SECRET_KEY || '';
 const STRIPE_WEBHOOK_SECRET = process.env.STRIPE_WEBHOOK_SECRET || '';
 const STRIPE_PRICE_SHOP_MONTHLY = process.env.STRIPE_PRICE_SHOP_MONTHLY || '';
-const STRIPE_PRICE_MECHANIC_MONTHLY = process.env.STRIPE_PRICE_MECHANIC_MONTHLY || '';
 const APP_URL = process.env.APP_URL || 'http://localhost:3000';
 const stripe = STRIPE_SECRET_KEY ? new Stripe(STRIPE_SECRET_KEY) : null;
 
@@ -98,13 +98,13 @@ function missingProductionConfig() {
     'APP_URL',
     'STRIPE_SECRET_KEY',
     'STRIPE_WEBHOOK_SECRET',
-    'STRIPE_PRICE_MECHANIC_MONTHLY'
+    'STRIPE_PRICE_SHOP_MONTHLY'
   ];
   return required.filter(key => !String(process.env[key] || '').trim());
 }
 
 function billingConfigReady() {
-  return !!(stripe && STRIPE_WEBHOOK_SECRET && (STRIPE_PRICE_MECHANIC_MONTHLY || STRIPE_PRICE_SHOP_MONTHLY));
+  return !!(stripe && STRIPE_WEBHOOK_SECRET && STRIPE_PRICE_SHOP_MONTHLY);
 }
 
 const ops = operationsStore({ database: USE_SUPABASE, request: supabaseRequest, directory: path.join(__dirname, '.local-data') });
@@ -365,10 +365,13 @@ async function setBannedEmail(email, active, reason = '', category = '') {
   return next;
 }
 
-function resolvePriceForRole(role) {
-  const normalized = String(role || '').toLowerCase();
-  if (normalized === 'shop') return STRIPE_PRICE_SHOP_MONTHLY || STRIPE_PRICE_MECHANIC_MONTHLY;
-  return STRIPE_PRICE_MECHANIC_MONTHLY || STRIPE_PRICE_SHOP_MONTHLY;
+function resolvePriceForRole(role) { return role === 'shop' ? STRIPE_PRICE_SHOP_MONTHLY : ''; }
+async function requireShopAccess(user, res, paid = true) {
+  const verification = (await ops.list('provider_verifications', { user_id: user.id }))[0];
+  const billing = paid ? await getBillingByUserIdAsync(user.id) : null;
+  const allowed = paid ? subscribedShop(verification, billing, user.id) : approvedShop(verification, user.id);
+  if (!allowed) { res.status(403).json({ error: paid ? 'An approved registered shop with an active subscription is required.' : 'Registered shop approval is required before subscribing.' }); return null; }
+  return verification;
 }
 
 function stripePriceConfigError(price) {
@@ -848,6 +851,8 @@ async function removeInvitesForRepair(repairId) {
 
 async function listProviderPool() {
   const providers = [];
+  const verifications = await ops.list('provider_verifications');
+  const eligible = (id, billing) => subscribedShop(verifications.find(v => String(v.user_id) === String(id)), billing, id);
 
   const authUsers = await listAuthUsers();
   for (const u of authUsers) {
@@ -864,7 +869,7 @@ async function listProviderPool() {
       services: String(meta?.services || '').trim().toLowerCase(),
       zip: String(meta?.zip || ''),
       serviceRadiusMiles: Number(meta?.serviceRadiusMiles || 25),
-      can_submit_estimates: canSubmitEstimatesFromBilling(billing)
+      can_submit_estimates: eligible(u.id, billing)
     });
   }
 
@@ -881,7 +886,7 @@ async function listProviderPool() {
       services: String(b.services || ''),
       zip: String(b.zip || ''),
       serviceRadiusMiles: Number(b.serviceRadiusMiles || 25),
-      can_submit_estimates: canSubmitEstimatesFromBilling(b)
+      can_submit_estimates: eligible(b.user_id, b)
     });
   }
 
@@ -1190,10 +1195,13 @@ async function listRepairRequests({ ownerId, status, providerEmail, providerType
 
 async function createBid(row) {
   if (USE_SUPABASE) {
-    const out = await supabaseRequest('rpc/create_marketplace_bid', { method: 'POST', body: { p_bid: row } });
+    const out = await supabaseRequest('rpc/create_shop_bid', { method: 'POST', body: { p_bid: row } });
     return out[0];
   }
+  // Synchronous read/check/write is atomic within the local development process.
   const bids = readJson(BIDS_PATH, []);
+  if (bids.filter(b => Number(b.request_id) === Number(row.request_id)).length >= 3) throw new Error('Estimate limit reached');
+  if (bids.some(b => Number(b.request_id) === Number(row.request_id) && b.mechanic_id === row.mechanic_id)) throw new Error('Estimate already submitted');
   const local = {
     id: (bids[0]?.id || 0) + 1,
     request_id: row.request_id,
@@ -1338,7 +1346,6 @@ app.use(cors({
 
 route('post', '/api/stripe/webhook', express.raw({ type: 'application/json' }), async (req, res) => {
   if (!stripe || !STRIPE_WEBHOOK_SECRET) return res.status(400).send('Stripe webhook not configured.');
-
   let event;
   try {
     const sig = req.headers['stripe-signature'];
@@ -1441,7 +1448,7 @@ route('post', '/api/signup', async (req, res) => {
   const { name, email, phone, zip, repairAddress, borough, type, experience, hasShop, turnstileToken, utm, heroVariant } = req.body || {};
   if (!name || !email || !phone || !zip || !borough || !type) return res.status(400).json({ error: 'Missing required fields.' });
   if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return res.status(400).json({ error: 'Invalid email.' });
-  if (!['owner', 'mechanic'].includes(type)) return res.status(400).json({ error: 'Invalid type.' });
+  if (!['owner', 'shop'].includes(type)) return res.status(400).json({ error: 'Invalid type.' });
   const normalizedEmail = String(email).trim().toLowerCase();
   if (await isBannedEmail(normalizedEmail)) return res.status(403).json({ error: 'This account is restricted. Contact support.' });
 
@@ -1459,8 +1466,8 @@ route('post', '/api/signup', async (req, res) => {
     repair_address: String(repairAddress || '').trim(),
     borough: String(borough).trim(),
     type,
-    experience: type === 'mechanic' ? (experience || '') : '',
-    has_shop: type === 'mechanic' ? (hasShop || '') : '',
+    experience: '',
+    has_shop: type === 'shop' ? 'yes' : '',
     hero_variant: heroVariant || '',
     utm: utm || {},
     created_at: new Date().toISOString()
@@ -1600,12 +1607,13 @@ route('get', '/api/repairs', async (req, res) => {
 
   try {
     const role = roleForUser(user);
+    if (role !== 'owner' && !(await requireShopAccess(user, res))) return;
     const status = req.query.status ? String(req.query.status) : undefined;
     const ownerId = role === 'owner' ? String(user.id) : undefined;
     const providerEmail = role === 'mechanic' || role === 'shop' ? String(user.email || '').toLowerCase() : undefined;
     const providerType = role === 'shop' ? 'shop' : role === 'mechanic' ? 'mechanic' : undefined;
     const providerServices = providerEmail ? (req.query.providerServices ? String(req.query.providerServices) : getUserServices(user)) : undefined;
-    const previewLeads = providerEmail ? String(req.query.previewLeads || '').toLowerCase() === 'true' : false;
+    const previewLeads = false;
     const rows = await listRepairRequests({ ownerId, status, providerEmail, providerType, providerServices, previewLeads });
     res.json({ ok: true, repairs: rows.map(r => sanitizeRepairForUser(r, user)) });
   } catch (e) {
@@ -1691,8 +1699,10 @@ route('post', '/api/repairs/:id/complete', async (req, res) => {
 });
 
 route('post', '/api/bids', async (req, res) => {
-  const user = await requireAuthenticatedUser(req, res, ['mechanic', 'shop']);
+  const user = await requireAuthenticatedUser(req, res, ['shop']);
   if (!user) return;
+  const verifiedShop = await requireShopAccess(user, res);
+  if (!verifiedShop) return;
 
   const { requestId, mechanicName, amount, etaHours, notes } = req.body || {};
   if (!requestId || !mechanicName || !amount || !etaHours) {
@@ -1706,39 +1716,11 @@ route('post', '/api/bids', async (req, res) => {
     return res.status(402).json({ error: 'Active $99/month subscription required to submit estimates.' });
   }
 
-  const cleanNotes = String(notes || '').trim();
-  if (cleanNotes.replace(/\[META\][\s\S]*?\[\/META\]/g, '').trim().length < 15) {
-    return res.status(400).json({ error: 'Please include at least 15 characters in estimate notes.' });
-  }
-
-  let providerType = 'mechanic';
-  let providerEmail = '';
-  try {
-    const m = cleanNotes.match(/\[META\]([\s\S]*?)\[\/META\]/);
-    if (m) {
-      const parsed = JSON.parse(m[1]);
-      const t = String(parsed?.providerType || '').toLowerCase();
-      if (t === 'shop' || t === 'mechanic') providerType = t;
-      providerEmail = String(parsed?.businessEmail || '').trim().toLowerCase();
-
-      const minimumProfile = [parsed?.businessName, parsed?.businessEmail, parsed?.businessPhone];
-      if (minimumProfile.some(v => !String(v || '').trim())) {
-        return res.status(400).json({ error: 'Please complete minimum profile info (name, email, phone) before submitting.' });
-      }
-    }
-  } catch {}
-
-  if (providerEmail && await isBannedEmail(providerEmail)) {
-    return res.status(403).json({ error: 'This account is restricted. Contact support.' });
-  }
-
-  if (USE_SUPABASE && providerEmail) {
-    const authEmail = String(user?.email || '').trim().toLowerCase();
-    if (authEmail && authEmail !== providerEmail) {
-      return res.status(403).json({ error: 'Provider email mismatch.' });
-    }
-  }
-
+  const noteText = String(notes || '').replace(/\[META\][\s\S]*?\[\/META\]/g, '').trim();
+  if (noteText.length < 15 || noteText.length > 5000) return res.status(400).json({ error: 'Estimate notes must be 15–5000 characters.' });
+  const providerType = 'shop';
+  const providerEmail = String(user.email || '').trim().toLowerCase();
+  const cleanNotes = '[META]' + JSON.stringify({ providerType, businessName: verifiedShop.business_name, businessEmail: providerEmail, businessPhone: String(user.user_metadata?.phone || '') }) + '[/META] ' + noteText;
   try {
     const repairs = await listRepairRequests({
       providerEmail: String(user.email || '').toLowerCase(),
@@ -1771,33 +1753,12 @@ route('post', '/api/bids', async (req, res) => {
       }
     }
 
-    const existing = await listBids({ requestId: Number(requestId), status: 'open' });
-    const countByType = { shop: 0, mechanic: 0 };
-    for (const b of existing) {
-      const raw = String(b?.notes || '');
-      const mm = raw.match(/\[META\]([\s\S]*?)\[\/META\]/);
-      let t = null;
-      if (mm) {
-        try {
-          const meta = JSON.parse(mm[1]);
-          const parsedType = String(meta?.providerType || '').toLowerCase();
-          if (parsedType === 'shop' || parsedType === 'mechanic') t = parsedType;
-        } catch {}
-      }
-      if (t) countByType[t] += 1;
-    }
-
-    if (providerType === 'shop' && countByType.shop >= 3) {
-      return res.status(400).json({ error: 'This request already has 3 shop estimates.' });
-    }
-    if (providerType === 'mechanic' && countByType.mechanic >= 2) {
-      return res.status(400).json({ error: 'This request already has 2 individual mechanic estimates.' });
-    }
+    if (existingAllForRequest.length >= 3) return res.status(409).json({ error: 'This request already has 3 estimates.' });
 
     const created = await createBid({
       request_id: Number(requestId),
       mechanic_id: String(mechanicId).trim(),
-      mechanic_name: String(mechanicName).trim(),
+      mechanic_name: verifiedShop.business_name,
       amount: Number(amount),
       eta_hours: Number(etaHours),
       notes: cleanNotes,
@@ -1843,7 +1804,7 @@ route('get', '/api/bids', async (req, res) => {
       }
       rows = await listBids({ requestId, status });
       const reviews = await ops.list('provider_verifications');
-      const approved = new Set(reviews.filter(r => r.status === 'approved').map(r => r.user_id));
+      const approved = new Set(reviews.filter(r => approvedShop(r, r.user_id)).map(r => r.user_id));
       return res.json({ ok: true, bids: rows.map(b => ({ ...sanitizeBidForUser(b, user, { includeProviderContact: true }), verificationStatus: approved.has(b.mechanic_id) ? 'approved' : 'unreviewed' })) });
     }
 
@@ -1982,7 +1943,7 @@ route('get', '/api/billing/status', async (req, res) => {
     hasStripeCustomer: !!billing.stripe_customer_id,
     status,
     manualAccessOverride: billing.manual_access_override || null,
-    canSubmitEstimates: canSubmitEstimatesFromBilling(billing),
+    canSubmitEstimates: roleForUser(user) === 'shop' && subscribedShop((await ops.list('provider_verifications', { user_id: userId }))[0], billing, userId),
     currentPeriodEnd: billing.current_period_end || null,
     amountLabel: '$99/month',
     refundPolicy: 'If you receive zero eligible opportunities to submit an estimate in a billing month, your $99 is refunded. Winning jobs is based on quote quality, speed, and reputation.'
@@ -1990,15 +1951,16 @@ route('get', '/api/billing/status', async (req, res) => {
 });
 
 route('post', '/api/billing/create-checkout-session', async (req, res) => {
-  if (!stripe) return res.status(500).json({ error: 'Stripe is not configured on the server.' });
 
-  const user = await requireAuthenticatedUser(req, res, ['mechanic', 'shop']);
+  const user = await requireAuthenticatedUser(req, res, ['shop']);
   if (!user) return;
+  if (!(await requireShopAccess(user, res, false))) return;
+  if (!stripe) return res.status(503).json({ error: 'Stripe is not configured on the server.' });
   const userId = String(user.id || '');
   const email = String(user.email || '').trim().toLowerCase();
   if (!userId || !email) return res.status(400).json({ error: 'userId and email are required.' });
 
-  const role = roleForUser(user);
+  const role = 'shop';
   const meta = user.user_metadata || {};
   if (!validZip(meta.zip) || !String(meta.services || '').trim() || Number(meta.serviceRadiusMiles) < 1 || Number(meta.serviceRadiusMiles) > 100 || !Number.isFinite(Number(meta.serviceRadiusMiles))) return res.status(400).json({ error: 'Complete your ZIP code, specialties, and service radius in Profile before subscribing.' });
   const price = resolvePriceForRole(role);
@@ -2449,8 +2411,7 @@ route('get', '/admin', async (req, res) => {
   if (!isAdminConfigValid()) {
     return res.status(503).send('<h2>Admin disabled</h2><p>Set a strong ADMIN_TOKEN environment variable.</p>');
   }
-  if (!isAuthorizedAdminRequest(req)) {
-    return res.status(401).send('<h2>Unauthorized</h2><p>Use /admin?token=YOUR_TOKEN or send x-admin-token header.</p>');
+  if (!isAuthorizedAdminRequest(req)) {    return res.status(401).send('<h2>Unauthorized</h2><p>Use /admin?token=YOUR_TOKEN or send x-admin-token header.</p>');
   }
   let data = [];
   let loadError = '';
