@@ -31,3 +31,10 @@ npm run check runs Node syntax and tests. Tests use local persistence/mocked int
 - Review guarantees/refund language, legacy subscriptions, and zero-quote support process.
 
 Pilot metrics: eligible requests, first-quote p50/time-to-quote, >=1 quote by 24h (suggested >=80%), quote acceptance/completion, opportunities per shop, failed payments, support and refunds. Hard invariant: <=3 total quotes. Human review of every zero-quote request within one business day. Daily operations review and weekly shop interviews. The platform is NOT ready for an unassisted Westchester pilot from this slice alone.
+
+## Follow-up review: history isolation and price attestation
+Provider dashboard history now reads /api/provider/repair-history, which derives repair IDs only from the authenticated provider's own persisted bids. It ignores client-selected provider/owner IDs, does not dispatch or discover leads, and strips owner/contact/client metadata through the repair sanitizer. Legacy mechanics and expired approved shops retain their history; new lead discovery remains forbidden. A failed history-detail request still renders existing bid cards with request-number fallbacks. Banned users remain blocked by authentication policy.
+
+48 local tests pass, including ownership-isolated history for legacy/expired providers and executable JSDOM coverage of dashboard rendering when lead access is denied or history details fail. No live service calls or database migrations were run for this follow-up.
+
+Billing blocker: cached entitlement records do NOT attest subscription price, currency, product, quantity or interval. Checkout validates USD 99/month, but existing subscriptions and portal-modified subscriptions can diverge. Before pilot, persist and validate authoritative Stripe subscription item/price attestations on webhook/reconciliation, explicitly handle multi-item subscriptions, and test legacy/portal price changes in isolated Stripe test mode. Do not infer payment of the intended plan from active status alone. No live billing changes were made.

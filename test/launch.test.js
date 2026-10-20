@@ -163,3 +163,27 @@ test('homepage quote CTA enters the actual owner flow and mobile menu opens with
   document.dispatchEvent(new dom.window.KeyboardEvent('keydown',{key:'Escape'}));
   assert.equal(toggle.getAttribute('aria-expanded'),'false');dom.window.close();
 });
+
+test('dashboard history renders despite denied new leads and unavailable history details', async () => {
+  const source=fs.readFileSync(new URL('../public/mechanic.js',import.meta.url),'utf8');
+  const dashboard=source.slice(source.indexOf('  async function loadDashboard()'),source.indexOf('  function renderMechanicChecklist('));
+  for (const historyUnavailable of [false,true]) {
+    const dom=new JSDOM('<div id="view-dashboard"><div id="mechBidsWon"></div><div id="mechBidsActive"></div><div id="mechBidsOther"></div></div>',{runScripts:'outside-only'});
+    const w=dom.window; w.DOMPurify=createDOMPurify(w);
+    w.session={id:'legacy'}; w.labelForStatus=s=>s; w.parseOwnerMeta=s=>({cleanDetails:s}); w.setView=()=>{}; w.loadHomeMetrics=async()=>{};
+    w.fetchJson=async url=>{
+      if(url==='/api/repairs') throw Error('New leads denied');
+      if(url==='/api/provider/repair-history') { if(historyUnavailable) throw Error('History unavailable'); return {repairs:[{id:1,title:'Existing job',status:'completed',issue_details:'Brake repair'}]}; }
+      if(url.startsWith('/api/bids?')) return {bids:[{id:1,request_id:1,status:'accepted',amount:300},{id:2,request_id:2,status:'open',amount:200},{id:3,request_id:3,status:'declined',amount:100}]};
+      throw Error('Unexpected endpoint');
+    };
+    await assert.rejects(w.fetchJson('/api/repairs'),/denied/);
+    w.eval(dashboard+';window.runDashboard=loadDashboard;');
+    await w.runDashboard();
+    assert.match(w.document.querySelector('#mechBidsWon').textContent,/Won Job/);
+    assert.match(w.document.querySelector('#mechBidsActive').textContent,/200/);
+    assert.match(w.document.querySelector('#mechBidsOther').textContent,/100/);
+    assert.match(w.document.querySelector('#mechBidsWon').textContent,historyUnavailable?/Request #1/:/Existing job/);
+    dom.window.close();
+  }
+});

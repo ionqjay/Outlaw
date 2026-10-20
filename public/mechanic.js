@@ -552,7 +552,8 @@ async function boot() {
     try {
       const [bidsData, repairsData] = await Promise.all([
         fetchJson(`/api/bids?mechanicId=${encodeURIComponent(session.id)}`),
-        fetchJson('/api/repairs')
+        // History is ownership-scoped and does not depend on new-lead eligibility.
+        fetchJson('/api/provider/repair-history').catch(() => ({ repairs: [] }))
       ]);
 
       const bids = bidsData.bids || [];

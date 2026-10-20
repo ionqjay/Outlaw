@@ -1601,6 +1601,20 @@ route('post', '/api/repairs', async (req, res) => {
   }
 });
 
+// Historical participation is separate from entitlement to discover new leads.
+route('get', '/api/provider/repair-history', async (req, res) => {
+  const user = await requireAuthenticatedUser(req, res, ['mechanic', 'shop']);
+  if (!user) return;
+  const bids = await listBids({ mechanicId: String(user.id) });
+  const repairIds = [...new Set(bids.map(b => Number(b.request_id)))];
+  const repairs = [];
+  for (const id of repairIds) {
+    const repair = await getRepairById(id);
+    if (repair) repairs.push(sanitizeRepairForUser(repair, user));
+  }
+  res.json({ ok: true, repairs });
+});
+
 route('get', '/api/repairs', async (req, res) => {
   const user = await requireAuthenticatedUser(req, res, ['owner', 'mechanic', 'shop']);
   if (!user) return;

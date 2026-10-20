@@ -536,3 +536,28 @@ test('legacy mechanics and self-selected unapproved shops cannot access leads, b
     }
   });
 });
+
+test('legacy mechanics and expired approved shops retain only their own sanitized repair history', async () => {
+  const paths = ['repair_requests.json','bids.json','billing_accounts.json','.local-data/provider_verifications.json'].map(p=>new URL('../'+p,import.meta.url));
+  fs.mkdirSync(new URL('../.local-data/',import.meta.url),{recursive:true});
+  await preservingJsonFiles(paths, async () => {
+    fs.writeFileSync(paths[0],JSON.stringify([11,12,13].map(id=>({id,owner_id:'private-owner',title:'Repair '+id,zip:'10701',status:'completed',issue_details:'[OWNER_META]{"email":"private@example.test"}[/OWNER_META][CLIENT_META]{"token":"private"}[/CLIENT_META]Brake repair'}))));
+    fs.writeFileSync(paths[1],JSON.stringify([{id:1,request_id:11,mechanic_id:'history-mechanic',status:'accepted'},{id:2,request_id:12,mechanic_id:'history-shop',status:'declined'},{id:3,request_id:13,mechanic_id:'other',status:'open'}]));
+    fs.writeFileSync(paths[2],JSON.stringify([{user_id:'history-shop',subscription_status:'active',stripe_subscription_id:'sub_expired',current_period_end:'2020-01-01T00:00:00Z'}]));
+    fs.writeFileSync(paths[3],JSON.stringify([{user_id:'history-shop',status:'approved',business_type:'registered_shop'}]));
+    await withServer(async base => {
+      assert.equal((await fetch(base+'/api/provider/repair-history')).status,401);
+      for (const [role,id] of [['mechanic',11],['shop',12]]) {
+        const headers={'x-dev-user-id':'history-'+role,'x-dev-user-email':role+'@example.test','x-dev-user-role':role};
+        const response=await fetch(base+'/api/provider/repair-history?mechanicId=other&ownerId=private-owner',{headers});
+        assert.equal(response.status,200);
+        const data=await response.json();
+        assert.deepEqual(data.repairs.map(r=>r.id),[id]);
+        assert.equal(data.repairs[0].owner_id,undefined);
+        assert.equal(data.repairs[0].zip,'107xx');
+        assert.equal(data.repairs[0].issue_details,'Brake repair');
+        assert.equal((await fetch(base+'/api/repairs',{headers})).status,403);
+      }
+    });
+  });
+});
