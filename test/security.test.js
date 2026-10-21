@@ -562,3 +562,16 @@ test('legacy mechanics and expired approved shops retain only their own sanitize
     });
   });
 });
+
+test('public and authenticated repair endpoints reject malformed fields before persistence',async()=>{
+ await withServer(async base=>{
+  const good={title:'Brake repair',issueDetails:'Squeaking brakes need inspection.',issueCategory:'Brakes',vehicleYear:'2020',vehicleMake:'Toyota',vehicleModel:'Camry',city:'Yonkers',state:'NY',zip:'10701',urgency:'Standard',fullName:'Test Owner',email:'test@example.test',mobile:'5551234567',serviceAddress:'123 Test St'};
+  for(const route of ['/api/repairs','/api/owner-request']){
+   for(const patch of [{vehicleYear:'9999'},{vehicleModel:{}},{issueDetails:'x'},{urgency:'Unknown'},{state:'ZZ'}]){
+    const response=await fetch(base+route,{method:'POST',headers:{'Content-Type':'application/json','x-dev-user-id':'validation-owner','x-dev-user-email':'test@example.test','x-dev-user-role':'owner'},body:JSON.stringify({...good,...patch})});
+    assert.equal(response.status,400,route+' '+JSON.stringify(patch));
+   }
+  }
+  for(const patch of [{email:'invalid'},{mobile:'not a telephone'},{fullName:{}},{serviceAddress:' '}]) assert.equal((await fetch(base+'/api/owner-request',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({...good,...patch})})).status,400);
+ });
+});

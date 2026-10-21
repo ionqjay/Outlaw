@@ -187,3 +187,9 @@ test('dashboard history renders despite denied new leads and unavailable history
     dom.window.close();
   }
 });
+
+test('business verification rejects objects, control bytes and oversized references',()=>withOperations(async({call,store})=>{
+ const good={business_name:'Example Garage',license_reference:'TEST',insurance_reference:'TEST',registration_reference:'NY test registration',business_address:'123 Test Street'};
+ for(const patch of [{business_name:{}},{registration_reference:'x'.repeat(501)},{business_address:'bad'+String.fromCharCode(0)}]) assert.equal((await call('/api/provider/verification',{...good,...patch})).status,400);
+ assert.equal((await store.list('provider_verifications')).length,0);
+}));

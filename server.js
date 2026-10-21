@@ -1,4 +1,5 @@
 import express from 'express';
+import { trustedProxyPolicy, createRateLimiter, boundedText, repairValidationError } from './lib/request-security.js';
 import { createBillingReconciler, reconciliationConfig } from './lib/billing-reconciliation.js';
 import { attestShopPlan } from './lib/stripe-entitlement.js';
 import { approvedShop, subscribedShop } from './lib/shop-eligibility.js';
@@ -19,6 +20,8 @@ const __dirname = path.dirname(__filename);
 
 const app = express();
 app.disable('x-powered-by');
+app.set('trust proxy', trustedProxyPolicy(process.env.TRUSTED_PROXY_CIDRS || ''));
+app.use(createRateLimiter());
 // Express 4 does not forward rejected async handlers automatically.
 function route(method, path, ...handlers) {
   app[method](path, ...handlers.map(handler => (req, res, next) => {
@@ -1317,8 +1320,7 @@ async function verifyTurnstile(token, ip) {
 
 async function sendSms(to, text) {
   if (!TWILIO_ACCOUNT_SID || !TWILIO_AUTH_TOKEN || !TWILIO_FROM_NUMBER) return false;
-  const url = `https://api.twilio.com/2010-04-01/Accounts/${TWILIO_ACCOUNT_SID}/Messages.json`;
-  const body = new URLSearchParams({ To: `+1${to}`, From: TWILIO_FROM_NUMBER, Body: text });
+  const url = `https://api.twilio.com/2010-04-01/Accounts/${TWILIO_ACCOUNT_SID}/Messages.json`;  const body = new URLSearchParams({ To: `+1${to}`, From: TWILIO_FROM_NUMBER, Body: text });
   await axios.post(url, body.toString(), {
     auth: { username: TWILIO_ACCOUNT_SID, password: TWILIO_AUTH_TOKEN },
     headers: { 'Content-Type': 'application/x-www-form-urlencoded' }
@@ -1389,34 +1391,7 @@ route('post', '/api/stripe/webhook', express.raw({ type: 'application/json' }), 
   }
 });
 
-app.use(express.json());
-
-const RATE_LIMIT_RULES = [
-  { prefix: '/api/repairs', windowMs: 60_000, max: 60 },
-  { prefix: '/api/bids', windowMs: 60_000, max: 40 },
-  { prefix: '/api/signup', windowMs: 60_000, max: 20 },
-  { prefix: '/api/send-otp', windowMs: 60_000, max: 10 }
-];
-const __rateHits = new Map();
-app.use((req, res, next) => {
-  const rule = RATE_LIMIT_RULES.find(r => req.path.startsWith(r.prefix));
-  if (!rule) return next();
-  const ip = String(req.headers['x-forwarded-for'] || req.socket?.remoteAddress || 'unknown').split(',')[0].trim();
-  const key = `${rule.prefix}:${ip}`;
-  const now = Date.now();
-  const hit = __rateHits.get(key) || { count: 0, resetAt: now + rule.windowMs };
-  if (now > hit.resetAt) {
-    hit.count = 0;
-    hit.resetAt = now + rule.windowMs;
-  }
-  hit.count += 1;
-  __rateHits.set(key, hit);
-  if (hit.count > rule.max) {
-    res.setHeader('Retry-After', String(Math.ceil((hit.resetAt - now) / 1000)));
-    return res.status(429).json({ error: 'Too many requests. Please try again shortly.' });
-  }
-  return next();
-});
+app.use(express.json({ limit: '100kb' }));
 
 app.use(express.static(path.join(__dirname, 'public')));
 
@@ -1456,6 +1431,7 @@ route('post', '/api/signup', async (req, res) => {
   const { name, email, phone, zip, repairAddress, borough, type, experience, hasShop, turnstileToken, utm, heroVariant } = req.body || {};
   if (!name || !email || !phone || !zip || !borough || !type) return res.status(400).json({ error: 'Missing required fields.' });
   if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return res.status(400).json({ error: 'Invalid email.' });
+  if (![name,email,phone,zip,borough].every(v => boundedText(v,1,320))) return res.status(400).json({ error: 'Invalid signup text fields.' });
   if (!['owner', 'shop'].includes(type)) return res.status(400).json({ error: 'Invalid type.' });
   const normalizedEmail = String(email).trim().toLowerCase();
   if (await isBannedEmail(normalizedEmail)) return res.status(403).json({ error: 'This account is restricted. Contact support.' });
@@ -1514,6 +1490,8 @@ route('post', '/api/owner-request', async (req, res) => {
   if (!fullName || !email || !mobile || !vehicleYear || !vehicleMake || !vehicleModel || !issueCategory || !issueDetails || !serviceAddress || !city || !state || !zip) {
     return res.status(400).json({ error: 'Please complete all required owner request fields.' });
   }
+  const validationError = repairValidationError({ ...req.body, title: 'Owner repair request' });
+  if (validationError || !boundedText(fullName,1,160) || !boundedText(serviceAddress,3,500) || !boundedText(email,3,254) || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) || !boundedText(mobile,10,32) || !/^[+()\d .-]+$/.test(mobile) || !/^1?\d{10}$/.test(mobile.replace(/\D/g,'')) || !validZip(zip)) return res.status(400).json({ error: validationError || 'Enter valid contact and address details.' });
   if (await isBannedEmail(String(email).trim().toLowerCase())) {
     return res.status(403).json({ error: 'This account is restricted. Contact support.' });
   }
@@ -1567,6 +1545,8 @@ route('post', '/api/repairs', async (req, res) => {
 
   try {
     if (!validZip(zip)) return res.status(400).json({ error: 'Enter a valid five-digit US ZIP code.' });
+    const validationError = repairValidationError(req.body);
+    if (validationError) return res.status(400).json({ error: validationError });
     const cleanClientRequestId = String(clientRequestId || '').trim();
     if (cleanClientRequestId && !/^[a-zA-Z0-9_.:-]{8,120}$/.test(cleanClientRequestId)) {
       return res.status(400).json({ error: 'Invalid request token.' });
@@ -1727,7 +1707,7 @@ route('post', '/api/bids', async (req, res) => {
   if (!verifiedShop) return;
 
   const { requestId, mechanicName, amount, etaHours, notes } = req.body || {};
-  if (!requestId || !mechanicName || !amount || !etaHours) {
+  if (!requestId || !amount || !etaHours) {
     return res.status(400).json({ error: 'Missing required fields.' });
   }
 
@@ -1738,6 +1718,7 @@ route('post', '/api/bids', async (req, res) => {
     return res.status(402).json({ error: 'Active $99/month subscription required to submit estimates.' });
   }
 
+  if (!boundedText(notes, 15, 10000)) return res.status(400).json({ error: 'Invalid estimate notes.' });
   const noteText = String(notes || '').replace(/\[META\][\s\S]*?\[\/META\]/g, '').trim();
   if (noteText.length < 15 || noteText.length > 5000) return res.status(400).json({ error: 'Estimate notes must be 15–5000 characters.' });
   const providerType = 'shop';
@@ -2419,8 +2400,7 @@ route('get', '/admin/ops', async (req, res) => {
     document.getElementById('reconcileNotifications').addEventListener('click', async () => {
       const button = document.getElementById('reconcileNotifications');
       button.disabled = true;
-      try {
-        const res = await fetch('/api/admin/ops/reconcile-notifications?token=${encodeURIComponent(String(req.query.token||''))}', { method: 'POST' });
+      try {        const res = await fetch('/api/admin/ops/reconcile-notifications?token=${encodeURIComponent(String(req.query.token||''))}', { method: 'POST' });
         const data = await res.json();
         button.textContent = res.ok ? ('Reconciled ' + (data.applied || 0) + ' missing notifications') : (data.error || 'Reconciliation failed');
       } catch { button.textContent = 'Reconciliation failed'; }
@@ -2904,6 +2884,8 @@ route('get', '/admin', async (req, res) => {
 registerOperations({ route, store: ops, requireUser: requireAuthenticatedUser, guardAdmin: guardAdminApi, billingFor: getBillingByUserIdAsync, stripe, request: supabaseRequest });
 
 app.use((error, req, res, next) => {
+  if (error.type === 'entity.too.large') return res.status(413).json({ error: 'Request body too large.' });
+  if (error.type === 'entity.parse.failed') return res.status(400).json({ error: 'Invalid JSON request.' });
   console.error('Request failed:', req.method, req.path, error.name);
   if (res.headersSent) return next(error);
   res.status(503).json({ error: 'Service temporarily unavailable. Please try again shortly.' });
