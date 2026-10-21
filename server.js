@@ -1,4 +1,5 @@
 import express from 'express';
+import { attestShopPlan } from './lib/stripe-entitlement.js';
 import { approvedShop, subscribedShop } from './lib/shop-eligibility.js';
 import path from 'path';
 import { fileURLToPath } from 'url';
@@ -306,6 +307,7 @@ async function syncBillingFromStripe(billing) {
         ...patch,
         stripe_subscription_id: sub.id,
         stripe_customer_id: sub.customer || patch.stripe_customer_id || billing.stripe_customer_id || '',
+        ...attestShopPlan(sub, STRIPE_PRICE_SHOP_MONTHLY),
         subscription_status: String(sub.status || ''),
         current_period_end: subscriptionPeriodEnd(sub),
         cancel_at_period_end: !!sub.cancel_at_period_end
@@ -1319,8 +1321,7 @@ async function sendSms(to, text) {
   await axios.post(url, body.toString(), {
     auth: { username: TWILIO_ACCOUNT_SID, password: TWILIO_AUTH_TOKEN },
     headers: { 'Content-Type': 'application/x-www-form-urlencoded' }
-  });
-  return true;
+  });  return true;
 }
 
 async function addToMailchimp(email, firstName, tags = []) {
@@ -1365,6 +1366,7 @@ route('post', '/api/stripe/webhook', express.raw({ type: 'application/json' }), 
         await upsertBillingByUserIdAsync(userId, {
           email: object.customer_details?.email || '', role: object.metadata?.role || 'mechanic',
           stripe_customer_id: object.customer, stripe_subscription_id: sub.id,
+          ...attestShopPlan(sub, STRIPE_PRICE_SHOP_MONTHLY),
           subscription_status: sub.status, current_period_end: subscriptionPeriodEnd(sub), cancel_at_period_end: !!sub.cancel_at_period_end
         });
       }
@@ -1376,7 +1378,8 @@ route('post', '/api/stripe/webhook', express.raw({ type: 'application/json' }), 
     if (subscriptionId) {
       const sub = await stripe.subscriptions.retrieve(subscriptionId);
       await updateBillingBySubscriptionId(subscriptionId, {
-        subscription_status: sub.status, current_period_end: subscriptionPeriodEnd(sub), cancel_at_period_end: !!sub.cancel_at_period_end
+        ...attestShopPlan(sub, STRIPE_PRICE_SHOP_MONTHLY),
+          subscription_status: sub.status, current_period_end: subscriptionPeriodEnd(sub), cancel_at_period_end: !!sub.cancel_at_period_end
       });
     }
     res.json({ received: true });
@@ -1431,6 +1434,10 @@ route('get', '/api/health', async (req, res) => {
   if (USE_SUPABASE) {
     try {
       await Promise.all(['repair_requests', 'bids', 'request_invites', 'billing_accounts', 'banned_accounts', 'notifications', 'refund_requests'].map(table => supabaseRequest(`${table}?select=*&limit=0`)));
+      await Promise.all([
+        supabaseRequest('provider_verifications?select=business_type,registration_reference,business_address,reviewed_at&limit=0'),
+        supabaseRequest('billing_accounts?select=shop_plan_valid,shop_plan_price_id,shop_plan_checked_at&limit=0')
+      ]);
       databaseReady = true;
     } catch { databaseReady = false; }
   }
@@ -2424,8 +2431,7 @@ route('get', '/admin/ops', async (req, res) => {
 route('get', '/admin', async (req, res) => {
   if (!isAdminConfigValid()) {
     return res.status(503).send('<h2>Admin disabled</h2><p>Set a strong ADMIN_TOKEN environment variable.</p>');
-  }
-  if (!isAuthorizedAdminRequest(req)) {    return res.status(401).send('<h2>Unauthorized</h2><p>Use /admin?token=YOUR_TOKEN or send x-admin-token header.</p>');
+  }  if (!isAuthorizedAdminRequest(req)) {    return res.status(401).send('<h2>Unauthorized</h2><p>Use /admin?token=YOUR_TOKEN or send x-admin-token header.</p>');
   }
   let data = [];
   let loadError = '';

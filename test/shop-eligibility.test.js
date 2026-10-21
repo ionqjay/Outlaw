@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { approvedShop, subscribedShop } from '../lib/shop-eligibility.js';
 const v = { user_id: 'shop', status: 'approved', business_type: 'registered_shop' };
-const b = { user_id: 'shop', subscription_status: 'active', stripe_subscription_id: 'sub_test', current_period_end: '2030-01-01T00:00:00Z' };
+const b = { shop_plan_valid:true, shop_plan_price_id:'price_test', shop_plan_checked_at:new Date().toISOString(), user_id: 'shop', subscription_status: 'active', stripe_subscription_id: 'sub_test', current_period_end: '2030-01-01T00:00:00Z' };
 test('only explicit registered-business review grants approval', () => {
   assert.equal(approvedShop(v, 'shop'), true);
   for (const record of [null, { ...v, status:'pending' }, { ...v, status:'rejected' }, { ...v, business_type:null }, { ...v, user_id:'other' }]) assert.equal(approvedShop(record, 'shop'), false);
