@@ -9,6 +9,8 @@ test('attest exact single-item $99 monthly shop plan from retrieved subscription
     const s=make();mutate(s);const result=attestShopPlan(s,'price_shop');assert.equal(result.shop_plan_valid,false);assert.equal(result.shop_plan_price_id,null);
   }
   assert.equal(attestShopPlan(make(),'').shop_plan_valid,false);
+  assert.equal(attestShopPlan({items:{data:[null]}},'price_shop').shop_plan_valid,false);
+  assert.equal(attestShopPlan({items:{data:[{quantity:1,price:null}]}},'price_shop').shop_plan_valid,false);
 });
 test('portal plan changes replace eligibility and stale/missing attestations fail closed',()=>{
  const now=Date.now(),v={user_id:'shop',status:'approved',business_type:'registered_shop'};

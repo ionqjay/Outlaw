@@ -1,4 +1,5 @@
 import express from 'express';
+import { createBillingReconciler, reconciliationConfig } from './lib/billing-reconciliation.js';
 import { attestShopPlan } from './lib/stripe-entitlement.js';
 import { approvedShop, subscribedShop } from './lib/shop-eligibility.js';
 import path from 'path';
@@ -1436,7 +1437,7 @@ route('get', '/api/health', async (req, res) => {
       await Promise.all(['repair_requests', 'bids', 'request_invites', 'billing_accounts', 'banned_accounts', 'notifications', 'refund_requests'].map(table => supabaseRequest(`${table}?select=*&limit=0`)));
       await Promise.all([
         supabaseRequest('provider_verifications?select=business_type,registration_reference,business_address,reviewed_at&limit=0'),
-        supabaseRequest('billing_accounts?select=shop_plan_valid,shop_plan_price_id,shop_plan_checked_at&limit=0')
+        supabaseRequest('billing_accounts?select=shop_plan_valid,shop_plan_price_id,shop_plan_checked_at,billing_reconcile_after&limit=0')
       ]);
       databaseReady = true;
     } catch { databaseReady = false; }
@@ -1730,7 +1731,7 @@ route('post', '/api/bids', async (req, res) => {
     return res.status(400).json({ error: 'Missing required fields.' });
   }
 
-  if (!Number.isFinite(Number(amount)) || Number(amount) <= 0 || Number(amount) > 100000 || !Number.isInteger(Number(etaHours)) || Number(etaHours) < 1 || Number(etaHours) > 8760) return res.status(400).json({ error: 'Enter a positive estimate amount and whole-number availability in hours.' });
+  if (!Number.isFinite(Number(amount)) || Number(Number(amount).toFixed(2)) !== Number(amount) || Number(amount) <= 0 || Number(amount) > 100000 || !Number.isInteger(Number(etaHours)) || Number(etaHours) < 1 || Number(etaHours) > 8760) return res.status(400).json({ error: 'Enter a positive estimate amount and whole-number availability in hours.' });
   const mechanicId = String(user.id);
   const billing = await getBillingByUserIdAsync(mechanicId);
   if (!billing || !canSubmitEstimatesFromBilling(billing)) {
@@ -2909,6 +2910,35 @@ app.use((error, req, res, next) => {
 });
 
 if (process.env.NODE_ENV !== 'test') {
+const billingWorkerConfig = reconciliationConfig(process.env);
+if (billingWorkerConfig.enabled) {
+  if (!USE_SUPABASE || !stripe || !STRIPE_PRICE_SHOP_MONTHLY) throw new Error('Billing reconciliation requires Supabase and configured Stripe shop price');
+  const workerStripe = new Stripe(STRIPE_SECRET_KEY, { timeout: 10000, maxNetworkRetries: 0 });
+  const runBillingReconciliation = createBillingReconciler({
+    config: billingWorkerConfig, priceId: STRIPE_PRICE_SHOP_MONTHLY,
+    listDue: (limit, cutoff) => {
+      const query = new URLSearchParams({ select: 'user_id,stripe_subscription_id,stripe_customer_id,updated_at',
+        stripe_subscription_id: 'not.is.null', or: '(shop_plan_checked_at.is.null,shop_plan_checked_at.lt.' + cutoff + ')',
+        and: '(or(subscription_status.is.null,subscription_status.not.in.(canceled,incomplete_expired)),or(billing_reconcile_after.is.null,billing_reconcile_after.lte.' + new Date().toISOString() + '))',
+        order: 'billing_reconcile_after.asc.nullsfirst,shop_plan_checked_at.asc.nullsfirst,user_id.asc', limit: String(limit) });
+      return supabaseRequest('billing_accounts?' + query);
+    },
+    retrieve: id => workerStripe.subscriptions.retrieve(id),
+    save: (row, patch) => {
+      // Compare-and-set prevents a delayed refresh overwriting a webhook or replaced subscription.
+      const query = new URLSearchParams({ user_id: 'eq.' + row.user_id,
+        stripe_subscription_id: 'eq.' + row.stripe_subscription_id, updated_at: 'eq.' + row.updated_at });
+      return supabaseRequest('billing_accounts?' + query, { method: 'PATCH',
+        body: { ...patch, updated_at: new Date().toISOString() }, prefer: 'return=minimal' });
+    }
+  });
+  const tick = () => runBillingReconciliation().then(result => {
+    if (!result.skipped) console.info('Billing reconciliation:', JSON.stringify(result));
+  }).catch(error => console.error('Billing reconciliation unavailable:', error.name));
+  const billingTimer = setInterval(tick, billingWorkerConfig.intervalMs);
+  billingTimer.unref();
+  void tick();
+}
 let dispatchRunning = false;
 const dispatchTimer = setInterval(async () => {
   if (dispatchRunning || !USE_SUPABASE) return;

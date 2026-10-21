@@ -11,6 +11,7 @@ test('embedded PostgreSQL executes migrations, RPC cap, eligibility and role iso
   await db.exec(sql('20260923002347_launch_security_and_operations.sql').replace('create extension if not exists pgcrypto;',''));
   await db.exec(sql('20261020170000_registered_shops_only.sql'));
   await db.exec(sql('20261021010000_shop_plan_attestation.sql'));
+  await db.exec(sql('20261021020000_reconciliation_and_quote_cents.sql'));
   await db.exec("grant usage on schema public,auth to service_role; grant select on auth.users to service_role;");
   await db.exec("insert into repair_requests(id,owner_id,title,issue_category,issue_details,vehicle_year,vehicle_make,vehicle_model,city,state,zip) overriding system value values(1,'owner','Brakes','brakes','Noise','2020','Test','Car','Yonkers','NY','10701'),(2,'owner','Other','brakes','Noise','2020','Test','Car','Yonkers','NY','10701');");
   for(let i=1;i<=4;i++){
@@ -22,12 +23,17 @@ test('embedded PostgreSQL executes migrations, RPC cap, eligibility and role iso
   }
   await db.exec('set role service_role');
   const bid=i=>({request_id:1,mechanic_id:'00000000-0000-0000-0000-'+String(i).padStart(12,'0'),amount:200,eta_hours:24,notes:'No trusted metadata needed'});
+  await assert.rejects(db.query('select * from create_shop_bid($1::jsonb)',[JSON.stringify({...bid(1),amount:0.001})]),/Invalid estimate/);
   const results=await Promise.allSettled([1,2,3,4].map(i=>db.query('select * from create_shop_bid($1::jsonb)',[JSON.stringify(bid(i))])));
   assert.equal(results.filter(r=>r.status==='fulfilled').length,3);
   assert.equal((await db.query('select count(*)::int as count from bids')).rows[0].count,3);
   await assert.rejects(db.query('select * from create_marketplace_bid($1::jsonb)',[JSON.stringify(bid(4))]),/permission denied/);
   await assert.rejects(db.query('select * from create_shop_bid($1::jsonb)',[JSON.stringify({...bid(4),request_id:2})]),/invitation required/);
   await db.exec('reset role');
+  const snapshot=(await db.query('select user_id,stripe_subscription_id,updated_at from billing_accounts limit 1')).rows[0];
+  await db.query("update billing_accounts set updated_at=updated_at+interval '1 second',subscription_status='canceled' where user_id=$1",[snapshot.user_id]);
+  const stale=await db.query("update billing_accounts set subscription_status='active' where user_id=$1 and stripe_subscription_id=$2 and updated_at=$3 returning user_id",[snapshot.user_id,snapshot.stripe_subscription_id,snapshot.updated_at]);
+  assert.equal(stale.rows.length,0,'stale reconciliation must not overwrite newer webhook');
   await db.exec("update billing_accounts set shop_plan_valid=false");
   await db.exec('set role service_role');
   await assert.rejects(db.query('select * from create_shop_bid($1::jsonb)',[JSON.stringify(bid(4))]),/not eligible/);
