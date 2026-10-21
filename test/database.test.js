@@ -12,6 +12,8 @@ test('embedded PostgreSQL executes migrations, RPC cap, eligibility and role iso
   await db.exec(sql('20261020170000_registered_shops_only.sql'));
   await db.exec(sql('20261021010000_shop_plan_attestation.sql'));
   await db.exec(sql('20261021020000_reconciliation_and_quote_cents.sql'));
+  await db.exec('alter default privileges in schema public grant all on tables to service_role; alter default privileges in schema public grant all on sequences to anon,authenticated;');
+  await db.exec(sql('20261021030000_participant_messages.sql'));
   await db.exec("grant usage on schema public,auth to service_role; grant select on auth.users to service_role;");
   await db.exec("insert into repair_requests(id,owner_id,title,issue_category,issue_details,vehicle_year,vehicle_make,vehicle_model,city,state,zip) overriding system value values(1,'owner','Brakes','brakes','Noise','2020','Test','Car','Yonkers','NY','10701'),(2,'owner','Other','brakes','Noise','2020','Test','Car','Yonkers','NY','10701');");
   for(let i=1;i<=4;i++){
@@ -37,10 +39,16 @@ test('embedded PostgreSQL executes migrations, RPC cap, eligibility and role iso
   await db.exec("update billing_accounts set shop_plan_valid=false");
   await db.exec('set role service_role');
   await assert.rejects(db.query('select * from create_shop_bid($1::jsonb)',[JSON.stringify(bid(4))]),/not eligible/);
+  await db.query("insert into repair_messages(bid_id,sender_id,sender_role,body,client_message_id) values(1,'owner','owner','Hello repair shop','message_token_0001')");
+  assert.equal((await db.query('select count(*)::int as count from repair_messages')).rows[0].count,1);
+  await assert.rejects(db.query("update repair_messages set body='changed'"),/permission denied/);
   await db.exec('reset role; set role authenticated');
+  await assert.rejects(db.query('select * from repair_messages'),/permission denied/);
   await assert.rejects(db.query('select * from bids'),/permission denied/);
   await assert.rejects(db.query('select * from create_shop_bid($1::jsonb)',[JSON.stringify(bid(4))]),/permission denied/);
   await db.exec('reset role; set role anon');
   await assert.rejects(db.query('select * from billing_accounts'),/permission denied/);
+  await assert.rejects(db.query('select * from repair_messages'),/permission denied/);
+  await assert.rejects(db.query("select nextval('repair_messages_id_seq')"),/permission denied/);
  } finally { await db.close(); }
 });

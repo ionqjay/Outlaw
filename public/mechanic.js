@@ -568,6 +568,7 @@ async function boot() {
         const isWon = status === 'accepted';
 
         return `<div class='estimate-card ${isWon ? 'won-job' : ''}'>
+          ${window.smrMessages.button(Number(b.id))}
           <div class='estimate-top'>
             <div>
               ${isWon ? `<div class='won-title'>Won Job</div>` : ''}

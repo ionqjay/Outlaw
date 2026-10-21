@@ -413,6 +413,7 @@ function renderBids() {
     const email = String(meta.businessEmail || '').trim();
 
     return `<div class='estimate-card ${providerType}'>
+      ${window.smrMessages.button(Number(b.id))}
       <div class='estimate-top'>
         <div>
           <div class='estimate-name'>${meta.businessName || b.mechanic_name}</div>${b.verificationStatus === 'approved' ? "<span class='pill'>Business details reviewed</span>" : ''}
@@ -465,6 +466,7 @@ function renderBids() {
     <div class='winner-hero'>
       <div>
         <div class='winner-title'>Selected Quote</div>
+        ${window.smrMessages.button(Number(accepted.id))}
         <div class='estimate-name'>${acceptedMeta.businessName || accepted.mechanic_name}</div>
         <div class='provider-chip ${acceptedProviderType}'>${acceptedProviderTypeLabel}</div>
       </div>

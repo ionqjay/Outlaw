@@ -548,6 +548,7 @@ test('legacy mechanics and expired approved shops retain only their own sanitize
     fs.writeFileSync(paths[3],JSON.stringify([{user_id:'history-shop',status:'approved',business_type:'registered_shop'}]));
     await withServer(async base => {
       assert.equal((await fetch(base+'/api/provider/repair-history')).status,401);
+      assert.equal((await fetch(base+'/api/bids/1/messages')).status,401);
       for (const [role,id] of [['mechanic',11],['shop',12]]) {
         const headers={'x-dev-user-id':'history-'+role,'x-dev-user-email':role+'@example.test','x-dev-user-role':role};
         const response=await fetch(base+'/api/provider/repair-history?mechanicId=other&ownerId=private-owner',{headers});
@@ -558,6 +559,8 @@ test('legacy mechanics and expired approved shops retain only their own sanitize
         assert.equal(data.repairs[0].zip,'107xx');
         assert.equal(data.repairs[0].issue_details,'Brake repair');
         assert.equal((await fetch(base+'/api/repairs',{headers})).status,403);
+        assert.equal((await fetch(base+'/api/bids/'+(id===11?1:2)+'/messages',{headers})).status,200);
+        assert.equal((await fetch(base+'/api/bids/3/messages',{headers})).status,404);
       }
     });
   });

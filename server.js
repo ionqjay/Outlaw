@@ -1,4 +1,5 @@
 import express from 'express';
+import { messageStore, registerMessages } from './lib/messages.js';
 import { trustedProxyPolicy, createRateLimiter, boundedText, repairValidationError } from './lib/request-security.js';
 import { createBillingReconciler, reconciliationConfig } from './lib/billing-reconciliation.js';
 import { attestShopPlan } from './lib/stripe-entitlement.js';
@@ -407,7 +408,8 @@ async function supabaseRequest(pathname, { method = 'GET', body, prefer } = {}) 
     throw new Error(`Supabase error ${res.status}: ${txt}`);
   }
   if (res.status === 204) return [];
-  return res.json();
+  const responseText = await res.text();
+  return responseText.trim() ? JSON.parse(responseText) : [];
 }
 
 async function listAuthUsers() {
@@ -1411,6 +1413,7 @@ route('get', '/api/health', async (req, res) => {
     try {
       await Promise.all(['repair_requests', 'bids', 'request_invites', 'billing_accounts', 'banned_accounts', 'notifications', 'refund_requests'].map(table => supabaseRequest(`${table}?select=*&limit=0`)));
       await Promise.all([
+        supabaseRequest('repair_messages?select=id,bid_id,sender_id,body&limit=0'),
         supabaseRequest('provider_verifications?select=business_type,registration_reference,business_address,reviewed_at&limit=0'),
         supabaseRequest('billing_accounts?select=shop_plan_valid,shop_plan_price_id,shop_plan_checked_at,billing_reconcile_after&limit=0')
       ]);
@@ -2880,6 +2883,9 @@ route('get', '/admin', async (req, res) => {
   </script>
   </div></body></html>`);
 });
+
+registerMessages({ route, requireUser: requireAuthenticatedUser, getBid: getBidById, getRepair: getRepairById,
+  store: messageStore({ database: USE_SUPABASE, request: supabaseRequest, directory: path.join(__dirname, '.local-data') }) });
 
 registerOperations({ route, store: ops, requireUser: requireAuthenticatedUser, guardAdmin: guardAdminApi, billingFor: getBillingByUserIdAsync, stripe, request: supabaseRequest });
 
