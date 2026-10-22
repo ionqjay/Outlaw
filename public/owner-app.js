@@ -500,7 +500,8 @@ function renderBids() {
     ${existingFeedback ? `<div class='muted-xs'>Your review was submitted: <b>${existingFeedback.rating}/5</b>${existingFeedback.text ? ` - ${existingFeedback.text}` : ''}</div>` : ''}
 
     <div class='winner-actions'>
-      ${canComplete ? `<button class='btn btn-green' data-complete='${selected.id}'>Mark Job Completed</button>` : ''}
+      ${canComplete ? window.smrWorkflow.button(selected.id, 'complete', selected.workflow_revision) : ''}
+      ${selected.status === 'in_progress' && selected.completion_requested_at ? '<p>The shop requests your confirmation that work is completed.</p>' + window.smrWorkflow.button(selected.id, 'continue-work', selected.workflow_revision) : ''}
       ${isCompleted ? `<button class='btn btn-secondary' data-feedback='${accepted.id}' data-request='${selected.id}' data-mechanic='${accepted.mechanic_id}'>${existingFeedback ? 'Update Review' : 'Leave Feedback'}</button>` : `<span class='muted-xs'>Review unlocks after job is marked completed.</span>`}
     </div>
   </div>` : '';
@@ -832,3 +833,9 @@ async function boot() {
 boot();
 
 
+
+window.addEventListener('smr-workflow-updated', async () => {
+  const keep=selectedRequestId;
+  await loadDashboardData(window.__ownerSession);
+  selectedRequestId=keep;renderRequests();renderBids();
+});

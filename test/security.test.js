@@ -397,6 +397,20 @@ test('paid invited provider can submit estimate and owner can accept completed r
         headers: ownerHeaders
       });
       assert.equal(accept.status, 200);
+      const transition=(action,headers,revision)=>fetch(base+'/api/repairs/301/'+action,{method:'POST',headers,body:JSON.stringify({expectedRevision:revision})});
+      assert.equal((await transition('start-work',ownerHeaders,0)).status,403);
+      assert.equal((await transition('request-completion',mechanicHeaders,0)).status,409);
+      assert.equal((await transition('start-work',mechanicHeaders,0)).status,200);
+      assert.equal((await transition('start-work',mechanicHeaders,0)).status,409);
+      assert.equal((await transition('request-completion',mechanicHeaders,1)).status,200);
+      assert.equal((await transition('request-completion',mechanicHeaders,1)).status,409);
+      assert.equal((await transition('complete',mechanicHeaders,2)).status,403);
+      assert.equal((await transition('cancel',ownerHeaders,2)).status,409);
+      assert.equal((await transition('continue-work',ownerHeaders,2)).status,200);
+      assert.equal((await transition('request-completion',mechanicHeaders,1)).status,409);
+      assert.equal((await transition('request-completion',mechanicHeaders,3)).status,200);
+      const history=await(await fetch(base+'/api/repairs/301/transitions',{headers:mechanicHeaders})).json();
+      assert.equal(history.events.length,5);assert.equal(history.events.at(-1).action,'accept');
 
       const complete = await fetch(`${base}/api/repairs/301/complete`, {
         method: 'POST',

@@ -1,4 +1,5 @@
 import express from 'express';
+import { repairTransition } from './lib/repair-workflow.js';
 import { photoMetadata, photoObjects, registerPhotos } from './lib/photos.js';
 import { messageStore, registerMessages } from './lib/messages.js';
 import { trustedProxyPolicy, createRateLimiter, boundedText, repairValidationError } from './lib/request-security.js';
@@ -196,7 +197,9 @@ function readJson(filePath, fallback = []) {
   return JSON.parse(fs.readFileSync(filePath, 'utf8'));
 }
 function writeJson(filePath, data) {
-  fs.writeFileSync(filePath, JSON.stringify(data, null, 2));
+  const temporary=filePath+'.'+process.pid+'.tmp';
+  fs.writeFileSync(temporary, JSON.stringify(data, null, 2));
+  fs.renameSync(temporary,filePath);
 }
 function readDb() {
   return readJson(DB_PATH, []);
@@ -539,6 +542,8 @@ function sanitizeRepairForUser(repair, user, { includeOwnerContact = false } = {
     zip: role === 'owner' && isOwner ? repair?.zip : String(repair?.zip || '').replace(/^(\d{3}).*/, '$1xx'),
     urgency: repair?.urgency,
     status: repair?.status,
+    completion_requested_at: repair?.completion_requested_at || null,
+    workflow_revision: Number(repair?.workflow_revision || 0),
     created_at: repair?.created_at,
     invite_expires_at: repair?.invite_expires_at || null,
     dispatch_summary: isOwner ? repair?.dispatch_summary : undefined,
@@ -1310,8 +1315,7 @@ function esc(s = '') {
 }
 
 async function verifyTurnstile(token, ip) {
-  if (!TURNSTILE_SECRET) return true;
-  if (token === 'dev-bypass' && process.env.NODE_ENV !== 'production') return true;
+  if (!TURNSTILE_SECRET) return true;  if (token === 'dev-bypass' && process.env.NODE_ENV !== 'production') return true;
   try {
     const body = new URLSearchParams({ secret: TURNSTILE_SECRET, response: token, remoteip: ip || '' });
     const r = await axios.post('https://challenges.cloudflare.com/turnstile/v0/siteverify', body.toString(), {
@@ -1416,6 +1420,8 @@ route('get', '/api/health', async (req, res) => {
     try {
       await Promise.all(['repair_requests', 'bids', 'request_invites', 'billing_accounts', 'banned_accounts', 'notifications', 'refund_requests'].map(table => supabaseRequest(`${table}?select=*&limit=0`)));
       await Promise.all([
+        supabaseRequest('repair_requests?select=completion_requested_at,workflow_revision&limit=0'),
+        supabaseRequest('repair_transition_events?select=id&limit=0'),
         supabaseRequest('repair_photos?select=id,repair_id,state&limit=0'),
         supabaseRequest('repair_messages?select=id,bid_id,sender_id,body&limit=0'),
         supabaseRequest('provider_verifications?select=business_type,registration_reference,business_address,reviewed_at&limit=0'),
@@ -1631,82 +1637,47 @@ route('get', '/api/repairs', async (req, res) => {
   }
 });
 
-route('post', '/api/repairs/:id/cancel', async (req, res) => {
-  const repairId = Number(req.params.id);
-  if (!repairId) return res.status(400).json({ error: 'Invalid repair id.' });
-  const adminOverride = isAuthorizedAdminRequest(req);
-  const user = adminOverride ? null : await requireAuthenticatedUser(req, res, ['owner']);
-  if (!adminOverride && !user) return;
+route('get','/api/repairs/:id/transitions',async(req,res)=>{
+ const user=await requireAuthenticatedUser(req,res,['owner','mechanic','shop']);if(!user)return;
+ const id=Number(req.params.id);if(!Number.isSafeInteger(id)||id<1)return res.status(400).json({error:'Invalid repair ID.'});
+ const repair=await getRepairById(id);if(!repair)return res.status(404).json({error:'Repair not found.'});
+ if(String(repair.owner_id)!==String(user.id)&&!(await listBids({requestId:id,mechanicId:String(user.id)})).length)return res.status(404).json({error:'Repair not found.'});
+ const rows=USE_SUPABASE?await supabaseRequest('repair_transition_events?repair_id=eq.'+id+'&select=action,from_status,to_status,created_at&order=id.desc&limit=50'):[...(repair.transition_history||[])].reverse().slice(0,50);
+ res.json({ok:true,events:rows.map(e=>({action:e.action,fromStatus:e.from_status,toStatus:e.to_status,createdAt:e.created_at}))});
+});
 
-  try {
-    const target = await getRepairById(repairId);
-    if (!target) return res.status(404).json({ error: 'Repair request not found.' });
-    if (!adminOverride && String(target.owner_id || '') !== String(user.id)) {
-      return res.status(403).json({ error: 'You can only cancel your own repair requests.' });
-    }
-
-    if (USE_SUPABASE) {
-      if (String(target.status || '').toLowerCase() === 'accepted') {
-        return res.status(400).json({ error: 'Accepted requests cannot be cancelled.' });
+for (const action of ['cancel','complete','start-work','request-completion','continue-work']) {
+  route('post', '/api/repairs/:id/' + action, async (req,res) => {
+    const id=Number(req.params.id);
+    if (!/^[1-9]\d*$/.test(req.params.id)||!Number.isSafeInteger(id)) return res.status(400).json({error:'Invalid repair ID.'});
+    const expectedRevision=req.body?.expectedRevision;
+    if(['start-work','request-completion','continue-work'].includes(action)&&(!Number.isSafeInteger(expectedRevision)||expectedRevision<0))return res.status(400).json({error:'Current workflow revision required.'});
+    const admin=['cancel','complete'].includes(action)&&isAuthorizedAdminRequest(req);
+    const user=admin?{id:'admin-token'}:await requireAuthenticatedUser(req,res,['owner','mechanic','shop']);
+    if(!user)return;
+    try {
+      if(USE_SUPABASE){
+        const repair=await getRepairById(id);if(!repair)return res.status(404).json({error:'Repair not found.'});
+        const bids=await listBids({requestId:id});
+        repairTransition(repair,bids,{id:user.id,admin},action,undefined,expectedRevision); // Friendly errors; RPC repeats checks under lock.
+        const result=await supabaseRequest('rpc/transition_repair',{method:'POST',body:{p_repair_id:id,p_actor_id:String(user.id),p_action:action,p_admin:admin,p_expected_revision:expectedRevision??null}});
+        return res.json(result);
       }
-      await supabaseRequest(`repair_requests?id=eq.${repairId}`, { method: 'PATCH', body: { status: 'cancelled' } });
-      await supabaseRequest(`bids?request_id=eq.${repairId}&status=eq.open`, { method: 'PATCH', body: { status: 'declined' } });
-      return res.json({ ok: true });
-    }
-
-    const requests = readJson(REPAIR_REQUESTS_PATH, []);
-    if (String(target.status || '').toLowerCase() === 'accepted') {
-      return res.status(400).json({ error: 'Accepted requests cannot be cancelled.' });
-    }
-    requests.forEach(r => {
-      if (Number(r.id) === repairId) r.status = 'cancelled';
-    });
-    writeJson(REPAIR_REQUESTS_PATH, requests);
-
-    const bids = readJson(BIDS_PATH, []);
-    bids.forEach(b => {
-      if (Number(b.request_id) === repairId && String(b.status || '').toLowerCase() === 'open') b.status = 'declined';
-    });
-    writeJson(BIDS_PATH, bids);
-
-    res.json({ ok: true });
-  } catch (e) {
-    res.status(500).json({ error: 'Could not cancel request.' });
-  }
-});
-
-route('post', '/api/repairs/:id/complete', async (req, res) => {
-  const repairId = Number(req.params.id);
-  if (!repairId) return res.status(400).json({ error: 'Invalid repair id.' });
-  const adminOverride = isAuthorizedAdminRequest(req);
-  const user = adminOverride ? null : await requireAuthenticatedUser(req, res, ['owner']);
-  if (!adminOverride && !user) return;
-  try {
-    const target = await getRepairById(repairId);
-    if (!target) return res.status(404).json({ error: 'Repair request not found.' });
-    if (!adminOverride && String(target.owner_id || '') !== String(user.id)) {
-      return res.status(403).json({ error: 'You can only complete your own repair requests.' });
-    }
-
-    if (USE_SUPABASE) {
-      const st = String(target.status || '').toLowerCase();
-      if (!['accepted', 'in_progress', 'completed'].includes(st)) return res.status(400).json({ error: 'Only accepted/in-progress jobs can be completed.' });
-      await supabaseRequest(`repair_requests?id=eq.${repairId}`, { method: 'PATCH', body: { status: 'completed' } });
-      return res.json({ ok: true });
-    }
-
-    const requests = readJson(REPAIR_REQUESTS_PATH, []);
-    const st = String(target.status || '').toLowerCase();
-    if (!['accepted', 'in_progress', 'completed'].includes(st)) return res.status(400).json({ error: 'Only accepted/in-progress jobs can be completed.' });
-    requests.forEach(r => {
-      if (Number(r.id) === repairId) r.status = 'completed';
-    });
-    writeJson(REPAIR_REQUESTS_PATH, requests);
-    res.json({ ok: true });
-  } catch (e) {
-    res.status(500).json({ error: 'Could not complete request.' });
-  }
-});
+      // No await inside local read/validate/write critical section.
+      const repairs=readJson(REPAIR_REQUESTS_PATH,[]),index=repairs.findIndex(r=>Number(r.id)===id);
+      if(index<0)return res.status(404).json({error:'Repair not found.'});
+      const bids=readJson(BIDS_PATH,[]),result=repairTransition(repairs[index],bids,{id:user.id,admin},action,undefined,expectedRevision);
+      if(result.changed){
+        result.repair.transition_history=[...(repairs[index].transition_history||[]),result.event];
+        repairs[index]=result.repair;writeJson(REPAIR_REQUESTS_PATH,repairs);
+      }
+      // Also repair an interrupted local cancellation on an idempotent retry.
+      if(action==='cancel'){bids.forEach(b=>{if(Number(b.request_id)===id&&b.status==='open')b.status='declined';});writeJson(BIDS_PATH,bids);
+      }
+      return res.json({ok:true,changed:result.changed});
+    }catch(error){return res.status(error.status||409).json({error:error.status?error.message:'Repair state changed or storage unavailable. Refresh before retrying.'});}
+  });
+}
 
 route('post', '/api/bids', async (req, res) => {
   const user = await requireAuthenticatedUser(req, res, ['shop']);
@@ -1852,6 +1823,8 @@ route('post', '/api/bids/:id/accept', async (req, res) => {
     const bids = readJson(BIDS_PATH, []);
     const target = bids.find(b => Number(b.id) === bidId);
     if (!target) return res.status(404).json({ error: 'Bid not found.' });
+    const currentRepair=readJson(REPAIR_REQUESTS_PATH,[]).find(r=>Number(r.id)===Number(target.request_id));
+    if(!currentRepair||!['open','accepted'].includes(currentRepair.status)||(currentRepair.status==='accepted'&&target.status!=='accepted'))return res.status(409).json({error:'Repair changed. Refresh before accepting.'});
     bids.forEach(b => {
       if (Number(b.request_id) === Number(target.request_id)) b.status = Number(b.id) === bidId ? 'accepted' : 'declined';
     });
@@ -1859,13 +1832,16 @@ route('post', '/api/bids/:id/accept', async (req, res) => {
 
     const requests = readJson(REPAIR_REQUESTS_PATH, []);
     requests.forEach(r => {
-      if (Number(r.id) === Number(target.request_id)) r.status = 'accepted';
+      if (Number(r.id) === Number(target.request_id) && r.status !== 'accepted') {
+        r.transition_history=[...(r.transition_history||[]),{action:'accept',actor_id:user?.id||'admin-token',from_status:r.status,to_status:'accepted',created_at:new Date().toISOString()}];
+        r.status = 'accepted';
+      }
     });
     writeJson(REPAIR_REQUESTS_PATH, requests);
 
     res.json({ ok: true });
   } catch {
-    res.status(500).json({ error: 'Could not accept bid.' });
+    res.status(409).json({ error: 'Could not accept bid. Repair state may have changed; refresh before retrying.' });
   }
 });
 
@@ -2399,8 +2375,7 @@ route('get', '/admin/ops', async (req, res) => {
         ['Accepted Repairs',k.acceptedRepairs,'Converted jobs'],
         ['Total Estimates',k.totalBids,'All estimates submitted'],
         ['Open Estimates',k.openBids,'Awaiting owner action'],
-        ['Avg Estimates / Open Repair',k.avgBidsPerOpen,'Supply depth indicator'],
-        ['Dispatch Invites',k.totalInvites,'Providers invited to jobs'],
+        ['Avg Estimates / Open Repair',k.avgBidsPerOpen,'Supply depth indicator'],        ['Dispatch Invites',k.totalInvites,'Providers invited to jobs'],
         ['Missing Bid Notifications',k.missingBidNotifications,'Run reconciliation before launch']
       ];
       document.getElementById('k').innerHTML=DOMPurify.sanitize(entries.map(([l,v,h])=>'<div class="card"><div class="lbl">'+l+'</div><div class="val">'+(v??0)+'</div><div class="hint">'+h+'</div></div>').join(''));

@@ -570,6 +570,8 @@ async function boot() {
 
         return `<div class='estimate-card ${isWon ? 'won-job' : ''}'>
           ${window.smrMessages.button(Number(b.id))}${window.smrPhotos.button(Number(b.request_id))}
+          ${isWon && repStatus === 'accepted' ? window.smrWorkflow.button(b.request_id, 'start-work', rep?.workflow_revision) : ''}
+          ${isWon && repStatus === 'in_progress' ? (rep?.completion_requested_at ? '<p>Waiting for owner completion confirmation.</p>' : window.smrWorkflow.button(b.request_id, 'request-completion', rep?.workflow_revision)) : ''}
           <div class='estimate-top'>
             <div>
               ${isWon ? `<div class='won-title'>Won Job</div>` : ''}
@@ -671,6 +673,7 @@ async function boot() {
 
   await loadProfile();
   await refreshBillingStatus();
+  window.addEventListener('smr-workflow-updated', () => { void loadDashboard(); });
   loadRepairs();
   loadDashboard();
 

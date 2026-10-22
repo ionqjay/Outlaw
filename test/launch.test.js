@@ -170,7 +170,7 @@ test('dashboard history renders despite denied new leads and unavailable history
   for (const historyUnavailable of [false,true]) {
     const dom=new JSDOM('<div id="view-dashboard"><div id="mechBidsWon"></div><div id="mechBidsActive"></div><div id="mechBidsOther"></div></div>',{runScripts:'outside-only'});
     const w=dom.window; w.DOMPurify=createDOMPurify(w);
-    w.smrPhotos={button:()=>'<button>Photos</button>'}; w.smrMessages={button:()=>'<button>Messages</button>'}; w.session={id:'legacy'}; w.labelForStatus=s=>s; w.parseOwnerMeta=s=>({cleanDetails:s}); w.setView=()=>{}; w.loadHomeMetrics=async()=>{};
+    w.smrWorkflow={button:()=>'<button>Workflow</button>'}; w.smrPhotos={button:()=>'<button>Photos</button>'}; w.smrMessages={button:()=>'<button>Messages</button>'}; w.session={id:'legacy'}; w.labelForStatus=s=>s; w.parseOwnerMeta=s=>({cleanDetails:s}); w.setView=()=>{}; w.loadHomeMetrics=async()=>{};
     w.fetchJson=async url=>{
       if(url==='/api/repairs') throw Error('New leads denied');
       if(url==='/api/provider/repair-history') { if(historyUnavailable) throw Error('History unavailable'); return {repairs:[{id:1,title:'Existing job',status:'completed',issue_details:'Brake repair'}]}; }
