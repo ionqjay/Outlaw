@@ -561,6 +561,8 @@ test('legacy mechanics and expired approved shops retain only their own sanitize
         assert.equal((await fetch(base+'/api/repairs',{headers})).status,403);
         assert.equal((await fetch(base+'/api/bids/'+(id===11?1:2)+'/messages',{headers})).status,200);
         assert.equal((await fetch(base+'/api/bids/3/messages',{headers})).status,404);
+        assert.equal((await fetch(base+'/api/repairs/'+id+'/photos',{headers})).status,200);
+        assert.equal((await fetch(base+'/api/repairs/13/photos',{headers})).status,404);
       }
     });
   });

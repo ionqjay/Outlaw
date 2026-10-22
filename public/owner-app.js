@@ -284,6 +284,7 @@ function renderRequests() {
       </div>`;
 
     return `<div class='list-card'>
+      ${window.smrPhotos.button(Number(x.id))}
       <div class='request-head'>
         <strong>#${x.id} - ${x.title}</strong>
         <span class='pill ${status}'>${statusLabel}</span>

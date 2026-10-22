@@ -1,4 +1,5 @@
 import express from 'express';
+import { photoMetadata, photoObjects, registerPhotos } from './lib/photos.js';
 import { messageStore, registerMessages } from './lib/messages.js';
 import { trustedProxyPolicy, createRateLimiter, boundedText, repairValidationError } from './lib/request-security.js';
 import { createBillingReconciler, reconciliationConfig } from './lib/billing-reconciliation.js';
@@ -104,7 +105,8 @@ function missingProductionConfig() {
     'APP_URL',
     'STRIPE_SECRET_KEY',
     'STRIPE_WEBHOOK_SECRET',
-    'STRIPE_PRICE_SHOP_MONTHLY'
+    'STRIPE_PRICE_SHOP_MONTHLY',
+    'REPAIR_PHOTO_BUCKET'
   ];
   return required.filter(key => !String(process.env[key] || '').trim());
 }
@@ -113,6 +115,7 @@ function billingConfigReady() {
   return !!(stripe && STRIPE_WEBHOOK_SECRET && STRIPE_PRICE_SHOP_MONTHLY);
 }
 
+const privatePhotoObjects = photoObjects({ database: USE_SUPABASE, url: SUPABASE_URL, key: SUPABASE_SERVICE_ROLE_KEY, bucket: process.env.REPAIR_PHOTO_BUCKET || '', directory: path.join(__dirname, '.local-data', 'private-photos') });
 const ops = operationsStore({ database: USE_SUPABASE, request: supabaseRequest, directory: path.join(__dirname, '.local-data') });
 async function notifyUser(userId, eventKey, title, body, href) {
   if (!userId) return;
@@ -1413,10 +1416,12 @@ route('get', '/api/health', async (req, res) => {
     try {
       await Promise.all(['repair_requests', 'bids', 'request_invites', 'billing_accounts', 'banned_accounts', 'notifications', 'refund_requests'].map(table => supabaseRequest(`${table}?select=*&limit=0`)));
       await Promise.all([
+        supabaseRequest('repair_photos?select=id,repair_id,state&limit=0'),
         supabaseRequest('repair_messages?select=id,bid_id,sender_id,body&limit=0'),
         supabaseRequest('provider_verifications?select=business_type,registration_reference,business_address,reviewed_at&limit=0'),
         supabaseRequest('billing_accounts?select=shop_plan_valid,shop_plan_price_id,shop_plan_checked_at,billing_reconcile_after&limit=0')
       ]);
+      await privatePhotoObjects.ready();
       databaseReady = true;
     } catch { databaseReady = false; }
   }
@@ -2882,6 +2887,23 @@ route('get', '/admin', async (req, res) => {
     loadBilling();
   </script>
   </div></body></html>`);
+});
+
+registerPhotos({ route, requireUser: requireAuthenticatedUser, getRepair: getRepairById,
+  canView: async (user, repair) => {
+    const ownBids = await listBids({ requestId: Number(repair.id), mechanicId: String(user.id) });
+    if (ownBids.length) return true; // Historical participants retain access without buying new leads.
+    if (roleForUser(user) !== 'shop') return false;
+    const verification = (await ops.list('provider_verifications', { user_id: user.id }))[0];
+    if (!subscribedShop(verification, await getBillingByUserIdAsync(user.id), user.id)) return false;
+    const email = String(user.email || '').trim().toLowerCase();
+    if (!email) return false;
+    const invites = await listInvites({ repairId: Number(repair.id), providerEmail: email, providerType: 'shop', status: 'pending' });
+    return repair.status === 'open' && !requestIsExpiredForNewInvites(repair) && invites.some(i => Date.parse(i.expires_at) > Date.now())
+      && providerSupportsRepair({ zip: user.user_metadata?.zip, services: user.user_metadata?.services, serviceRadiusMiles: user.user_metadata?.serviceRadiusMiles }, repair);
+  },
+  metadata: photoMetadata({ database: USE_SUPABASE, request: supabaseRequest, directory: path.join(__dirname, '.local-data') }),
+  objects: privatePhotoObjects
 });
 
 registerMessages({ route, requireUser: requireAuthenticatedUser, getBid: getBidById, getRepair: getRepairById,

@@ -14,6 +14,7 @@ test('embedded PostgreSQL executes migrations, RPC cap, eligibility and role iso
   await db.exec(sql('20261021020000_reconciliation_and_quote_cents.sql'));
   await db.exec('alter default privileges in schema public grant all on tables to service_role; alter default privileges in schema public grant all on sequences to anon,authenticated;');
   await db.exec(sql('20261021030000_participant_messages.sql'));
+  await db.exec(sql('20261021040000_private_repair_photos.sql'));
   await db.exec("grant usage on schema public,auth to service_role; grant select on auth.users to service_role;");
   await db.exec("insert into repair_requests(id,owner_id,title,issue_category,issue_details,vehicle_year,vehicle_make,vehicle_model,city,state,zip) overriding system value values(1,'owner','Brakes','brakes','Noise','2020','Test','Car','Yonkers','NY','10701'),(2,'owner','Other','brakes','Noise','2020','Test','Car','Yonkers','NY','10701');");
   for(let i=1;i<=4;i++){
@@ -24,6 +25,9 @@ test('embedded PostgreSQL executes migrations, RPC cap, eligibility and role iso
    await db.query("insert into request_invites(repair_id,provider_email,provider_type,expires_at) values(1,$1,'shop',now()+interval '1 hour')",['shop'+i+'@example.test']);
   }
   await db.exec('set role service_role');
+  await assert.rejects(db.query("select * from reserve_repair_photo(1,'other','10000000-0000-0000-0000-000000000001')"),/Not authorized/);
+  for(let i=1;i<=5;i++)await db.query('select * from reserve_repair_photo(1,$1,$2)', ['owner','10000000-0000-0000-0000-'+String(i).padStart(12,'0')]);
+  await assert.rejects(db.query("select * from reserve_repair_photo(1,'owner','10000000-0000-0000-0000-000000000006')"),/Photo limit/);
   const bid=i=>({request_id:1,mechanic_id:'00000000-0000-0000-0000-'+String(i).padStart(12,'0'),amount:200,eta_hours:24,notes:'No trusted metadata needed'});
   await assert.rejects(db.query('select * from create_shop_bid($1::jsonb)',[JSON.stringify({...bid(1),amount:0.001})]),/Invalid estimate/);
   const results=await Promise.allSettled([1,2,3,4].map(i=>db.query('select * from create_shop_bid($1::jsonb)',[JSON.stringify(bid(i))])));
@@ -45,6 +49,7 @@ test('embedded PostgreSQL executes migrations, RPC cap, eligibility and role iso
   await db.exec('reset role; set role authenticated');
   await assert.rejects(db.query('select * from repair_messages'),/permission denied/);
   await assert.rejects(db.query('select * from bids'),/permission denied/);
+  await assert.rejects(db.query('select * from repair_photos'),/permission denied/);
   await assert.rejects(db.query('select * from create_shop_bid($1::jsonb)',[JSON.stringify(bid(4))]),/permission denied/);
   await db.exec('reset role; set role anon');
   await assert.rejects(db.query('select * from billing_accounts'),/permission denied/);

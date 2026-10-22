@@ -377,6 +377,7 @@ async function boot() {
             <div class='small'>${rep.vehicle_year || ''} ${rep.vehicle_make || ''} ${rep.vehicle_model || ''}</div>
             <div class='small'><b>Repair needed:</b> ${ownerMeta.cleanDetails || 'No description provided.'}</div>
             ${locked ? "<div class='small'><b>Preview:</b> This shows market activity before subscription. Active subscribers see full details for leads matched by the matching criteria.</div>" : `<div class='small'><b>Estimate window:</b> ${formatInviteCountdown(rep.invite_expires_at)}</div>`}
+            ${!locked ? window.smrPhotos.button(Number(rep.id)) : ''}
             ${locked ? "<button class='btn btn-secondary' data-view='profile' style='margin-top:10px'>Unlock Matched Lead System</button>" : `
             <div class='grid2' style='margin-top:10px'>
               <label class='field'>Estimate amount<span>Total price in USD.</span><input inputmode='decimal' placeholder='325' id='amount-${rep.id}' /></label>
@@ -568,7 +569,7 @@ async function boot() {
         const isWon = status === 'accepted';
 
         return `<div class='estimate-card ${isWon ? 'won-job' : ''}'>
-          ${window.smrMessages.button(Number(b.id))}
+          ${window.smrMessages.button(Number(b.id))}${window.smrPhotos.button(Number(b.request_id))}
           <div class='estimate-top'>
             <div>
               ${isWon ? `<div class='won-title'>Won Job</div>` : ''}
