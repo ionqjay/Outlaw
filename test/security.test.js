@@ -4,7 +4,6 @@ import fs from 'node:fs';
 
 process.env.NODE_ENV = 'test';
 process.env.ALLOW_DEV_AUTH = 'true';
-process.env.ADMIN_TOKEN = 'test-admin-token';
 
 const { app, sanitizeRepairForUser, sanitizeBidForUser } = await import('../server.js');
 
@@ -441,7 +440,10 @@ test('ops reconciliation backfills missing bid notifications without failing sav
   const bidsPath = new URL('../bids.json', import.meta.url);
   const notificationsPath = new URL('../.local-data/notifications.json', import.meta.url);
 
-  await preservingJsonFiles([repairRequestsPath, bidsPath, notificationsPath], async () => {
+  const membersPath=new URL('../.local-data/admin_memberships.json',import.meta.url),auditPath=new URL('../.local-data/admin_audit_events.jsonl',import.meta.url);
+  fs.mkdirSync(new URL('../.local-data/',import.meta.url),{recursive:true});
+  await preservingJsonFiles([repairRequestsPath, bidsPath, notificationsPath,membersPath,auditPath], async () => {
+    fs.writeFileSync(membersPath,JSON.stringify([{user_id:'approved-admin',active:true}]));
     fs.writeFileSync(repairRequestsPath, JSON.stringify([
       {
         id: 401,
@@ -475,7 +477,7 @@ test('ops reconciliation backfills missing bid notifications without failing sav
     if (fs.existsSync(notificationsPath)) fs.unlinkSync(notificationsPath);
 
     await withServer(async base => {
-      const headers = { 'x-admin-token': 'test-admin-token' };
+      const headers = { 'x-dev-user-id':'approved-admin','x-dev-user-email':'admin@example.test','x-dev-user-role':'owner' };
       const before = await fetch(`${base}/api/admin/ops`, { headers });
       assert.equal(before.status, 200);
       const beforeData = await before.json();
@@ -592,5 +594,21 @@ test('public and authenticated repair endpoints reject malformed fields before p
    }
   }
   for(const patch of [{email:'invalid'},{mobile:'not a telephone'},{fullName:{}},{serviceAddress:' '}]) assert.equal((await fetch(base+'/api/owner-request',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({...good,...patch})})).status,400);
+ });
+});
+
+test('shared tokens and forged admin roles never grant administrative access',async()=>{
+ await withServer(async base=>{
+  for(const headers of [{'x-admin-token':'old-shared-token'},{'Authorization':'Bearer legacy-token'},{'x-dev-user-id':'not-approved','x-dev-user-role':'admin'}]){
+   const response=await fetch(base+'/api/admin/accounts?token=old-shared-token',{headers});assert.ok([401,403].includes(response.status));
+  }
+ });
+});
+
+test('owners cannot enumerate other owners feedback using missing or invalid request IDs',async()=>{
+ const repairs=new URL('../repair_requests.json',import.meta.url),feedbacks=new URL('../feedbacks.json',import.meta.url);
+ await preservingJsonFiles([repairs,feedbacks],async()=>{
+  fs.writeFileSync(repairs,JSON.stringify([{id:801,owner_id:'feedback-owner',status:'completed'},{id:802,owner_id:'other',status:'completed'}]));fs.writeFileSync(feedbacks,JSON.stringify([{id:1,request_id:801,text:'Mine'},{id:2,request_id:802,text:'Private other'}]));
+  await withServer(async base=>{const headers={'x-dev-user-id':'feedback-owner','x-dev-user-role':'owner'};const data=await(await fetch(base+'/api/feedbacks',{headers})).json();assert.deepEqual(data.feedbacks.map(f=>f.id),[1]);assert.equal((await fetch(base+'/api/feedbacks?requestId=NaN',{headers})).status,400);});
  });
 });

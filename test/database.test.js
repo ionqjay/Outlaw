@@ -16,6 +16,7 @@ test('embedded PostgreSQL executes migrations, RPC cap, eligibility and role iso
   await db.exec(sql('20261021030000_participant_messages.sql'));
   await db.exec(sql('20261021040000_private_repair_photos.sql'));
   await db.exec(sql('20261021050000_repair_workflow.sql'));
+  await db.exec(sql('20261021060000_admin_identity_audit.sql'));
   await db.exec("grant usage on schema public,auth to service_role; grant select on auth.users to service_role;");
   await db.exec("insert into repair_requests(id,owner_id,title,issue_category,issue_details,vehicle_year,vehicle_make,vehicle_model,city,state,zip) overriding system value values(1,'owner','Brakes','brakes','Noise','2020','Test','Car','Yonkers','NY','10701'),(2,'owner','Other','brakes','Noise','2020','Test','Car','Yonkers','NY','10701');");
   for(let i=1;i<=4;i++){
@@ -26,6 +27,9 @@ test('embedded PostgreSQL executes migrations, RPC cap, eligibility and role iso
    await db.query("insert into request_invites(repair_id,provider_email,provider_type,expires_at) values(1,$1,'shop',now()+interval '1 hour')",['shop'+i+'@example.test']);
   }
   await db.exec('set role service_role');
+  await assert.rejects(db.query("insert into admin_memberships(user_id,active) values('00000000-0000-0000-0000-000000000001',true)"),/permission denied/);
+  await db.query("insert into admin_audit_events(actor_id,action,target_hash,correlation_id,outcome) values('test-admin','TEST',repeat('a',64),'00000000-0000-0000-0000-000000000001','attempt')");
+  await assert.rejects(db.query("delete from admin_audit_events"),/permission denied/);
   await assert.rejects(db.query("select * from reserve_repair_photo(1,'other','10000000-0000-0000-0000-000000000001')"),/Not authorized/);
   for(let i=1;i<=5;i++)await db.query('select * from reserve_repair_photo(1,$1,$2)', ['owner','10000000-0000-0000-0000-'+String(i).padStart(12,'0')]);
   await assert.rejects(db.query("select * from reserve_repair_photo(1,'owner','10000000-0000-0000-0000-000000000006')"),/Photo limit/);
@@ -55,6 +59,10 @@ test('embedded PostgreSQL executes migrations, RPC cap, eligibility and role iso
   await assert.rejects(db.query("select transition_repair(1,'owner','cancel',false)"),/Invalid transition/);
   await db.query("select transition_repair(1,'owner','complete',false)");
   await db.query("select transition_repair(2,'owner','cancel',false)");
+  await db.query("insert into repair_requests(id,owner_id,title,issue_category,issue_details,vehicle_year,vehicle_make,vehicle_model,city,state,zip) overriding system value select 99,owner_id,title,issue_category,issue_details,vehicle_year,vehicle_make,vehicle_model,city,state,zip from repair_requests where id=1");
+  const adminBid=(await db.query("insert into bids(request_id,mechanic_id,mechanic_name,amount,eta_hours) values(99,'provider','Garage',100,24) returning id")).rows[0].id;
+  await db.query("select accept_marketplace_bid($1,'verified-admin-uuid',true)",[adminBid]);
+  assert.equal((await db.query("select actor_id from repair_transition_events where repair_id=99")).rows[0].actor_id,'verified-admin-uuid');
   await assert.rejects(db.query("select transition_repair(1,null,'complete',false)"),/Unauthorized/);
 
   await db.query("insert into repair_messages(bid_id,sender_id,sender_role,body,client_message_id) values(1,'owner','owner','Hello repair shop','message_token_0001')");
@@ -65,6 +73,8 @@ test('embedded PostgreSQL executes migrations, RPC cap, eligibility and role iso
   await assert.rejects(db.query('select * from bids'),/permission denied/);
   await assert.rejects(db.query('select * from repair_photos'),/permission denied/);
   await assert.rejects(db.query('select * from repair_transition_events'),/permission denied/);
+  await assert.rejects(db.query('select * from admin_memberships'),/permission denied/);
+  await assert.rejects(db.query('select * from admin_audit_events'),/permission denied/);
   await assert.rejects(db.query("select transition_repair(1,'owner','complete',false)"),/permission denied/);
   await assert.rejects(db.query('select * from create_shop_bid($1::jsonb)',[JSON.stringify(bid(4))]),/permission denied/);
   await db.exec('reset role; set role anon');

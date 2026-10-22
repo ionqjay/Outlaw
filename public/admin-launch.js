@@ -1,19 +1,24 @@
 (() => {
+  let generation=0;
+  function clearQueues(){document.getElementById('verificationQueue').replaceChildren();document.getElementById('refundQueue').replaceChildren();}
   const status = document.getElementById('opsStatus');
   const base = (window.APP_CONFIG?.API_BASE || location.origin).replace(/\/$/, '');
   async function api(url, body) {
-    const response = await fetch(base + url, { method: body ? 'POST' : 'GET', headers: { 'Content-Type': 'application/json', 'x-admin-token': document.getElementById('adminKey').value }, body: body ? JSON.stringify(body) : undefined });
+    const current=generation;
+    const response = await fetch(base + url, { method: body ? 'POST' : 'GET', headers: { 'Content-Type': 'application/json', ...await window.smrAuth.getAuthHeaders() }, body: body ? JSON.stringify(body) : undefined, signal: AbortSignal.timeout(15000) });
     const data = await response.json();
+    if(current!==generation)throw Error('Session changed; reload to reauthorize.');
     if (!response.ok) throw new Error(data.error || 'Request failed.');
     return data;
   }
   function addButton(card, label, callback) {
     const button = document.createElement('button'); button.type = 'button'; button.className = 'btn btn-secondary'; button.textContent = label;
-    button.addEventListener('click', async () => { button.disabled = true; try { await callback(); await load(); } catch (error) { status.textContent = error.message; } finally { button.disabled = false; } });
+    button.addEventListener('click', async () => { button.disabled = true; try { await callback(); await load(); } catch (error) { clearQueues(); status.textContent = error.message; } finally { button.disabled = false; } });
     card.append(button);
   }
   function cardFor(queue, text) { const card = document.createElement('div'); card.className = 'list-card'; const description = document.createElement('p'); description.textContent = text; card.append(description); queue.append(card); return card; }
   async function load() {
+    generation++;clearQueues();
     const data = await api('/api/admin/launch');
     const verificationQueue = document.getElementById('verificationQueue'); verificationQueue.replaceChildren();
     for (const row of data.verifications) {
@@ -28,5 +33,6 @@
     }
     status.textContent = `Loaded ${data.verifications.length} provider reviews and ${data.refunds.length} refund requests.`;
   }
-  document.getElementById('adminLogin').addEventListener('submit', async event => { event.preventDefault(); try { await load(); } catch (error) { status.textContent = error.message; } });
+  window.smrSupabase?.auth?.onAuthStateChange(event=>{if(['SIGNED_OUT','SIGNED_IN','USER_UPDATED'].includes(event)){generation++;clearQueues();status.textContent='Session changed; reload to reauthorize.';}});
+  document.getElementById('adminLogin').addEventListener('submit', async event => { event.preventDefault(); try { await load(); } catch (error) { clearQueues(); status.textContent = error.message; } });
 })();

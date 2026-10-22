@@ -23,7 +23,7 @@ Updated: 2026-09-26
 - Customer-scoped billing invoice API and a billing-month selector for opportunity-guarantee refund requests. Providers no longer need to copy raw invoice IDs from Stripe.
 - Bid notification delivery is now best-effort so a notification write failure does not make a successfully saved estimate appear failed. Admin ops exposes missing bid-notification reconciliation and can backfill owner notifications.
 - The launch SQL RPC definition now includes atomic per-provider-type estimate limits for the migration-history reconciliation pass. Do not push this blindly until Supabase migration history is reconciled.
-- Admin review UI at `/admin-launch.html` with an admin token supplied in a header.
+- Admin review UI uses an individually authenticated server-authorized session.
 
 ## Required before production release
 
@@ -43,7 +43,7 @@ Updated: 2026-09-26
 - Business review is manual. An approved badge means details were reviewed; it is not insurance coverage, licensing certification, or a repair-quality guarantee.
 - Refund approval needs human eligibility review, especially for periods before opportunity tracking began. In-app invitations alone do not prove delivery outside the app.
 - After a Stripe refund has been submitted, the request cannot be changed back to another review decision in the admin UI/API. Resolve any pending or failed refund state in Stripe before further action.
-- The legacy admin UI still supports a token in its URL. Prefer the new header-based admin review UI; migrate the legacy admin flow to authenticated sessions.
+- Shared/header/query admin tokens are removed. Provision server-owned membership explicitly.
 - Migration history has a version mismatch to reconcile before future migration pushes: the hosted database has the launch migration applied, while historical local migration files include older baseline/RLS paths. Do not rerun the old `002_enable_rls.sql`; its historical direct-client policies are superseded by backend-only access.
 
 ## Release and rollback plan
