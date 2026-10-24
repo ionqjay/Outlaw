@@ -247,6 +247,12 @@ async function boot() {
         status: String(data.status || 'none')
       };
       updateBillingButtons();
+      if (data.billingMode === 'disabled') {
+        if (el) el.textContent = data.message;
+        for (const id of ['startSubscriptionBtn', 'manageBillingBtn']) { const button = document.getElementById(id); if (button) button.disabled = true; }
+        setBillingNotice(data.message, 'err');
+        return;
+      }
       if (el) {
         if (billingState.canSubmitEstimates) {
           el.textContent = `Subscription active (${billingState.status}). You can submit estimates.`;

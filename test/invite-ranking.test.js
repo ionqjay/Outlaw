@@ -23,7 +23,7 @@ function harness(pool, initial = [], repairs = [repair()], hosted = false) {
   const rows = structuredClone(initial);
   let bids = [];
   const context = vm.createContext({
-    console, rankInviteCandidates, initialInviteCandidates,
+    BILLING_ENABLED: true, console, rankInviteCandidates, initialInviteCandidates,
     runDispatchExclusive: createDispatchQueue(),
     Date: class extends Date { static now() { return clock; } },
     STANDARD_INVITE_WINDOW_MS: 7200000, URGENT_INVITE_WINDOW_MS: 2700000,
@@ -49,6 +49,14 @@ function harness(pool, initial = [], repairs = [repair()], hosted = false) {
     + section('async function listRepairRequests(', 'async function createBid('), context);
   return { context, rows, advance: ms => { clock += ms; }, setBids: value => { bids = value; } };
 }
+
+test('disabled dispatch never creates invites even for cached eligible providers', async () => {
+  const h = harness([provider('paid')]);
+  h.context.BILLING_ENABLED = false;
+  await h.context.createDispatchSnapshot(repair());
+  await h.context.refreshDispatch([repair()]);
+  assert.equal(h.rows.length, 0);
+});
 
 test('fairness beats distance and response history when opportunity counts differ', () => {
   const busy = provider('busy', 'shop', { distanceMiles: 1 });

@@ -6,7 +6,8 @@ import { messageStore, registerMessages } from './lib/messages.js';
 import { trustedProxyPolicy, createRateLimiter, boundedText, repairValidationError } from './lib/request-security.js';
 import { createBillingReconciler, reconciliationConfig } from './lib/billing-reconciliation.js';
 import { attestShopPlan } from './lib/stripe-entitlement.js';
-import { approvedShop, subscribedShop } from './lib/shop-eligibility.js';
+import { billingMode, missingReleaseConfig, BILLING_UNAVAILABLE } from './lib/billing-mode.js';
+import { approvedShop, subscribedShop as entitledShop } from './lib/shop-eligibility.js';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import fs from 'fs';
@@ -28,6 +29,13 @@ app.set('trust proxy', trustedProxyPolicy(process.env.TRUSTED_PROXY_CIDRS || '')
 app.use(createRateLimiter());
 // Express 4 does not forward rejected async handlers automatically.
 function route(method, path, ...handlers) {
+  // Release gate includes admin fallbacks: disabled must never simulate billing changes.
+  const billingWrite = method !== 'get' && (path.startsWith('/api/billing/') || path.startsWith('/api/admin/billing/') || path === '/api/admin/refund/:id/process');
+  const newWork = method === 'post' && ['/api/repairs', '/api/owner-request', '/api/bids'].includes(path);
+  if (billingWrite || newWork || path === '/api/billing/invoices' || path === '/api/stripe/webhook') handlers.unshift((req,res,next) => {
+    if (!BILLING_ENABLED) return res.status(503).json({ error: BILLING_UNAVAILABLE, billingMode: 'disabled' });
+    next();
+  });
   const adminRequired=path.startsWith('/api/admin/');
   const overrideRoute=path==='/api/bids'||path==='/api/feedbacks'||path==='/api/bids/:id/accept'||path==='/api/repairs/:id/cancel'||path==='/api/repairs/:id/complete';
   if(adminRequired||overrideRoute)handlers.unshift(async(req,res,next)=>{
@@ -73,25 +81,17 @@ if (process.env.NODE_ENV === 'production' && !USE_SUPABASE) {
   throw new Error('Production requires Supabase; local file storage is development-only.');
 }
 
+const BILLING_ENABLED = billingMode(process.env) === 'enabled';
+const subscribedShop = (...args) => BILLING_ENABLED && entitledShop(...args);
 const STRIPE_SECRET_KEY = process.env.STRIPE_SECRET_KEY || '';
 const STRIPE_WEBHOOK_SECRET = process.env.STRIPE_WEBHOOK_SECRET || '';
 const STRIPE_PRICE_SHOP_MONTHLY = process.env.STRIPE_PRICE_SHOP_MONTHLY || '';
 const APP_URL = process.env.APP_URL || 'http://localhost:3000';
-const stripe = STRIPE_SECRET_KEY ? new Stripe(STRIPE_SECRET_KEY) : null;
+const stripe = BILLING_ENABLED && STRIPE_SECRET_KEY ? new Stripe(STRIPE_SECRET_KEY) : null;
 
 function missingProductionConfig() {
   if (process.env.NODE_ENV !== 'production') return [];
-  const required = [
-    'SUPABASE_URL',
-    'SUPABASE_SERVICE_ROLE_KEY',
-    'CORS_ORIGINS',
-    'APP_URL',
-    'STRIPE_SECRET_KEY',
-    'STRIPE_WEBHOOK_SECRET',
-    'STRIPE_PRICE_SHOP_MONTHLY',
-    'REPAIR_PHOTO_BUCKET'
-  ];
-  return required.filter(key => !String(process.env[key] || '').trim());
+  return missingReleaseConfig(process.env);
 }
 
 function billingConfigReady() {
@@ -363,6 +363,7 @@ async function setBannedEmail(email, active, reason = '', category = '') {
 
 function resolvePriceForRole(role) { return role === 'shop' ? STRIPE_PRICE_SHOP_MONTHLY : ''; }
 async function requireShopAccess(user, res, paid = true) {
+  if (paid && !BILLING_ENABLED) { res.status(503).json({ error: BILLING_UNAVAILABLE }); return null; }
   const verification = (await ops.list('provider_verifications', { user_id: user.id }))[0];
   const billing = paid ? await getBillingByUserIdAsync(user.id) : null;
   const allowed = paid ? subscribedShop(verification, billing, user.id) : approvedShop(verification, user.id);
@@ -713,6 +714,7 @@ function providerSupportsRepair(provider, repair) {
 }
 
 function providerEligibleForInvites(provider) {
+  if (!BILLING_ENABLED) return false;
   return !!provider?.can_submit_estimates;
 }
 
@@ -924,6 +926,7 @@ async function createDispatchSnapshot(repair) {
 }
 
 async function createDispatchSnapshotUnlocked(repair) {
+  if (!BILLING_ENABLED) return;
   if (repair.status !== 'open' || requestIsExpiredForNewInvites(repair)) return;
   const history = await listInvites();
   if (history.some(invite => Number(invite.repair_id) === Number(repair.id || repair.Id))) return;
@@ -1062,6 +1065,7 @@ async function processInviteEscalations(repairs = []) {
 }
 
 async function refreshDispatch(repairs) {
+  if (!BILLING_ENABLED) return;
   return runDispatchExclusive(async () => {
     // Recover repairs whose initial dispatch failed or had no eligible providers.
     // Every candidate is selected by the same queue, independent of who views it.
@@ -1395,6 +1399,8 @@ route('get', '/api/stats', async (req, res) => {
   }
 });
 
+route('get', '/api/availability', (req, res) => res.json({ billingMode: BILLING_ENABLED ? 'enabled' : 'disabled', newQuotesAvailable: BILLING_ENABLED, message: BILLING_ENABLED ? null : BILLING_UNAVAILABLE }));
+
 route('get', '/api/health', async (req, res) => {
   const missingConfig = missingProductionConfig();
   let databaseReady = !USE_SUPABASE && process.env.NODE_ENV !== 'production';
@@ -1416,7 +1422,7 @@ route('get', '/api/health', async (req, res) => {
     } catch { databaseReady = false; }
   }
   const ok = missingConfig.length === 0 && databaseReady;
-  res.status(ok ? 200 : 503).json({ ok, databaseReady, stripeConfigured: !!stripe,
+  res.status(ok ? 200 : 503).json({ ok, databaseReady, billingMode: BILLING_ENABLED ? 'enabled' : 'disabled', stripeConfigured: !!stripe,
     stripeBillingReady: billingConfigReady(), supabaseConfigured: USE_SUPABASE,
     missingProductionConfig: missingConfig, uptimeSec: Math.round(process.uptime()), ts: new Date().toISOString() });
 });
@@ -1899,6 +1905,10 @@ route('get', '/api/billing/status', async (req, res) => {
   if (!userId) return res.status(400).json({ error: 'userId is required.' });
 
   let billing = await getBillingByUserIdAsync(userId);
+  if (!BILLING_ENABLED) return res.json({ ok: true, billingMode: 'disabled', canSubmitEstimates: false,
+    hasSubscription: !!billing, hasStripeCustomer: !!billing?.stripe_customer_id,
+    status: billing?.subscription_status || 'none', currentPeriodEnd: billing?.current_period_end || null,
+    message: BILLING_UNAVAILABLE, billingManagementAvailable: false });
   billing = await syncBillingFromStripe(billing);
   if (!billing) {
     return res.json({
@@ -2374,7 +2384,7 @@ app.use((error, req, res, next) => {
 
 if (process.env.NODE_ENV !== 'test') {
 const billingWorkerConfig = reconciliationConfig(process.env);
-if (billingWorkerConfig.enabled) {
+if (BILLING_ENABLED && billingWorkerConfig.enabled) {
   if (!USE_SUPABASE || !stripe || !STRIPE_PRICE_SHOP_MONTHLY) throw new Error('Billing reconciliation requires Supabase and configured Stripe shop price');
   const workerStripe = new Stripe(STRIPE_SECRET_KEY, { timeout: 10000, maxNetworkRetries: 0 });
   const runBillingReconciliation = createBillingReconciler({
@@ -2404,7 +2414,7 @@ if (billingWorkerConfig.enabled) {
 }
 let dispatchRunning = false;
 const dispatchTimer = setInterval(async () => {
-  if (dispatchRunning || !USE_SUPABASE) return;
+  if (!BILLING_ENABLED || dispatchRunning || !USE_SUPABASE) return;
   dispatchRunning = true;
   try {
     const repairs = await supabaseRequest('repair_requests?select=*&status=eq.open');
