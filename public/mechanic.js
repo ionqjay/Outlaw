@@ -232,7 +232,8 @@ async function boot() {
     businessNameInput.placeholder = isShop ? 'Shop name' : 'Public display name';
   }
   const individualOnlyFields = document.getElementById('individualOnlyFields');
-  if (individualOnlyFields) individualOnlyFields.style.display = isShop ? 'none' : 'block';
+  if (individualOnlyFields) individualOnlyFields.style.display = 'block';
+  if (!isShop && dashboardSubtitle) dashboardSubtitle.textContent = 'Legacy account: existing history and billing remain available. New leads and subscriptions are for approved registered repair shops only.';
 
   async function refreshBillingStatus() {
     const el = document.getElementById('billingStatus');
@@ -246,6 +247,12 @@ async function boot() {
         status: String(data.status || 'none')
       };
       updateBillingButtons();
+      if (data.billingMode === 'disabled') {
+        if (el) el.textContent = data.message;
+        for (const id of ['startSubscriptionBtn', 'manageBillingBtn']) { const button = document.getElementById(id); if (button) button.disabled = true; }
+        setBillingNotice(data.message, 'err');
+        return;
+      }
       if (el) {
         if (billingState.canSubmitEstimates) {
           el.textContent = `Subscription active (${billingState.status}). You can submit estimates.`;
@@ -376,6 +383,7 @@ async function boot() {
             <div class='small'>${rep.vehicle_year || ''} ${rep.vehicle_make || ''} ${rep.vehicle_model || ''}</div>
             <div class='small'><b>Repair needed:</b> ${ownerMeta.cleanDetails || 'No description provided.'}</div>
             ${locked ? "<div class='small'><b>Preview:</b> This shows market activity before subscription. Active subscribers see full details for leads matched by the matching criteria.</div>" : `<div class='small'><b>Estimate window:</b> ${formatInviteCountdown(rep.invite_expires_at)}</div>`}
+            ${!locked ? window.smrPhotos.button(Number(rep.id)) : ''}
             ${locked ? "<button class='btn btn-secondary' data-view='profile' style='margin-top:10px'>Unlock Matched Lead System</button>" : `
             <div class='grid2' style='margin-top:10px'>
               <label class='field'>Estimate amount<span>Total price in USD.</span><input inputmode='decimal' placeholder='325' id='amount-${rep.id}' /></label>
@@ -551,7 +559,8 @@ async function boot() {
     try {
       const [bidsData, repairsData] = await Promise.all([
         fetchJson(`/api/bids?mechanicId=${encodeURIComponent(session.id)}`),
-        fetchJson('/api/repairs')
+        // History is ownership-scoped and does not depend on new-lead eligibility.
+        fetchJson('/api/provider/repair-history').catch(() => ({ repairs: [] }))
       ]);
 
       const bids = bidsData.bids || [];
@@ -566,6 +575,9 @@ async function boot() {
         const isWon = status === 'accepted';
 
         return `<div class='estimate-card ${isWon ? 'won-job' : ''}'>
+          ${window.smrMessages.button(Number(b.id))}${window.smrPhotos.button(Number(b.request_id))}
+          ${isWon && repStatus === 'accepted' ? window.smrWorkflow.button(b.request_id, 'start-work', rep?.workflow_revision) : ''}
+          ${isWon && repStatus === 'in_progress' ? (rep?.completion_requested_at ? '<p>Waiting for owner completion confirmation.</p>' : window.smrWorkflow.button(b.request_id, 'request-completion', rep?.workflow_revision)) : ''}
           <div class='estimate-top'>
             <div>
               ${isWon ? `<div class='won-title'>Won Job</div>` : ''}
@@ -667,6 +679,7 @@ async function boot() {
 
   await loadProfile();
   await refreshBillingStatus();
+  window.addEventListener('smr-workflow-updated', () => { void loadDashboard(); });
   loadRepairs();
   loadDashboard();
 

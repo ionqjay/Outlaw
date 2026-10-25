@@ -15,7 +15,6 @@ This serves `index.html`, `owner.html`, `script.js`, `owner.js`, `styles.css`.
 ## 2) Render (backend API)
 - Keep Node service running from repo root (`server.js`)
 - Set env vars:
-  - `ADMIN_TOKEN`
   - `SUPABASE_URL`
   - `SUPABASE_SERVICE_ROLE_KEY`
   - `CORS_ORIGINS=https://shopmyrepair.vercel.app,https://beta.shopmyrepair.com,http://localhost:3000`
@@ -48,5 +47,5 @@ This serves `index.html`, `owner.html`, `script.js`, `owner.js`, `styles.css`.
 3. Confirm redirect to `login.html`, then owner login opens `owner-app.html`
 4. Submit owner request
 5. Confirm row in Supabase table `owner_requests`
-6. Confirm `/admin?token=...` on Render shows signups
+Open `/admin-dashboard.html` with an individually approved Supabase session; see `SHOPS_ONLY_DELIVERY.md` for membership provisioning.
 7. Confirm `/api/health` reports `ok: true` and `stripeBillingReady: true`

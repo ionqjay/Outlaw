@@ -63,6 +63,7 @@ async function signInSupabase({ email, password }) {
 signUpBtn.addEventListener('click', async () => {
   const { name, email, password, role, services } = values();
   if (!name || !email || !password) return statusEl.textContent = 'Name, email, and password are required.';
+  if (!['owner', 'shop'].includes(role)) return statusEl.textContent = 'New accounts are for vehicle owners and registered repair shops only.';
   if (password.length < 12) return statusEl.textContent = 'Use at least 12 characters for your password.';
   if ((role === 'mechanic' || role === 'shop') && (!services || !services.length)) {
     return statusEl.textContent = 'Please select at least one specialty.';
@@ -120,7 +121,7 @@ if (allowLocalDevAuth()) {
 }
 
 const requestedRole = new URLSearchParams(location.search).get('role');
-if (['owner','mechanic','shop'].includes(requestedRole)) { roleEl.value = requestedRole; syncSpecialtiesVisibility(); }
+if (['owner','shop'].includes(requestedRole)) { roleEl.value = requestedRole; syncSpecialtiesVisibility(); }
 document.getElementById('authForm').addEventListener('submit', event => { event.preventDefault(); signInBtn.click(); });
 document.getElementById('forgotPasswordBtn').addEventListener('click', async () => {
   const email = values().email;

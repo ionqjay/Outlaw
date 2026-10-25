@@ -77,7 +77,7 @@ test('notifications are private to their recipient and events are idempotent', (
 }));
 
 test('provider review cannot be self-approved and reviewed status survives reload', () => withOperations(async ({store,call}) => {
-  await call('/api/provider/verification',{business_name:'Example Garage',license_reference:'TEST',insurance_reference:'TEST',status:'approved'});
+  await call('/api/provider/verification',{business_name:'Example Garage',license_reference:'TEST',insurance_reference:'TEST',registration_reference:'NY test registration',business_address:'123 Test Street',status:'approved',business_type:'registered_shop'});
   assert.equal((await store.list('provider_verifications'))[0].status,'pending');
   assert.equal((await call('/api/admin/verification/alice',{status:'approved',note:'Checked supporting evidence'})).status,401);
   assert.equal((await call('/api/admin/verification/alice',{status:'approved',note:'Checked supporting evidence'},'admin',true)).status,200);
@@ -163,3 +163,33 @@ test('homepage quote CTA enters the actual owner flow and mobile menu opens with
   document.dispatchEvent(new dom.window.KeyboardEvent('keydown',{key:'Escape'}));
   assert.equal(toggle.getAttribute('aria-expanded'),'false');dom.window.close();
 });
+
+test('dashboard history renders despite denied new leads and unavailable history details', async () => {
+  const source=fs.readFileSync(new URL('../public/mechanic.js',import.meta.url),'utf8');
+  const dashboard=source.slice(source.indexOf('  async function loadDashboard()'),source.indexOf('  function renderMechanicChecklist('));
+  for (const historyUnavailable of [false,true]) {
+    const dom=new JSDOM('<div id="view-dashboard"><div id="mechBidsWon"></div><div id="mechBidsActive"></div><div id="mechBidsOther"></div></div>',{runScripts:'outside-only'});
+    const w=dom.window; w.DOMPurify=createDOMPurify(w);
+    w.smrWorkflow={button:()=>'<button>Workflow</button>'}; w.smrPhotos={button:()=>'<button>Photos</button>'}; w.smrMessages={button:()=>'<button>Messages</button>'}; w.session={id:'legacy'}; w.labelForStatus=s=>s; w.parseOwnerMeta=s=>({cleanDetails:s}); w.setView=()=>{}; w.loadHomeMetrics=async()=>{};
+    w.fetchJson=async url=>{
+      if(url==='/api/repairs') throw Error('New leads denied');
+      if(url==='/api/provider/repair-history') { if(historyUnavailable) throw Error('History unavailable'); return {repairs:[{id:1,title:'Existing job',status:'completed',issue_details:'Brake repair'}]}; }
+      if(url.startsWith('/api/bids?')) return {bids:[{id:1,request_id:1,status:'accepted',amount:300},{id:2,request_id:2,status:'open',amount:200},{id:3,request_id:3,status:'declined',amount:100}]};
+      throw Error('Unexpected endpoint');
+    };
+    await assert.rejects(w.fetchJson('/api/repairs'),/denied/);
+    w.eval(dashboard+';window.runDashboard=loadDashboard;');
+    await w.runDashboard();
+    assert.match(w.document.querySelector('#mechBidsWon').textContent,/Won Job/);
+    assert.match(w.document.querySelector('#mechBidsActive').textContent,/200/);
+    assert.match(w.document.querySelector('#mechBidsOther').textContent,/100/);
+    assert.match(w.document.querySelector('#mechBidsWon').textContent,historyUnavailable?/Request #1/:/Existing job/);
+    dom.window.close();
+  }
+});
+
+test('business verification rejects objects, control bytes and oversized references',()=>withOperations(async({call,store})=>{
+ const good={business_name:'Example Garage',license_reference:'TEST',insurance_reference:'TEST',registration_reference:'NY test registration',business_address:'123 Test Street'};
+ for(const patch of [{business_name:{}},{registration_reference:'x'.repeat(501)},{business_address:'bad'+String.fromCharCode(0)}]) assert.equal((await call('/api/provider/verification',{...good,...patch})).status,400);
+ assert.equal((await store.list('provider_verifications')).length,0);
+}));

@@ -4,7 +4,6 @@ import fs from 'node:fs';
 
 process.env.NODE_ENV = 'test';
 process.env.ALLOW_DEV_AUTH = 'true';
-process.env.ADMIN_TOKEN = 'test-admin-token';
 
 const { app, sanitizeRepairForUser, sanitizeBidForUser } = await import('../server.js');
 
@@ -158,7 +157,7 @@ test('mechanic billing status reports portal availability', async () => {
   });
 });
 
-test('mechanic billing status allows active billing access', async () => {
+test('legacy mechanic retains billing visibility but cannot submit new estimates', async () => {
   const billingAccountsPath = new URL('../billing_accounts.json', import.meta.url);
 
   await preservingJsonFiles([billingAccountsPath], async () => {
@@ -187,12 +186,12 @@ test('mechanic billing status allows active billing access', async () => {
       assert.equal(data.ok, true);
       assert.equal(data.hasStripeCustomer, true);
       assert.equal(data.status, 'active');
-      assert.equal(data.canSubmitEstimates, true);
+      assert.equal(data.canSubmitEstimates, false);
     });
   });
 });
 
-test('manual billing override controls estimate access', async () => {
+test('manual override never grants legacy mechanic estimate access', async () => {
   const billingAccountsPath = new URL('../billing_accounts.json', import.meta.url);
 
   await preservingJsonFiles([billingAccountsPath], async () => {
@@ -225,7 +224,7 @@ test('manual billing override controls estimate access', async () => {
       });
       assert.equal(active.status, 200);
       const activeData = await active.json();
-      assert.equal(activeData.canSubmitEstimates, true);
+      assert.equal(activeData.canSubmitEstimates, false);
       assert.equal(activeData.manualAccessOverride, 'active');
 
       const disabled = await fetch(`${base}/api/billing/status`, {
@@ -300,7 +299,10 @@ test('paid invited provider can submit estimate and owner can accept completed r
   const requestInvitesPath = new URL('../request_invites.json', import.meta.url);
   const feedbacksPath = new URL('../feedbacks.json', import.meta.url);
 
-  await preservingJsonFiles([repairRequestsPath, bidsPath, billingAccountsPath, requestInvitesPath, feedbacksPath], async () => {
+  const verificationPath = new URL('../.local-data/provider_verifications.json', import.meta.url);
+  fs.mkdirSync(new URL('../.local-data/', import.meta.url), { recursive: true });
+  await preservingJsonFiles([verificationPath, repairRequestsPath, bidsPath, billingAccountsPath, requestInvitesPath, feedbacksPath], async () => {
+    fs.writeFileSync(verificationPath, JSON.stringify([{ user_id: 'mechanic-paid-loop-1', status: 'approved', business_type: 'registered_shop', business_name: 'Verified Garage' }]));
     fs.writeFileSync(repairRequestsPath, JSON.stringify([
       {
         id: 301,
@@ -325,18 +327,19 @@ test('paid invited provider can submit estimate and owner can accept completed r
       {
         user_id: 'mechanic-paid-loop-1',
         email: 'paid-loop@example.com',
-        role: 'mechanic',
+        role: 'shop',
         zip: '10701', serviceRadiusMiles: 25, services: 'brakes',
         stripe_customer_id: 'cus_paid_loop',
         stripe_subscription_id: 'sub_paid_loop',
-        subscription_status: 'active'
+        subscription_status: 'active', current_period_end: new Date(Date.now()+86400000).toISOString(),
+        shop_plan_valid: true, shop_plan_price_id: 'price_test', shop_plan_checked_at: new Date().toISOString()
       }
     ], null, 2));
     fs.writeFileSync(requestInvitesPath, JSON.stringify([
       {
         repair_id: 301,
         provider_email: 'paid-loop@example.com',
-        provider_type: 'mechanic',
+        provider_type: 'shop',
         status: 'pending',
         created_at: new Date().toISOString(),
         expires_at: new Date(Date.now() + 60 * 60 * 1000).toISOString(),
@@ -349,7 +352,7 @@ test('paid invited provider can submit estimate and owner can accept completed r
         'Content-Type': 'application/json',
         'x-dev-user-id': 'mechanic-paid-loop-1',
         'x-dev-user-email': 'paid-loop@example.com',
-        'x-dev-user-role': 'mechanic'
+        'x-dev-user-role': 'shop'
       };
       const ownerHeaders = {
         'Content-Type': 'application/json',
@@ -372,13 +375,15 @@ test('paid invited provider can submit estimate and owner can accept completed r
           mechanicName: 'Paid Loop Mechanic',
           amount: 375,
           etaHours: 24,
-          notes: '[META]{"providerType":"mechanic","businessName":"Paid Loop Mechanic","businessEmail":"paid-loop@example.com","businessPhone":"5551234567"}[/META] Pads and rotors included with same-day diagnostics.'
+          notes: '[META]{"providerType":"mechanic","businessName":"Spoofed Name","businessEmail":"paid-loop@example.com","businessPhone":"5551234567"}[/META] Pads and rotors included with same-day diagnostics.'
         })
       });
       assert.equal(bid.status, 200);
       const bidData = await bid.json();
       assert.equal(bidData.ok, true);
       assert.equal(bidData.bid.amount, 375);
+      assert.equal(bidData.bid.mechanic_name, 'Verified Garage');
+      assert.equal(bidData.bid.provider.type, 'shop');
 
       const ownerBids = await fetch(`${base}/api/bids?requestId=301`, { headers: ownerHeaders });
       assert.equal(ownerBids.status, 200);
@@ -391,6 +396,20 @@ test('paid invited provider can submit estimate and owner can accept completed r
         headers: ownerHeaders
       });
       assert.equal(accept.status, 200);
+      const transition=(action,headers,revision)=>fetch(base+'/api/repairs/301/'+action,{method:'POST',headers,body:JSON.stringify({expectedRevision:revision})});
+      assert.equal((await transition('start-work',ownerHeaders,0)).status,403);
+      assert.equal((await transition('request-completion',mechanicHeaders,0)).status,409);
+      assert.equal((await transition('start-work',mechanicHeaders,0)).status,200);
+      assert.equal((await transition('start-work',mechanicHeaders,0)).status,409);
+      assert.equal((await transition('request-completion',mechanicHeaders,1)).status,200);
+      assert.equal((await transition('request-completion',mechanicHeaders,1)).status,409);
+      assert.equal((await transition('complete',mechanicHeaders,2)).status,403);
+      assert.equal((await transition('cancel',ownerHeaders,2)).status,409);
+      assert.equal((await transition('continue-work',ownerHeaders,2)).status,200);
+      assert.equal((await transition('request-completion',mechanicHeaders,1)).status,409);
+      assert.equal((await transition('request-completion',mechanicHeaders,3)).status,200);
+      const history=await(await fetch(base+'/api/repairs/301/transitions',{headers:mechanicHeaders})).json();
+      assert.equal(history.events.length,5);assert.equal(history.events.at(-1).action,'accept');
 
       const complete = await fetch(`${base}/api/repairs/301/complete`, {
         method: 'POST',
@@ -421,7 +440,10 @@ test('ops reconciliation backfills missing bid notifications without failing sav
   const bidsPath = new URL('../bids.json', import.meta.url);
   const notificationsPath = new URL('../.local-data/notifications.json', import.meta.url);
 
-  await preservingJsonFiles([repairRequestsPath, bidsPath, notificationsPath], async () => {
+  const membersPath=new URL('../.local-data/admin_memberships.json',import.meta.url),auditPath=new URL('../.local-data/admin_audit_events.jsonl',import.meta.url);
+  fs.mkdirSync(new URL('../.local-data/',import.meta.url),{recursive:true});
+  await preservingJsonFiles([repairRequestsPath, bidsPath, notificationsPath,membersPath,auditPath], async () => {
+    fs.writeFileSync(membersPath,JSON.stringify([{user_id:'approved-admin',active:true}]));
     fs.writeFileSync(repairRequestsPath, JSON.stringify([
       {
         id: 401,
@@ -455,7 +477,7 @@ test('ops reconciliation backfills missing bid notifications without failing sav
     if (fs.existsSync(notificationsPath)) fs.unlinkSync(notificationsPath);
 
     await withServer(async base => {
-      const headers = { 'x-admin-token': 'test-admin-token' };
+      const headers = { 'x-dev-user-id':'approved-admin','x-dev-user-email':'admin@example.test','x-dev-user-role':'owner' };
       const before = await fetch(`${base}/api/admin/ops`, { headers });
       assert.equal(before.status, 200);
       const beforeData = await before.json();
@@ -518,4 +540,75 @@ test('bid sanitizer strips provider private metadata unless explicitly allowed',
   assert.equal(authorizedOut.mechanic_id, 'provider-1');
   assert.equal(authorizedOut.provider.businessEmail, 'shop@example.com');
   assert.equal(authorizedOut.provider.businessPhone, '5559990000');
+});
+
+test('legacy mechanics and self-selected unapproved shops cannot access leads, bid or subscribe', async () => {
+  await withServer(async base => {
+    for (const role of ['mechanic', 'shop']) {
+      const headers = { 'Content-Type':'application/json', 'x-dev-user-id':'unapproved-'+role, 'x-dev-user-email':role+'@example.test', 'x-dev-user-role':role };
+      for (const [url,method] of [['/api/repairs?previewLeads=true','GET'], ['/api/bids','POST'], ['/api/billing/create-checkout-session','POST']]) {
+        const response = await fetch(base+url,{method,headers,...(method==='POST'?{body:JSON.stringify({notes:'[META]{"providerType":"shop","status":"approved"}[/META]'})}:{})});
+        assert.equal(response.status,403,role+' '+url);
+      }
+    }
+  });
+});
+
+test('legacy mechanics and expired approved shops retain only their own sanitized repair history', async () => {
+  const paths = ['repair_requests.json','bids.json','billing_accounts.json','.local-data/provider_verifications.json'].map(p=>new URL('../'+p,import.meta.url));
+  fs.mkdirSync(new URL('../.local-data/',import.meta.url),{recursive:true});
+  await preservingJsonFiles(paths, async () => {
+    fs.writeFileSync(paths[0],JSON.stringify([11,12,13].map(id=>({id,owner_id:'private-owner',title:'Repair '+id,zip:'10701',status:'completed',issue_details:'[OWNER_META]{"email":"private@example.test"}[/OWNER_META][CLIENT_META]{"token":"private"}[/CLIENT_META]Brake repair'}))));
+    fs.writeFileSync(paths[1],JSON.stringify([{id:1,request_id:11,mechanic_id:'history-mechanic',status:'accepted'},{id:2,request_id:12,mechanic_id:'history-shop',status:'declined'},{id:3,request_id:13,mechanic_id:'other',status:'open'}]));
+    fs.writeFileSync(paths[2],JSON.stringify([{user_id:'history-shop',subscription_status:'active',stripe_subscription_id:'sub_expired',current_period_end:'2020-01-01T00:00:00Z'}]));
+    fs.writeFileSync(paths[3],JSON.stringify([{user_id:'history-shop',status:'approved',business_type:'registered_shop'}]));
+    await withServer(async base => {
+      assert.equal((await fetch(base+'/api/provider/repair-history')).status,401);
+      assert.equal((await fetch(base+'/api/bids/1/messages')).status,401);
+      for (const [role,id] of [['mechanic',11],['shop',12]]) {
+        const headers={'x-dev-user-id':'history-'+role,'x-dev-user-email':role+'@example.test','x-dev-user-role':role};
+        const response=await fetch(base+'/api/provider/repair-history?mechanicId=other&ownerId=private-owner',{headers});
+        assert.equal(response.status,200);
+        const data=await response.json();
+        assert.deepEqual(data.repairs.map(r=>r.id),[id]);
+        assert.equal(data.repairs[0].owner_id,undefined);
+        assert.equal(data.repairs[0].zip,'107xx');
+        assert.equal(data.repairs[0].issue_details,'Brake repair');
+        assert.equal((await fetch(base+'/api/repairs',{headers})).status,403);
+        assert.equal((await fetch(base+'/api/bids/'+(id===11?1:2)+'/messages',{headers})).status,200);
+        assert.equal((await fetch(base+'/api/bids/3/messages',{headers})).status,404);
+        assert.equal((await fetch(base+'/api/repairs/'+id+'/photos',{headers})).status,200);
+        assert.equal((await fetch(base+'/api/repairs/13/photos',{headers})).status,404);
+      }
+    });
+  });
+});
+
+test('public and authenticated repair endpoints reject malformed fields before persistence',async()=>{
+ await withServer(async base=>{
+  const good={title:'Brake repair',issueDetails:'Squeaking brakes need inspection.',issueCategory:'Brakes',vehicleYear:'2020',vehicleMake:'Toyota',vehicleModel:'Camry',city:'Yonkers',state:'NY',zip:'10701',urgency:'Standard',fullName:'Test Owner',email:'test@example.test',mobile:'5551234567',serviceAddress:'123 Test St'};
+  for(const route of ['/api/repairs','/api/owner-request']){
+   for(const patch of [{vehicleYear:'9999'},{vehicleModel:{}},{issueDetails:'x'},{urgency:'Unknown'},{state:'ZZ'}]){
+    const response=await fetch(base+route,{method:'POST',headers:{'Content-Type':'application/json','x-dev-user-id':'validation-owner','x-dev-user-email':'test@example.test','x-dev-user-role':'owner'},body:JSON.stringify({...good,...patch})});
+    assert.equal(response.status,400,route+' '+JSON.stringify(patch));
+   }
+  }
+  for(const patch of [{email:'invalid'},{mobile:'not a telephone'},{fullName:{}},{serviceAddress:' '}]) assert.equal((await fetch(base+'/api/owner-request',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({...good,...patch})})).status,400);
+ });
+});
+
+test('shared tokens and forged admin roles never grant administrative access',async()=>{
+ await withServer(async base=>{
+  for(const headers of [{'x-admin-token':'old-shared-token'},{'Authorization':'Bearer legacy-token'},{'x-dev-user-id':'not-approved','x-dev-user-role':'admin'}]){
+   const response=await fetch(base+'/api/admin/accounts?token=old-shared-token',{headers});assert.ok([401,403].includes(response.status));
+  }
+ });
+});
+
+test('owners cannot enumerate other owners feedback using missing or invalid request IDs',async()=>{
+ const repairs=new URL('../repair_requests.json',import.meta.url),feedbacks=new URL('../feedbacks.json',import.meta.url);
+ await preservingJsonFiles([repairs,feedbacks],async()=>{
+  fs.writeFileSync(repairs,JSON.stringify([{id:801,owner_id:'feedback-owner',status:'completed'},{id:802,owner_id:'other',status:'completed'}]));fs.writeFileSync(feedbacks,JSON.stringify([{id:1,request_id:801,text:'Mine'},{id:2,request_id:802,text:'Private other'}]));
+  await withServer(async base=>{const headers={'x-dev-user-id':'feedback-owner','x-dev-user-role':'owner'};const data=await(await fetch(base+'/api/feedbacks',{headers})).json();assert.deepEqual(data.feedbacks.map(f=>f.id),[1]);assert.equal((await fetch(base+'/api/feedbacks?requestId=NaN',{headers})).status,400);});
+ });
 });

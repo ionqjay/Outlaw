@@ -9,8 +9,6 @@ services:
     envVars:
       - key: NODE_ENV
         value: production
-      - key: ADMIN_TOKEN
-        sync: false
       - key: TURNSTILE_SECRET
         sync: false
       - key: MAILCHIMP_API_KEY
@@ -36,8 +34,6 @@ services:
       - key: STRIPE_SECRET_KEY
         sync: false
       - key: STRIPE_WEBHOOK_SECRET
-        sync: false
-      - key: STRIPE_PRICE_MECHANIC_MONTHLY
         sync: false
       - key: STRIPE_PRICE_SHOP_MONTHLY
         sync: false

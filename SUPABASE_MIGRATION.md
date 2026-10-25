@@ -29,7 +29,7 @@ After env vars are set, redeploy.
 ## 5) Verify write path
 - Submit `/api/signup` from site
 - Create/login as an owner and submit a request from `/owner-app.html`
-- Open `/admin?token=...` and confirm rows appear
+Open `/admin-dashboard.html` with an individually approved Supabase session; see `SHOPS_ONLY_DELIVERY.md` for membership provisioning.
 
 ## 6) Optional backfill from JSON
 If you have existing local files (`signups.json`, `owner_requests.json`), import into Supabase with CSV or SQL inserts.

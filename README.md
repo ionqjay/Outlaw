@@ -21,7 +21,6 @@ npm start
 Open: `http://localhost:3000`
 
 ## Required env vars (Render)
-- `ADMIN_TOKEN`
 - `APP_URL` (e.g. `https://shopmyrepair.com`)
 - `TURNSTILE_SECRET` (optional for dev)
 - `TWILIO_ACCOUNT_SID` (optional for dev)

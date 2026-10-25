@@ -1,4 +1,13 @@
 import express from 'express';
+import { adminStore, prepareAdminAccess } from './lib/admin-access.js';
+import { repairTransition } from './lib/repair-workflow.js';
+import { photoMetadata, photoObjects, registerPhotos } from './lib/photos.js';
+import { messageStore, registerMessages } from './lib/messages.js';
+import { trustedProxyPolicy, createRateLimiter, boundedText, repairValidationError } from './lib/request-security.js';
+import { createBillingReconciler, reconciliationConfig } from './lib/billing-reconciliation.js';
+import { attestShopPlan } from './lib/stripe-entitlement.js';
+import { billingMode, missingReleaseConfig, BILLING_UNAVAILABLE } from './lib/billing-mode.js';
+import { approvedShop, subscribedShop as entitledShop } from './lib/shop-eligibility.js';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import fs from 'fs';
@@ -16,8 +25,22 @@ const __dirname = path.dirname(__filename);
 
 const app = express();
 app.disable('x-powered-by');
+app.set('trust proxy', trustedProxyPolicy(process.env.TRUSTED_PROXY_CIDRS || ''));
+app.use(createRateLimiter());
 // Express 4 does not forward rejected async handlers automatically.
 function route(method, path, ...handlers) {
+  // Release gate includes admin fallbacks: disabled must never simulate billing changes.
+  const billingWrite = method !== 'get' && (path.startsWith('/api/billing/') || path.startsWith('/api/admin/billing/') || path === '/api/admin/refund/:id/process');
+  const newWork = method === 'post' && ['/api/repairs', '/api/owner-request', '/api/bids'].includes(path);
+  if (billingWrite || newWork || path === '/api/billing/invoices' || path === '/api/stripe/webhook') handlers.unshift((req,res,next) => {
+    if (!BILLING_ENABLED) return res.status(503).json({ error: BILLING_UNAVAILABLE, billingMode: 'disabled' });
+    next();
+  });
+  const adminRequired=path.startsWith('/api/admin/');
+  const overrideRoute=path==='/api/bids'||path==='/api/feedbacks'||path==='/api/bids/:id/accept'||path==='/api/repairs/:id/cancel'||path==='/api/repairs/:id/complete';
+  if(adminRequired||overrideRoute)handlers.unshift(async(req,res,next)=>{
+    if(await prepareAdminAccess(req,res,{required:adminRequired,store:admins,getUser:async r=>{const u=await getAuthenticatedUser(r);return u&&!await isBannedEmail(u.email)?u:null;}}))next();
+  });
   app[method](path, ...handlers.map(handler => (req, res, next) => {
     Promise.resolve().then(() => handler(req, res, next)).catch(next);
   }));
@@ -30,32 +53,9 @@ app.use((req, res, next) => {
   next();
 });
 const PORT = process.env.PORT || 3000;
-const ADMIN_TOKEN = process.env.ADMIN_TOKEN || '';
-
-function getAdminTokenFromRequest(req) {
-  const auth = String(req.headers.authorization || '');
-  if (auth.toLowerCase().startsWith('bearer ')) return auth.slice(7).trim();
-  const headerToken = String(req.headers['x-admin-token'] || '').trim();
-  if (headerToken) return headerToken;
-  return String(req.query.token || '').trim();
-}
-
-function isAdminConfigValid() {
-  return !!ADMIN_TOKEN && ADMIN_TOKEN !== 'change-me';
-}
-
-function isAuthorizedAdminRequest(req) {
-  if (!isAdminConfigValid()) return false;
-  return getAdminTokenFromRequest(req) === ADMIN_TOKEN;
-}
-
-function guardAdminApi(req, res) {
-  if (!isAdminConfigValid()) {
-    return res.status(503).json({ error: 'Admin API disabled: set a strong ADMIN_TOKEN environment variable.' });
-  }
-  if (!isAuthorizedAdminRequest(req)) {
-    return res.status(401).json({ error: 'Unauthorized' });
-  }
+function isAuthorizedAdminRequest(req) { return !!req.adminUser; }
+function guardAdminApi(req,res) {
+  if(!req.adminUser)return res.status(403).json({error:'Administrator authorization required.'});
   return null;
 }
 const DB_PATH = path.join(__dirname, 'signups.json');
@@ -81,32 +81,25 @@ if (process.env.NODE_ENV === 'production' && !USE_SUPABASE) {
   throw new Error('Production requires Supabase; local file storage is development-only.');
 }
 
+const BILLING_ENABLED = billingMode(process.env) === 'enabled';
+const subscribedShop = (...args) => BILLING_ENABLED && entitledShop(...args);
 const STRIPE_SECRET_KEY = process.env.STRIPE_SECRET_KEY || '';
 const STRIPE_WEBHOOK_SECRET = process.env.STRIPE_WEBHOOK_SECRET || '';
 const STRIPE_PRICE_SHOP_MONTHLY = process.env.STRIPE_PRICE_SHOP_MONTHLY || '';
-const STRIPE_PRICE_MECHANIC_MONTHLY = process.env.STRIPE_PRICE_MECHANIC_MONTHLY || '';
 const APP_URL = process.env.APP_URL || 'http://localhost:3000';
-const stripe = STRIPE_SECRET_KEY ? new Stripe(STRIPE_SECRET_KEY) : null;
+const stripe = BILLING_ENABLED && STRIPE_SECRET_KEY ? new Stripe(STRIPE_SECRET_KEY) : null;
 
 function missingProductionConfig() {
   if (process.env.NODE_ENV !== 'production') return [];
-  const required = [
-    'ADMIN_TOKEN',
-    'SUPABASE_URL',
-    'SUPABASE_SERVICE_ROLE_KEY',
-    'CORS_ORIGINS',
-    'APP_URL',
-    'STRIPE_SECRET_KEY',
-    'STRIPE_WEBHOOK_SECRET',
-    'STRIPE_PRICE_MECHANIC_MONTHLY'
-  ];
-  return required.filter(key => !String(process.env[key] || '').trim());
+  return missingReleaseConfig(process.env);
 }
 
 function billingConfigReady() {
-  return !!(stripe && STRIPE_WEBHOOK_SECRET && (STRIPE_PRICE_MECHANIC_MONTHLY || STRIPE_PRICE_SHOP_MONTHLY));
+  return !!(stripe && STRIPE_WEBHOOK_SECRET && STRIPE_PRICE_SHOP_MONTHLY);
 }
 
+const privatePhotoObjects = photoObjects({ database: USE_SUPABASE, url: SUPABASE_URL, key: SUPABASE_SERVICE_ROLE_KEY, bucket: process.env.REPAIR_PHOTO_BUCKET || '', directory: path.join(__dirname, '.local-data', 'private-photos') });
+const admins = adminStore({database:USE_SUPABASE,request:supabaseRequest,directory:path.join(__dirname,'.local-data')});
 const ops = operationsStore({ database: USE_SUPABASE, request: supabaseRequest, directory: path.join(__dirname, '.local-data') });
 async function notifyUser(userId, eventKey, title, body, href) {
   if (!userId) return;
@@ -187,7 +180,9 @@ function readJson(filePath, fallback = []) {
   return JSON.parse(fs.readFileSync(filePath, 'utf8'));
 }
 function writeJson(filePath, data) {
-  fs.writeFileSync(filePath, JSON.stringify(data, null, 2));
+  const temporary=filePath+'.'+process.pid+'.tmp';
+  fs.writeFileSync(temporary, JSON.stringify(data, null, 2));
+  fs.renameSync(temporary,filePath);
 }
 function readDb() {
   return readJson(DB_PATH, []);
@@ -306,6 +301,7 @@ async function syncBillingFromStripe(billing) {
         ...patch,
         stripe_subscription_id: sub.id,
         stripe_customer_id: sub.customer || patch.stripe_customer_id || billing.stripe_customer_id || '',
+        ...attestShopPlan(sub, STRIPE_PRICE_SHOP_MONTHLY),
         subscription_status: String(sub.status || ''),
         current_period_end: subscriptionPeriodEnd(sub),
         cancel_at_period_end: !!sub.cancel_at_period_end
@@ -365,10 +361,14 @@ async function setBannedEmail(email, active, reason = '', category = '') {
   return next;
 }
 
-function resolvePriceForRole(role) {
-  const normalized = String(role || '').toLowerCase();
-  if (normalized === 'shop') return STRIPE_PRICE_SHOP_MONTHLY || STRIPE_PRICE_MECHANIC_MONTHLY;
-  return STRIPE_PRICE_MECHANIC_MONTHLY || STRIPE_PRICE_SHOP_MONTHLY;
+function resolvePriceForRole(role) { return role === 'shop' ? STRIPE_PRICE_SHOP_MONTHLY : ''; }
+async function requireShopAccess(user, res, paid = true) {
+  if (paid && !BILLING_ENABLED) { res.status(503).json({ error: BILLING_UNAVAILABLE }); return null; }
+  const verification = (await ops.list('provider_verifications', { user_id: user.id }))[0];
+  const billing = paid ? await getBillingByUserIdAsync(user.id) : null;
+  const allowed = paid ? subscribedShop(verification, billing, user.id) : approvedShop(verification, user.id);
+  if (!allowed) { res.status(403).json({ error: paid ? 'An approved registered shop with an active subscription is required.' : 'Registered shop approval is required before subscribing.' }); return null; }
+  return verification;
 }
 
 function stripePriceConfigError(price) {
@@ -398,7 +398,8 @@ async function supabaseRequest(pathname, { method = 'GET', body, prefer } = {}) 
     throw new Error(`Supabase error ${res.status}: ${txt}`);
   }
   if (res.status === 204) return [];
-  return res.json();
+  const responseText = await res.text();
+  return responseText.trim() ? JSON.parse(responseText) : [];
 }
 
 async function listAuthUsers() {
@@ -525,6 +526,8 @@ function sanitizeRepairForUser(repair, user, { includeOwnerContact = false } = {
     zip: role === 'owner' && isOwner ? repair?.zip : String(repair?.zip || '').replace(/^(\d{3}).*/, '$1xx'),
     urgency: repair?.urgency,
     status: repair?.status,
+    completion_requested_at: repair?.completion_requested_at || null,
+    workflow_revision: Number(repair?.workflow_revision || 0),
     created_at: repair?.created_at,
     invite_expires_at: repair?.invite_expires_at || null,
     dispatch_summary: isOwner ? repair?.dispatch_summary : undefined,
@@ -711,6 +714,7 @@ function providerSupportsRepair(provider, repair) {
 }
 
 function providerEligibleForInvites(provider) {
+  if (!BILLING_ENABLED) return false;
   return !!provider?.can_submit_estimates;
 }
 
@@ -848,6 +852,8 @@ async function removeInvitesForRepair(repairId) {
 
 async function listProviderPool() {
   const providers = [];
+  const verifications = await ops.list('provider_verifications');
+  const eligible = (id, billing) => subscribedShop(verifications.find(v => String(v.user_id) === String(id)), billing, id);
 
   const authUsers = await listAuthUsers();
   for (const u of authUsers) {
@@ -864,7 +870,7 @@ async function listProviderPool() {
       services: String(meta?.services || '').trim().toLowerCase(),
       zip: String(meta?.zip || ''),
       serviceRadiusMiles: Number(meta?.serviceRadiusMiles || 25),
-      can_submit_estimates: canSubmitEstimatesFromBilling(billing)
+      can_submit_estimates: eligible(u.id, billing)
     });
   }
 
@@ -881,7 +887,7 @@ async function listProviderPool() {
       services: String(b.services || ''),
       zip: String(b.zip || ''),
       serviceRadiusMiles: Number(b.serviceRadiusMiles || 25),
-      can_submit_estimates: canSubmitEstimatesFromBilling(b)
+      can_submit_estimates: eligible(b.user_id, b)
     });
   }
 
@@ -920,6 +926,7 @@ async function createDispatchSnapshot(repair) {
 }
 
 async function createDispatchSnapshotUnlocked(repair) {
+  if (!BILLING_ENABLED) return;
   if (repair.status !== 'open' || requestIsExpiredForNewInvites(repair)) return;
   const history = await listInvites();
   if (history.some(invite => Number(invite.repair_id) === Number(repair.id || repair.Id))) return;
@@ -1058,6 +1065,7 @@ async function processInviteEscalations(repairs = []) {
 }
 
 async function refreshDispatch(repairs) {
+  if (!BILLING_ENABLED) return;
   return runDispatchExclusive(async () => {
     // Recover repairs whose initial dispatch failed or had no eligible providers.
     // Every candidate is selected by the same queue, independent of who views it.
@@ -1190,10 +1198,13 @@ async function listRepairRequests({ ownerId, status, providerEmail, providerType
 
 async function createBid(row) {
   if (USE_SUPABASE) {
-    const out = await supabaseRequest('rpc/create_marketplace_bid', { method: 'POST', body: { p_bid: row } });
+    const out = await supabaseRequest('rpc/create_shop_bid', { method: 'POST', body: { p_bid: row } });
     return out[0];
   }
+  // Synchronous read/check/write is atomic within the local development process.
   const bids = readJson(BIDS_PATH, []);
+  if (bids.filter(b => Number(b.request_id) === Number(row.request_id)).length >= 3) throw new Error('Estimate limit reached');
+  if (bids.some(b => Number(b.request_id) === Number(row.request_id) && b.mechanic_id === row.mechanic_id)) throw new Error('Estimate already submitted');
   const local = {
     id: (bids[0]?.id || 0) + 1,
     request_id: row.request_id,
@@ -1283,16 +1294,14 @@ async function upsertFeedback(row) {
 function counts(data) {
   const total = data.length;
   const owners = data.filter(x => (x.Type || x.type) === 'owner').length;
-  const mechanics = data.filter(x => (x.Type || x.type) === 'mechanic').length;
-  return { total, owners, mechanics };
+  const mechanics = data.filter(x => (x.Type || x.type) === 'mechanic').length;  return { total, owners, mechanics };
 }
 function esc(s = '') {
   return String(s).replace(/[&<>"']/g, m => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;' }[m]));
 }
 
 async function verifyTurnstile(token, ip) {
-  if (!TURNSTILE_SECRET) return true;
-  if (token === 'dev-bypass' && process.env.NODE_ENV !== 'production') return true;
+  if (!TURNSTILE_SECRET) return true;  if (token === 'dev-bypass' && process.env.NODE_ENV !== 'production') return true;
   try {
     const body = new URLSearchParams({ secret: TURNSTILE_SECRET, response: token, remoteip: ip || '' });
     const r = await axios.post('https://challenges.cloudflare.com/turnstile/v0/siteverify', body.toString(), {
@@ -1306,13 +1315,11 @@ async function verifyTurnstile(token, ip) {
 
 async function sendSms(to, text) {
   if (!TWILIO_ACCOUNT_SID || !TWILIO_AUTH_TOKEN || !TWILIO_FROM_NUMBER) return false;
-  const url = `https://api.twilio.com/2010-04-01/Accounts/${TWILIO_ACCOUNT_SID}/Messages.json`;
-  const body = new URLSearchParams({ To: `+1${to}`, From: TWILIO_FROM_NUMBER, Body: text });
+  const url = `https://api.twilio.com/2010-04-01/Accounts/${TWILIO_ACCOUNT_SID}/Messages.json`;  const body = new URLSearchParams({ To: `+1${to}`, From: TWILIO_FROM_NUMBER, Body: text });
   await axios.post(url, body.toString(), {
     auth: { username: TWILIO_ACCOUNT_SID, password: TWILIO_AUTH_TOKEN },
     headers: { 'Content-Type': 'application/x-www-form-urlencoded' }
-  });
-  return true;
+  });  return true;
 }
 
 async function addToMailchimp(email, firstName, tags = []) {
@@ -1338,7 +1345,6 @@ app.use(cors({
 
 route('post', '/api/stripe/webhook', express.raw({ type: 'application/json' }), async (req, res) => {
   if (!stripe || !STRIPE_WEBHOOK_SECRET) return res.status(400).send('Stripe webhook not configured.');
-
   let event;
   try {
     const sig = req.headers['stripe-signature'];
@@ -1358,6 +1364,7 @@ route('post', '/api/stripe/webhook', express.raw({ type: 'application/json' }), 
         await upsertBillingByUserIdAsync(userId, {
           email: object.customer_details?.email || '', role: object.metadata?.role || 'mechanic',
           stripe_customer_id: object.customer, stripe_subscription_id: sub.id,
+          ...attestShopPlan(sub, STRIPE_PRICE_SHOP_MONTHLY),
           subscription_status: sub.status, current_period_end: subscriptionPeriodEnd(sub), cancel_at_period_end: !!sub.cancel_at_period_end
         });
       }
@@ -1369,7 +1376,8 @@ route('post', '/api/stripe/webhook', express.raw({ type: 'application/json' }), 
     if (subscriptionId) {
       const sub = await stripe.subscriptions.retrieve(subscriptionId);
       await updateBillingBySubscriptionId(subscriptionId, {
-        subscription_status: sub.status, current_period_end: subscriptionPeriodEnd(sub), cancel_at_period_end: !!sub.cancel_at_period_end
+        ...attestShopPlan(sub, STRIPE_PRICE_SHOP_MONTHLY),
+          subscription_status: sub.status, current_period_end: subscriptionPeriodEnd(sub), cancel_at_period_end: !!sub.cancel_at_period_end
       });
     }
     res.json({ received: true });
@@ -1378,34 +1386,7 @@ route('post', '/api/stripe/webhook', express.raw({ type: 'application/json' }), 
   }
 });
 
-app.use(express.json());
-
-const RATE_LIMIT_RULES = [
-  { prefix: '/api/repairs', windowMs: 60_000, max: 60 },
-  { prefix: '/api/bids', windowMs: 60_000, max: 40 },
-  { prefix: '/api/signup', windowMs: 60_000, max: 20 },
-  { prefix: '/api/send-otp', windowMs: 60_000, max: 10 }
-];
-const __rateHits = new Map();
-app.use((req, res, next) => {
-  const rule = RATE_LIMIT_RULES.find(r => req.path.startsWith(r.prefix));
-  if (!rule) return next();
-  const ip = String(req.headers['x-forwarded-for'] || req.socket?.remoteAddress || 'unknown').split(',')[0].trim();
-  const key = `${rule.prefix}:${ip}`;
-  const now = Date.now();
-  const hit = __rateHits.get(key) || { count: 0, resetAt: now + rule.windowMs };
-  if (now > hit.resetAt) {
-    hit.count = 0;
-    hit.resetAt = now + rule.windowMs;
-  }
-  hit.count += 1;
-  __rateHits.set(key, hit);
-  if (hit.count > rule.max) {
-    res.setHeader('Retry-After', String(Math.ceil((hit.resetAt - now) / 1000)));
-    return res.status(429).json({ error: 'Too many requests. Please try again shortly.' });
-  }
-  return next();
-});
+app.use(express.json({ limit: '100kb' }));
 
 app.use(express.static(path.join(__dirname, 'public')));
 
@@ -1418,17 +1399,30 @@ route('get', '/api/stats', async (req, res) => {
   }
 });
 
+route('get', '/api/availability', (req, res) => res.json({ billingMode: BILLING_ENABLED ? 'enabled' : 'disabled', newQuotesAvailable: BILLING_ENABLED, message: BILLING_ENABLED ? null : BILLING_UNAVAILABLE }));
+
 route('get', '/api/health', async (req, res) => {
   const missingConfig = missingProductionConfig();
   let databaseReady = !USE_SUPABASE && process.env.NODE_ENV !== 'production';
   if (USE_SUPABASE) {
     try {
       await Promise.all(['repair_requests', 'bids', 'request_invites', 'billing_accounts', 'banned_accounts', 'notifications', 'refund_requests'].map(table => supabaseRequest(`${table}?select=*&limit=0`)));
+      await Promise.all([
+        supabaseRequest('admin_memberships?select=user_id&limit=0'),
+        supabaseRequest('admin_audit_events?select=id&limit=0'),
+        supabaseRequest('repair_requests?select=completion_requested_at,workflow_revision&limit=0'),
+        supabaseRequest('repair_transition_events?select=id&limit=0'),
+        supabaseRequest('repair_photos?select=id,repair_id,state&limit=0'),
+        supabaseRequest('repair_messages?select=id,bid_id,sender_id,body&limit=0'),
+        supabaseRequest('provider_verifications?select=business_type,registration_reference,business_address,reviewed_at&limit=0'),
+        supabaseRequest('billing_accounts?select=shop_plan_valid,shop_plan_price_id,shop_plan_checked_at,billing_reconcile_after&limit=0')
+      ]);
+      await privatePhotoObjects.ready();
       databaseReady = true;
     } catch { databaseReady = false; }
   }
   const ok = missingConfig.length === 0 && databaseReady;
-  res.status(ok ? 200 : 503).json({ ok, databaseReady, stripeConfigured: !!stripe,
+  res.status(ok ? 200 : 503).json({ ok, databaseReady, billingMode: BILLING_ENABLED ? 'enabled' : 'disabled', stripeConfigured: !!stripe,
     stripeBillingReady: billingConfigReady(), supabaseConfigured: USE_SUPABASE,
     missingProductionConfig: missingConfig, uptimeSec: Math.round(process.uptime()), ts: new Date().toISOString() });
 });
@@ -1441,7 +1435,8 @@ route('post', '/api/signup', async (req, res) => {
   const { name, email, phone, zip, repairAddress, borough, type, experience, hasShop, turnstileToken, utm, heroVariant } = req.body || {};
   if (!name || !email || !phone || !zip || !borough || !type) return res.status(400).json({ error: 'Missing required fields.' });
   if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return res.status(400).json({ error: 'Invalid email.' });
-  if (!['owner', 'mechanic'].includes(type)) return res.status(400).json({ error: 'Invalid type.' });
+  if (![name,email,phone,zip,borough].every(v => boundedText(v,1,320))) return res.status(400).json({ error: 'Invalid signup text fields.' });
+  if (!['owner', 'shop'].includes(type)) return res.status(400).json({ error: 'Invalid type.' });
   const normalizedEmail = String(email).trim().toLowerCase();
   if (await isBannedEmail(normalizedEmail)) return res.status(403).json({ error: 'This account is restricted. Contact support.' });
 
@@ -1459,8 +1454,8 @@ route('post', '/api/signup', async (req, res) => {
     repair_address: String(repairAddress || '').trim(),
     borough: String(borough).trim(),
     type,
-    experience: type === 'mechanic' ? (experience || '') : '',
-    has_shop: type === 'mechanic' ? (hasShop || '') : '',
+    experience: '',
+    has_shop: type === 'shop' ? 'yes' : '',
     hero_variant: heroVariant || '',
     utm: utm || {},
     created_at: new Date().toISOString()
@@ -1499,6 +1494,8 @@ route('post', '/api/owner-request', async (req, res) => {
   if (!fullName || !email || !mobile || !vehicleYear || !vehicleMake || !vehicleModel || !issueCategory || !issueDetails || !serviceAddress || !city || !state || !zip) {
     return res.status(400).json({ error: 'Please complete all required owner request fields.' });
   }
+  const validationError = repairValidationError({ ...req.body, title: 'Owner repair request' });
+  if (validationError || !boundedText(fullName,1,160) || !boundedText(serviceAddress,3,500) || !boundedText(email,3,254) || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) || !boundedText(mobile,10,32) || !/^[+()\d .-]+$/.test(mobile) || !/^1?\d{10}$/.test(mobile.replace(/\D/g,'')) || !validZip(zip)) return res.status(400).json({ error: validationError || 'Enter valid contact and address details.' });
   if (await isBannedEmail(String(email).trim().toLowerCase())) {
     return res.status(403).json({ error: 'This account is restricted. Contact support.' });
   }
@@ -1552,6 +1549,8 @@ route('post', '/api/repairs', async (req, res) => {
 
   try {
     if (!validZip(zip)) return res.status(400).json({ error: 'Enter a valid five-digit US ZIP code.' });
+    const validationError = repairValidationError(req.body);
+    if (validationError) return res.status(400).json({ error: validationError });
     const cleanClientRequestId = String(clientRequestId || '').trim();
     if (cleanClientRequestId && !/^[a-zA-Z0-9_.:-]{8,120}$/.test(cleanClientRequestId)) {
       return res.status(400).json({ error: 'Invalid request token.' });
@@ -1594,18 +1593,33 @@ route('post', '/api/repairs', async (req, res) => {
   }
 });
 
+// Historical participation is separate from entitlement to discover new leads.
+route('get', '/api/provider/repair-history', async (req, res) => {
+  const user = await requireAuthenticatedUser(req, res, ['mechanic', 'shop']);
+  if (!user) return;
+  const bids = await listBids({ mechanicId: String(user.id) });
+  const repairIds = [...new Set(bids.map(b => Number(b.request_id)))];
+  const repairs = [];
+  for (const id of repairIds) {
+    const repair = await getRepairById(id);
+    if (repair) repairs.push(sanitizeRepairForUser(repair, user));
+  }
+  res.json({ ok: true, repairs });
+});
+
 route('get', '/api/repairs', async (req, res) => {
   const user = await requireAuthenticatedUser(req, res, ['owner', 'mechanic', 'shop']);
   if (!user) return;
 
   try {
     const role = roleForUser(user);
+    if (role !== 'owner' && !(await requireShopAccess(user, res))) return;
     const status = req.query.status ? String(req.query.status) : undefined;
     const ownerId = role === 'owner' ? String(user.id) : undefined;
     const providerEmail = role === 'mechanic' || role === 'shop' ? String(user.email || '').toLowerCase() : undefined;
     const providerType = role === 'shop' ? 'shop' : role === 'mechanic' ? 'mechanic' : undefined;
     const providerServices = providerEmail ? (req.query.providerServices ? String(req.query.providerServices) : getUserServices(user)) : undefined;
-    const previewLeads = providerEmail ? String(req.query.previewLeads || '').toLowerCase() === 'true' : false;
+    const previewLeads = false;
     const rows = await listRepairRequests({ ownerId, status, providerEmail, providerType, providerServices, previewLeads });
     res.json({ ok: true, repairs: rows.map(r => sanitizeRepairForUser(r, user)) });
   } catch (e) {
@@ -1613,132 +1627,72 @@ route('get', '/api/repairs', async (req, res) => {
   }
 });
 
-route('post', '/api/repairs/:id/cancel', async (req, res) => {
-  const repairId = Number(req.params.id);
-  if (!repairId) return res.status(400).json({ error: 'Invalid repair id.' });
-  const adminOverride = isAuthorizedAdminRequest(req);
-  const user = adminOverride ? null : await requireAuthenticatedUser(req, res, ['owner']);
-  if (!adminOverride && !user) return;
+route('get','/api/repairs/:id/transitions',async(req,res)=>{
+ const user=await requireAuthenticatedUser(req,res,['owner','mechanic','shop']);if(!user)return;
+ const id=Number(req.params.id);if(!Number.isSafeInteger(id)||id<1)return res.status(400).json({error:'Invalid repair ID.'});
+ const repair=await getRepairById(id);if(!repair)return res.status(404).json({error:'Repair not found.'});
+ if(String(repair.owner_id)!==String(user.id)&&!(await listBids({requestId:id,mechanicId:String(user.id)})).length)return res.status(404).json({error:'Repair not found.'});
+ const rows=USE_SUPABASE?await supabaseRequest('repair_transition_events?repair_id=eq.'+id+'&select=action,from_status,to_status,created_at&order=id.desc&limit=50'):[...(repair.transition_history||[])].reverse().slice(0,50);
+ res.json({ok:true,events:rows.map(e=>({action:e.action,fromStatus:e.from_status,toStatus:e.to_status,createdAt:e.created_at}))});
+});
 
-  try {
-    const target = await getRepairById(repairId);
-    if (!target) return res.status(404).json({ error: 'Repair request not found.' });
-    if (!adminOverride && String(target.owner_id || '') !== String(user.id)) {
-      return res.status(403).json({ error: 'You can only cancel your own repair requests.' });
-    }
-
-    if (USE_SUPABASE) {
-      if (String(target.status || '').toLowerCase() === 'accepted') {
-        return res.status(400).json({ error: 'Accepted requests cannot be cancelled.' });
+for (const action of ['cancel','complete','start-work','request-completion','continue-work']) {
+  route('post', '/api/repairs/:id/' + action, async (req,res) => {
+    const id=Number(req.params.id);
+    if (!/^[1-9]\d*$/.test(req.params.id)||!Number.isSafeInteger(id)) return res.status(400).json({error:'Invalid repair ID.'});
+    const expectedRevision=req.body?.expectedRevision;
+    if(['start-work','request-completion','continue-work'].includes(action)&&(!Number.isSafeInteger(expectedRevision)||expectedRevision<0))return res.status(400).json({error:'Current workflow revision required.'});
+    const admin=['cancel','complete'].includes(action)&&isAuthorizedAdminRequest(req);
+    const user=admin?req.adminUser:await requireAuthenticatedUser(req,res,['owner','mechanic','shop']);
+    if(!user)return;
+    try {
+      if(USE_SUPABASE){
+        const repair=await getRepairById(id);if(!repair)return res.status(404).json({error:'Repair not found.'});
+        const bids=await listBids({requestId:id});
+        repairTransition(repair,bids,{id:user.id,admin},action,undefined,expectedRevision); // Friendly errors; RPC repeats checks under lock.
+        const result=await supabaseRequest('rpc/transition_repair',{method:'POST',body:{p_repair_id:id,p_actor_id:String(user.id),p_action:action,p_admin:admin,p_expected_revision:expectedRevision??null}});
+        return res.json(result);
       }
-      await supabaseRequest(`repair_requests?id=eq.${repairId}`, { method: 'PATCH', body: { status: 'cancelled' } });
-      await supabaseRequest(`bids?request_id=eq.${repairId}&status=eq.open`, { method: 'PATCH', body: { status: 'declined' } });
-      return res.json({ ok: true });
-    }
-
-    const requests = readJson(REPAIR_REQUESTS_PATH, []);
-    if (String(target.status || '').toLowerCase() === 'accepted') {
-      return res.status(400).json({ error: 'Accepted requests cannot be cancelled.' });
-    }
-    requests.forEach(r => {
-      if (Number(r.id) === repairId) r.status = 'cancelled';
-    });
-    writeJson(REPAIR_REQUESTS_PATH, requests);
-
-    const bids = readJson(BIDS_PATH, []);
-    bids.forEach(b => {
-      if (Number(b.request_id) === repairId && String(b.status || '').toLowerCase() === 'open') b.status = 'declined';
-    });
-    writeJson(BIDS_PATH, bids);
-
-    res.json({ ok: true });
-  } catch (e) {
-    res.status(500).json({ error: 'Could not cancel request.' });
-  }
-});
-
-route('post', '/api/repairs/:id/complete', async (req, res) => {
-  const repairId = Number(req.params.id);
-  if (!repairId) return res.status(400).json({ error: 'Invalid repair id.' });
-  const adminOverride = isAuthorizedAdminRequest(req);
-  const user = adminOverride ? null : await requireAuthenticatedUser(req, res, ['owner']);
-  if (!adminOverride && !user) return;
-  try {
-    const target = await getRepairById(repairId);
-    if (!target) return res.status(404).json({ error: 'Repair request not found.' });
-    if (!adminOverride && String(target.owner_id || '') !== String(user.id)) {
-      return res.status(403).json({ error: 'You can only complete your own repair requests.' });
-    }
-
-    if (USE_SUPABASE) {
-      const st = String(target.status || '').toLowerCase();
-      if (!['accepted', 'in_progress', 'completed'].includes(st)) return res.status(400).json({ error: 'Only accepted/in-progress jobs can be completed.' });
-      await supabaseRequest(`repair_requests?id=eq.${repairId}`, { method: 'PATCH', body: { status: 'completed' } });
-      return res.json({ ok: true });
-    }
-
-    const requests = readJson(REPAIR_REQUESTS_PATH, []);
-    const st = String(target.status || '').toLowerCase();
-    if (!['accepted', 'in_progress', 'completed'].includes(st)) return res.status(400).json({ error: 'Only accepted/in-progress jobs can be completed.' });
-    requests.forEach(r => {
-      if (Number(r.id) === repairId) r.status = 'completed';
-    });
-    writeJson(REPAIR_REQUESTS_PATH, requests);
-    res.json({ ok: true });
-  } catch (e) {
-    res.status(500).json({ error: 'Could not complete request.' });
-  }
-});
+      // No await inside local read/validate/write critical section.
+      const repairs=readJson(REPAIR_REQUESTS_PATH,[]),index=repairs.findIndex(r=>Number(r.id)===id);
+      if(index<0)return res.status(404).json({error:'Repair not found.'});
+      const bids=readJson(BIDS_PATH,[]),result=repairTransition(repairs[index],bids,{id:user.id,admin},action,undefined,expectedRevision);
+      if(result.changed){
+        result.repair.transition_history=[...(repairs[index].transition_history||[]),result.event];
+        repairs[index]=result.repair;writeJson(REPAIR_REQUESTS_PATH,repairs);
+      }
+      // Also repair an interrupted local cancellation on an idempotent retry.
+      if(action==='cancel'){bids.forEach(b=>{if(Number(b.request_id)===id&&b.status==='open')b.status='declined';});writeJson(BIDS_PATH,bids);
+      }
+      return res.json({ok:true,changed:result.changed});
+    }catch(error){return res.status(error.status||409).json({error:error.status?error.message:'Repair state changed or storage unavailable. Refresh before retrying.'});}
+  });
+}
 
 route('post', '/api/bids', async (req, res) => {
-  const user = await requireAuthenticatedUser(req, res, ['mechanic', 'shop']);
+  const user = await requireAuthenticatedUser(req, res, ['shop']);
   if (!user) return;
+  const verifiedShop = await requireShopAccess(user, res);
+  if (!verifiedShop) return;
 
   const { requestId, mechanicName, amount, etaHours, notes } = req.body || {};
-  if (!requestId || !mechanicName || !amount || !etaHours) {
+  if (!requestId || !amount || !etaHours) {
     return res.status(400).json({ error: 'Missing required fields.' });
   }
 
-  if (!Number.isFinite(Number(amount)) || Number(amount) <= 0 || Number(amount) > 100000 || !Number.isInteger(Number(etaHours)) || Number(etaHours) < 1 || Number(etaHours) > 8760) return res.status(400).json({ error: 'Enter a positive estimate amount and whole-number availability in hours.' });
+  if (!Number.isFinite(Number(amount)) || Number(Number(amount).toFixed(2)) !== Number(amount) || Number(amount) <= 0 || Number(amount) > 100000 || !Number.isInteger(Number(etaHours)) || Number(etaHours) < 1 || Number(etaHours) > 8760) return res.status(400).json({ error: 'Enter a positive estimate amount and whole-number availability in hours.' });
   const mechanicId = String(user.id);
   const billing = await getBillingByUserIdAsync(mechanicId);
   if (!billing || !canSubmitEstimatesFromBilling(billing)) {
     return res.status(402).json({ error: 'Active $99/month subscription required to submit estimates.' });
   }
 
-  const cleanNotes = String(notes || '').trim();
-  if (cleanNotes.replace(/\[META\][\s\S]*?\[\/META\]/g, '').trim().length < 15) {
-    return res.status(400).json({ error: 'Please include at least 15 characters in estimate notes.' });
-  }
-
-  let providerType = 'mechanic';
-  let providerEmail = '';
-  try {
-    const m = cleanNotes.match(/\[META\]([\s\S]*?)\[\/META\]/);
-    if (m) {
-      const parsed = JSON.parse(m[1]);
-      const t = String(parsed?.providerType || '').toLowerCase();
-      if (t === 'shop' || t === 'mechanic') providerType = t;
-      providerEmail = String(parsed?.businessEmail || '').trim().toLowerCase();
-
-      const minimumProfile = [parsed?.businessName, parsed?.businessEmail, parsed?.businessPhone];
-      if (minimumProfile.some(v => !String(v || '').trim())) {
-        return res.status(400).json({ error: 'Please complete minimum profile info (name, email, phone) before submitting.' });
-      }
-    }
-  } catch {}
-
-  if (providerEmail && await isBannedEmail(providerEmail)) {
-    return res.status(403).json({ error: 'This account is restricted. Contact support.' });
-  }
-
-  if (USE_SUPABASE && providerEmail) {
-    const authEmail = String(user?.email || '').trim().toLowerCase();
-    if (authEmail && authEmail !== providerEmail) {
-      return res.status(403).json({ error: 'Provider email mismatch.' });
-    }
-  }
-
+  if (!boundedText(notes, 15, 10000)) return res.status(400).json({ error: 'Invalid estimate notes.' });
+  const noteText = String(notes || '').replace(/\[META\][\s\S]*?\[\/META\]/g, '').trim();
+  if (noteText.length < 15 || noteText.length > 5000) return res.status(400).json({ error: 'Estimate notes must be 15–5000 characters.' });
+  const providerType = 'shop';
+  const providerEmail = String(user.email || '').trim().toLowerCase();
+  const cleanNotes = '[META]' + JSON.stringify({ providerType, businessName: verifiedShop.business_name, businessEmail: providerEmail, businessPhone: String(user.user_metadata?.phone || '') }) + '[/META] ' + noteText;
   try {
     const repairs = await listRepairRequests({
       providerEmail: String(user.email || '').toLowerCase(),
@@ -1771,33 +1725,12 @@ route('post', '/api/bids', async (req, res) => {
       }
     }
 
-    const existing = await listBids({ requestId: Number(requestId), status: 'open' });
-    const countByType = { shop: 0, mechanic: 0 };
-    for (const b of existing) {
-      const raw = String(b?.notes || '');
-      const mm = raw.match(/\[META\]([\s\S]*?)\[\/META\]/);
-      let t = null;
-      if (mm) {
-        try {
-          const meta = JSON.parse(mm[1]);
-          const parsedType = String(meta?.providerType || '').toLowerCase();
-          if (parsedType === 'shop' || parsedType === 'mechanic') t = parsedType;
-        } catch {}
-      }
-      if (t) countByType[t] += 1;
-    }
-
-    if (providerType === 'shop' && countByType.shop >= 3) {
-      return res.status(400).json({ error: 'This request already has 3 shop estimates.' });
-    }
-    if (providerType === 'mechanic' && countByType.mechanic >= 2) {
-      return res.status(400).json({ error: 'This request already has 2 individual mechanic estimates.' });
-    }
+    if (existingAllForRequest.length >= 3) return res.status(409).json({ error: 'This request already has 3 estimates.' });
 
     const created = await createBid({
       request_id: Number(requestId),
       mechanic_id: String(mechanicId).trim(),
-      mechanic_name: String(mechanicName).trim(),
+      mechanic_name: verifiedShop.business_name,
       amount: Number(amount),
       eta_hours: Number(etaHours),
       notes: cleanNotes,
@@ -1843,7 +1776,7 @@ route('get', '/api/bids', async (req, res) => {
       }
       rows = await listBids({ requestId, status });
       const reviews = await ops.list('provider_verifications');
-      const approved = new Set(reviews.filter(r => r.status === 'approved').map(r => r.user_id));
+      const approved = new Set(reviews.filter(r => approvedShop(r, r.user_id)).map(r => r.user_id));
       return res.json({ ok: true, bids: rows.map(b => ({ ...sanitizeBidForUser(b, user, { includeProviderContact: true }), verificationStatus: approved.has(b.mechanic_id) ? 'approved' : 'unreviewed' })) });
     }
 
@@ -1872,7 +1805,7 @@ route('post', '/api/bids/:id/accept', async (req, res) => {
 
     if (!['open', 'accepted'].includes(repair.status) || (repair.status === 'accepted' && bid.status !== 'accepted')) return res.status(409).json({ error: 'This repair already has a selected estimate or is closed.' });
     if (USE_SUPABASE) {
-      await supabaseRequest('rpc/accept_marketplace_bid', { method: 'POST', body: { p_bid_id: bidId, p_owner_id: user?.id || '', p_admin: adminOverride } });
+      await supabaseRequest('rpc/accept_marketplace_bid', { method: 'POST', body: { p_bid_id: bidId, p_owner_id: user?.id || req.adminUser?.id || '', p_admin: adminOverride } });
       await notifyUser(bid.mechanic_id, `accepted:${bidId}`, 'Your estimate was selected', 'The owner selected your estimate. Open your dashboard to review the job.', '/mechanic.html');
       return res.json({ ok: true });
     }
@@ -1880,6 +1813,8 @@ route('post', '/api/bids/:id/accept', async (req, res) => {
     const bids = readJson(BIDS_PATH, []);
     const target = bids.find(b => Number(b.id) === bidId);
     if (!target) return res.status(404).json({ error: 'Bid not found.' });
+    const currentRepair=readJson(REPAIR_REQUESTS_PATH,[]).find(r=>Number(r.id)===Number(target.request_id));
+    if(!currentRepair||!['open','accepted'].includes(currentRepair.status)||(currentRepair.status==='accepted'&&target.status!=='accepted'))return res.status(409).json({error:'Repair changed. Refresh before accepting.'});
     bids.forEach(b => {
       if (Number(b.request_id) === Number(target.request_id)) b.status = Number(b.id) === bidId ? 'accepted' : 'declined';
     });
@@ -1887,13 +1822,16 @@ route('post', '/api/bids/:id/accept', async (req, res) => {
 
     const requests = readJson(REPAIR_REQUESTS_PATH, []);
     requests.forEach(r => {
-      if (Number(r.id) === Number(target.request_id)) r.status = 'accepted';
+      if (Number(r.id) === Number(target.request_id) && r.status !== 'accepted') {
+        r.transition_history=[...(r.transition_history||[]),{action:'accept',actor_id:user?.id||req.adminUser?.id,from_status:r.status,to_status:'accepted',created_at:new Date().toISOString()}];
+        r.status = 'accepted';
+      }
     });
     writeJson(REPAIR_REQUESTS_PATH, requests);
 
     res.json({ ok: true });
   } catch {
-    res.status(500).json({ error: 'Could not accept bid.' });
+    res.status(409).json({ error: 'Could not accept bid. Repair state may have changed; refresh before retrying.' });
   }
 });
 
@@ -1904,6 +1842,7 @@ route('get', '/api/feedbacks', async (req, res) => {
 
   try {
     const requestId = req.query.requestId ? Number(req.query.requestId) : undefined;
+    if(req.query.requestId!==undefined&&(!Number.isSafeInteger(requestId)||requestId<1))return res.status(400).json({error:'Invalid repair ID.'});
     const mechanicId = adminOverride
       ? (req.query.mechanicId ? String(req.query.mechanicId) : undefined)
       : (roleForUser(user) === 'owner' ? undefined : String(user.id));
@@ -1913,7 +1852,11 @@ route('get', '/api/feedbacks', async (req, res) => {
         return res.status(403).json({ error: 'You can only view feedback for your own repair requests.' });
       }
     }
-    const rows = await listFeedbacks({ requestId, mechanicId });
+    let rows = await listFeedbacks({ requestId, mechanicId });
+    if(!adminOverride&&roleForUser(user)==='owner'&&!requestId){
+      const ids=new Set((await listRepairRequests({ownerId:String(user.id)})).map(r=>Number(r.id)));
+      rows=rows.filter(r=>ids.has(Number(r.request_id)));
+    }
     res.json({ ok: true, feedbacks: rows });
   } catch (e) {
     res.status(500).json({ error: 'Could not load feedbacks.' });
@@ -1962,6 +1905,10 @@ route('get', '/api/billing/status', async (req, res) => {
   if (!userId) return res.status(400).json({ error: 'userId is required.' });
 
   let billing = await getBillingByUserIdAsync(userId);
+  if (!BILLING_ENABLED) return res.json({ ok: true, billingMode: 'disabled', canSubmitEstimates: false,
+    hasSubscription: !!billing, hasStripeCustomer: !!billing?.stripe_customer_id,
+    status: billing?.subscription_status || 'none', currentPeriodEnd: billing?.current_period_end || null,
+    message: BILLING_UNAVAILABLE, billingManagementAvailable: false });
   billing = await syncBillingFromStripe(billing);
   if (!billing) {
     return res.json({
@@ -1982,7 +1929,7 @@ route('get', '/api/billing/status', async (req, res) => {
     hasStripeCustomer: !!billing.stripe_customer_id,
     status,
     manualAccessOverride: billing.manual_access_override || null,
-    canSubmitEstimates: canSubmitEstimatesFromBilling(billing),
+    canSubmitEstimates: roleForUser(user) === 'shop' && subscribedShop((await ops.list('provider_verifications', { user_id: userId }))[0], billing, userId),
     currentPeriodEnd: billing.current_period_end || null,
     amountLabel: '$99/month',
     refundPolicy: 'If you receive zero eligible opportunities to submit an estimate in a billing month, your $99 is refunded. Winning jobs is based on quote quality, speed, and reputation.'
@@ -1990,15 +1937,16 @@ route('get', '/api/billing/status', async (req, res) => {
 });
 
 route('post', '/api/billing/create-checkout-session', async (req, res) => {
-  if (!stripe) return res.status(500).json({ error: 'Stripe is not configured on the server.' });
 
-  const user = await requireAuthenticatedUser(req, res, ['mechanic', 'shop']);
+  const user = await requireAuthenticatedUser(req, res, ['shop']);
   if (!user) return;
+  if (!(await requireShopAccess(user, res, false))) return;
+  if (!stripe) return res.status(503).json({ error: 'Stripe is not configured on the server.' });
   const userId = String(user.id || '');
   const email = String(user.email || '').trim().toLowerCase();
   if (!userId || !email) return res.status(400).json({ error: 'userId and email are required.' });
 
-  const role = roleForUser(user);
+  const role = 'shop';
   const meta = user.user_metadata || {};
   if (!validZip(meta.zip) || !String(meta.services || '').trim() || Number(meta.serviceRadiusMiles) < 1 || Number(meta.serviceRadiusMiles) > 100 || !Number.isFinite(Number(meta.serviceRadiusMiles))) return res.status(400).json({ error: 'Complete your ZIP code, specialties, and service radius in Profile before subscribing.' });
   const price = resolvePriceForRole(role);
@@ -2072,6 +2020,8 @@ route('post', '/api/billing/create-portal-session', async (req, res) => {
     res.status(500).json({ error: 'Could not open billing portal.' });
   }
 });
+
+route('get','/api/admin/audit',async(req,res)=>{if(guardAdminApi(req,res))return;res.json({ok:true,events:await admins.recent()});});
 
 route('get', '/api/admin/billing', async (req, res) => {
   { const blocked = guardAdminApi(req, res); if (blocked) return; }
@@ -2399,538 +2349,72 @@ route('post', '/api/admin/ops/reconcile-notifications', async (req, res) => {
   }
 });
 
-route('get', '/admin/ops', async (req, res) => {
-  if (!isAdminConfigValid()) {
-    return res.status(503).send('<h2>Admin disabled</h2><p>Set a strong ADMIN_TOKEN environment variable.</p>');
-  }
-  if (!isAuthorizedAdminRequest(req)) {
-    return res.status(401).send('<h2>Unauthorized</h2><p>Use /admin/ops?token=YOUR_TOKEN or send x-admin-token header.</p>');
-  }
-  res.send(`<!doctype html><html><head><meta charset='utf-8'><title>Ops Dashboard</title><meta name='viewport' content='width=device-width,initial-scale=1'><style>
-  :root{--bg:#0b0d12;--card:#131722;--stroke:#293043;--text:#f2f4fb;--muted:#aeb7cc}
-  *{box-sizing:border-box} body{font-family:Inter,Arial,sans-serif;background:radial-gradient(900px 300px at 0 -120px,rgba(95,143,255,.14),transparent 60%),var(--bg);color:var(--text);margin:0;padding:22px}
-  .wrap{max-width:1200px;margin:0 auto} .top{display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;margin-bottom:12px}
-  .k{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px} .card{background:var(--card);border:1px solid var(--stroke);border-radius:14px;padding:12px}
-  .lbl{font-size:12px;color:var(--muted)} .val{font-size:30px;font-weight:800;margin-top:4px}
-  .hint{color:var(--muted);font-size:12px;margin-top:6px} a{color:#9fc1ff;text-decoration:none}
-  @media(max-width:980px){.k{grid-template-columns:repeat(2,minmax(0,1fr))}}
-  </style></head><body><div class='wrap'><div class='top'><div><h1>ShopMyRepair Ops Dashboard</h1><div class='hint'>Live marketplace health and delivery metrics</div></div><div><a href='/admin?token=${encodeURIComponent(String(req.query.token||''))}'>← Back to Signups Admin</a></div></div>
-  <div id='k' class='k'><div class='card'>Loading...</div></div>
-  <div style='margin-top:12px'><button id='reconcileNotifications' class='card' style='color:var(--text);cursor:pointer'>Reconcile missing bid notifications</button></div>
-  <script src="/vendor/purify.min.js"></script><script>
-    fetch('/api/admin/ops?token=${encodeURIComponent(String(req.query.token||''))}').then(r=>r.json()).then(d=>{
-      const k=d.kpis||{};
-      const entries=[
-        ['Total Repairs',k.totalRepairs,'All requests created'],
-        ['Open Repairs',k.openRepairs,'Need more estimate coverage'],
-        ['Accepted Repairs',k.acceptedRepairs,'Converted jobs'],
-        ['Total Estimates',k.totalBids,'All estimates submitted'],
-        ['Open Estimates',k.openBids,'Awaiting owner action'],
-        ['Avg Estimates / Open Repair',k.avgBidsPerOpen,'Supply depth indicator'],
-        ['Dispatch Invites',k.totalInvites,'Providers invited to jobs'],
-        ['Missing Bid Notifications',k.missingBidNotifications,'Run reconciliation before launch']
-      ];
-      document.getElementById('k').innerHTML=DOMPurify.sanitize(entries.map(([l,v,h])=>'<div class="card"><div class="lbl">'+l+'</div><div class="val">'+(v??0)+'</div><div class="hint">'+h+'</div></div>').join(''));
-    }).catch(()=>{ document.getElementById('k').innerHTML=DOMPurify.sanitize('<div class="card">Could not load ops data.</div>'); });
-    document.getElementById('reconcileNotifications').addEventListener('click', async () => {
-      const button = document.getElementById('reconcileNotifications');
-      button.disabled = true;
-      try {
-        const res = await fetch('/api/admin/ops/reconcile-notifications?token=${encodeURIComponent(String(req.query.token||''))}', { method: 'POST' });
-        const data = await res.json();
-        button.textContent = res.ok ? ('Reconciled ' + (data.applied || 0) + ' missing notifications') : (data.error || 'Reconciliation failed');
-      } catch { button.textContent = 'Reconciliation failed'; }
-      finally { button.disabled = false; }
-    });
-  </script></div></body></html>`);
+route('get','/admin',async(req,res)=>res.redirect('/admin-dashboard.html'));
+route('get','/admin/ops',async(req,res)=>res.redirect('/admin-dashboard.html'));
+
+registerPhotos({ route, requireUser: requireAuthenticatedUser, getRepair: getRepairById,
+  canView: async (user, repair) => {
+    const ownBids = await listBids({ requestId: Number(repair.id), mechanicId: String(user.id) });
+    if (ownBids.length) return true; // Historical participants retain access without buying new leads.
+    if (roleForUser(user) !== 'shop') return false;
+    const verification = (await ops.list('provider_verifications', { user_id: user.id }))[0];
+    if (!subscribedShop(verification, await getBillingByUserIdAsync(user.id), user.id)) return false;
+    const email = String(user.email || '').trim().toLowerCase();
+    if (!email) return false;
+    const invites = await listInvites({ repairId: Number(repair.id), providerEmail: email, providerType: 'shop', status: 'pending' });
+    return repair.status === 'open' && !requestIsExpiredForNewInvites(repair) && invites.some(i => Date.parse(i.expires_at) > Date.now())
+      && providerSupportsRepair({ zip: user.user_metadata?.zip, services: user.user_metadata?.services, serviceRadiusMiles: user.user_metadata?.serviceRadiusMiles }, repair);
+  },
+  metadata: photoMetadata({ database: USE_SUPABASE, request: supabaseRequest, directory: path.join(__dirname, '.local-data') }),
+  objects: privatePhotoObjects
 });
 
-route('get', '/admin', async (req, res) => {
-  if (!isAdminConfigValid()) {
-    return res.status(503).send('<h2>Admin disabled</h2><p>Set a strong ADMIN_TOKEN environment variable.</p>');
-  }
-  if (!isAuthorizedAdminRequest(req)) {
-    return res.status(401).send('<h2>Unauthorized</h2><p>Use /admin?token=YOUR_TOKEN or send x-admin-token header.</p>');
-  }
-  let data = [];
-  let loadError = '';
-  try {
-    data = await listSignups();
-  } catch (e) {
-    loadError = String(e?.message || e);
-  }
-  const c = counts(data);
-
-  const byBorough = Object.entries(data.reduce((a, r) => {
-    const k = r.Borough || r.borough || 'Unknown'; a[k] = (a[k] || 0) + 1; return a;
-  }, {})).sort((a, b) => b[1] - a[1]);
-
-  const byZip = Object.entries(data.reduce((a, r) => {
-    const k = String(r.ZIP || r.zip || 'Unknown').trim() || 'Unknown'; a[k] = (a[k] || 0) + 1; return a;
-  }, {})).sort((a, b) => b[1] - a[1]);
-
-  const since = Date.now() - (7 * 24 * 60 * 60 * 1000);
-  const last7 = data.filter(r => {
-    const dt = new Date(r.CreatedDate || r.created_at || 0).getTime();
-    return Number.isFinite(dt) && dt >= since;
-  }).length;
-
-  const shopCount = data.filter(r => {
-    const hasShop = String(r.HasShop || r.has_shop || '').toLowerCase();
-    return hasShop === 'yes' || hasShop === 'true' || hasShop === 'shop';
-  }).length;
-  const indyMech = Math.max(0, c.mechanics - shopCount);
-  const ownerPct = c.total ? Math.round((c.owners / c.total) * 100) : 0;
-  const mechPct = c.total ? Math.round((c.mechanics / c.total) * 100) : 0;
-
-  const boroughBars = byBorough.slice(0, 8).map(([k, v]) => `<div style='margin:8px 0'>${esc(k)} <b style='float:right'>${v}</b><div style='margin-top:5px;height:8px;background:#1a1d27;border-radius:999px;overflow:hidden'><span style='display:block;height:100%;background:linear-gradient(90deg,#ff7b54,#e8441a);width:${Math.min(100, c.total ? (v / c.total) * 100 : 0)}%'></span></div></div>`).join('');
-
-  const recentRows = data.slice(0, 50).map(r => `<tr><td>${r.Id || r.id || ''}</td><td>${esc(r.Name || r.name || '')}</td><td>${esc(r.Type || r.type || '')}</td><td>${esc(r.Borough || r.borough || '')}</td><td>${esc(r.ZIP || r.zip || '')}</td><td>${esc(r.Email || r.email || '')}</td><td>${r.CreatedDate || r.created_at || ''}</td></tr>`).join('');
-
-  res.send(`<!doctype html><html><head><meta charset='utf-8'><title>ShopMyRepair Admin</title><meta name='viewport' content='width=device-width,initial-scale=1'><style>
-  :root{--bg:#090c12;--card:#121a29;--card2:#0f1623;--stroke:#2a3752;--text:#eef3ff;--muted:#aab6d3;--orange:#ff7a45;--green:#22c55e;--red:#ef4444;--blue:#60a5fa}
-  *{box-sizing:border-box} body{font-family:Inter,Segoe UI,Arial,sans-serif;background:radial-gradient(1200px 420px at 0 -20%,rgba(255,122,69,.14),transparent 62%),radial-gradient(1000px 400px at 100% -10%,rgba(96,165,250,.12),transparent 60%),var(--bg);color:var(--text);margin:0;padding:22px}
-  h1,h2,h3{margin:0}.wrap{max-width:1280px;margin:0 auto}.top{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:14px}
-  .actions{display:flex;gap:8px;flex-wrap:wrap}.btnLink{border:1px solid var(--stroke);background:var(--card2);color:#dce7ff;padding:8px 12px;border-radius:10px;text-decoration:none;font-size:13px}
-  .btnLink:hover{border-color:#3b4a70}.grid{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:10px}.card{background:linear-gradient(180deg,var(--card),var(--card2));border:1px solid var(--stroke);border-radius:14px;padding:12px}
-  .k{font-size:12px;color:var(--muted)}.v{font-size:30px;font-weight:800;margin-top:4px}.span2{grid-column:span 2}.span3{grid-column:span 3}.span6{grid-column:span 6}
-  .pill{display:inline-block;border:1px solid #3b4a70;background:#101c30;color:#d3e4ff;border-radius:999px;padding:4px 9px;font-size:11px}
-  .subline{margin-top:5px;color:var(--muted);font-size:12px}
-  .toolbar{display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap;margin-top:10px}
-  .search{max-width:360px;width:100%;padding:9px 11px;border-radius:10px;border:1px solid #354563;background:#0a1220;color:#fff}
-  .tbl{max-height:460px;overflow:auto;border:1px solid var(--stroke);border-radius:12px;margin-top:8px}
-  table{width:100%;border-collapse:collapse}th,td{padding:9px;border-bottom:1px solid #23314c;font-size:12px;text-align:left;vertical-align:middle}th{color:#c8d7fb;background:#0f1728;position:sticky;top:0;z-index:1}
-  .actions-cell{display:flex;gap:6px;flex-wrap:wrap;align-items:center}
-  .badge{display:inline-block;padding:4px 8px;border-radius:999px;border:1px solid #3a4a70;font-size:11px;text-transform:capitalize}
-  .st-active,.st-trialing{border-color:#14532d;background:#052e1d;color:#bbf7d0}.st-past_due{border-color:#854d0e;background:#2b1603;color:#fde68a}.st-canceled,.st-none{border-color:#7f1d1d;background:#2a1111;color:#fecaca}.st-blocked{border-color:#9a3412;background:#2b1205;color:#fed7aa}
-  .btn{border:1px solid #3a4a70;background:#102038;color:#e7efff;border-radius:9px;padding:6px 9px;font-size:11px;cursor:pointer}
-  .btn:hover{filter:brightness(1.1)}.btn.cancel{border-color:#7f1d1d;background:#2a1010}.btn.activate{border-color:#14532d;background:#052117}.btn:disabled{opacity:.55;cursor:not-allowed;filter:none}
-  .warn{border:1px solid #7f1d1d;background:#2a1414;color:#ffcbcb;border-radius:12px;padding:10px;margin-top:10px}
-  .notice{border:1px solid #4b5563;background:#111827;color:#c7d2fe;border-radius:10px;padding:8px 10px;font-size:12px;margin-top:8px}
-  #toast{position:fixed;right:16px;bottom:16px;background:#0b1528;border:1px solid #334155;color:#dbeafe;padding:10px 12px;border-radius:10px;display:none;z-index:40}
-  @media(max-width:1100px){.grid{grid-template-columns:repeat(2,minmax(0,1fr))}.span2,.span3,.span6{grid-column:span 2}}
-  @media(max-width:760px){
-    body{padding:12px}
-    .top{align-items:flex-start}
-    .actions{width:100%}
-    .btnLink{flex:1;text-align:center}
-    .toolbar{position:sticky;top:0;background:linear-gradient(180deg,#0f1623,#0f1623f2);padding:8px;border:1px solid #2a3752;border-radius:10px;z-index:2}
-    .search{max-width:100%}
-    .tbl{max-height:58vh}
-    th,td{padding:8px 6px;font-size:11px}
-    .btn{padding:6px 8px;font-size:10px}
-    .actions-cell{min-width:180px}
-  }
-  </style></head><body><div class='wrap'>
-  <div class='top'><div><h1>ShopMyRepair Admin</h1><div class='subline'>Business overview, subscriptions, and controls</div></div><div class='actions'><a class='btnLink' href='/admin-launch.html'>Verification & refunds</a><a class='btnLink' href='/pricing.html' target='_blank'>Pricing page ↗</a><a class='btnLink' href='/admin/ops?token=${encodeURIComponent(String(req.query.token||''))}'>Ops dashboard</a></div></div>
-
-  <div class='grid'>
-    <div class='card'><div class='k'>Total Signups</div><div class='v'>${c.total}</div></div>
-    <div class='card'><div class='k'>Owners</div><div class='v'>${c.owners}</div><div class='k'>${ownerPct}%</div></div>
-    <div class='card'><div class='k'>Mechanics (All)</div><div class='v'>${c.mechanics}</div><div class='k'>${mechPct}%</div></div>
-    <div class='card'><div class='k'>Mechanic Shops</div><div class='v'>${shopCount}</div></div>
-    <div class='card'><div class='k'>Individual Mechanics</div><div class='v'>${indyMech}</div></div>
-    <div class='card'><div class='k'>New Last 7 Days</div><div class='v'>${last7}</div></div>
-
-    <div class='card span3'><h3>Demand by Borough</h3><div style='margin-top:8px'>${boroughBars || '<div class="k">No borough data yet</div>'}</div></div>
-    <div class='card span3'><h3>Quick Signals</h3><div class='k' style='margin-top:8px'>Top ZIP: <b>${esc(byZip[0]?.[0] || 'N/A')}</b> (${byZip[0]?.[1] || 0})</div><div class='k' style='margin-top:6px'>Top Borough: <b>${esc(byBorough[0]?.[0] || 'N/A')}</b> (${byBorough[0]?.[1] || 0})</div><div class='k' style='margin-top:10px'>Use these to focus recruitment and demand campaigns.</div><div style='margin-top:10px'><span class='pill'>Leads</span> <span class='pill'>Supply Mix</span> <span class='pill'>Geo Demand</span></div></div>
-
-    ${loadError ? `<div class='span6 warn'><h3 style='margin:0 0 6px 0'>Data source error</h3><div>${esc(loadError)}</div><div style='margin-top:6px'>Check SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY on deploy, or unset both for JSON fallback.</div></div>` : ''}
-
-    <div class='card span6'><h3>Recent Signups (latest 50)</h3><div class='tbl'><table><thead><tr><th>ID</th><th>Name</th><th>Type</th><th>Borough</th><th>ZIP</th><th>Email</th><th>Created</th></tr></thead><tbody>${recentRows || '<tr><td colspan="7">No signups yet.</td></tr>'}</tbody></table></div></div>
-
-    <div class='card span6'>
-      <h3>Account Management (Ban Controls)</h3>
-      <div class='k' style='margin-top:8px'>Filter by category and one-click ban/unban owners, individual mechanics, and mechanic shops.</div>
-      <div class='toolbar'>
-        <input id='accountSearch' class='search' placeholder='Search account email, name, category...' />
-        <select id='accountCategory' class='search' style='max-width:220px'>
-          <option value='all'>All categories</option>
-          <option value='owner'>Owner</option>
-          <option value='individual_mechanic'>Individual Mechanic</option>
-          <option value='mechanic_shop'>Mechanic Shop</option>
-        </select>
-        <button class='btn' onclick='loadAccounts()'>Refresh</button>
-      </div>
-      <div class='tbl'>
-        <table>
-          <thead><tr><th>Name</th><th>Email</th><th>Category</th><th>Borough</th><th>Status</th><th>Reason</th><th>Actions</th></tr></thead>
-          <tbody id='accountRows'><tr><td colspan='7'>Loading accounts...</td></tr></tbody>
-        </table>
-      </div>
-    </div>
-
-    <div class='card span6'>
-      <h3>Open Repair Requests</h3>
-      <div class='k' style='margin-top:8px'>Review open requests, assigned providers/invite times, and remove/cancel stale jobs.</div>
-      <div class='toolbar'>
-        <input id='repairSearch' class='search' placeholder='Search by title, city, category, owner ID...' />
-        <button class='btn' onclick='loadRepairs()'>Refresh</button>
-      </div>
-      <div class='tbl'>
-        <table>
-          <thead><tr><th>Request</th><th>Vehicle/Issue</th><th>Dispatch</th><th>Assigned Providers</th><th>Actions</th></tr></thead>
-          <tbody id='repairRows'><tr><td colspan='5'>Loading repairs...</td></tr></tbody>
-        </table>
-      </div>
-    </div>
-
-    <div class='card span6'>
-      <h3>Subscription Management</h3>
-      <div id='billingSummary' class='k' style='margin-top:8px'>Loading billing accounts...</div>
-      <div id='billingMode' class='notice'>Checking Stripe mode...</div>
-      <div class='toolbar'>
-        <input id='billingSearch' class='search' placeholder='Search by email, user ID, role, status...' />
-        <button class='btn' onclick='loadBilling()'>Refresh</button>
-      </div>
-      <div class='tbl'>
-        <table>
-          <thead><tr><th>User ID</th><th>Email</th><th>Role</th><th>Status</th><th>Access</th><th>Manual Override</th><th>Period End</th><th>Cancel at End</th><th>Actions</th></tr></thead>
-          <tbody id='billingRows'><tr><td colspan='9'>Loading...</td></tr></tbody>
-        </table>
-      </div>
-    </div>
-  </div>
-  <div id='toast'></div>
-  <script src="/vendor/purify.min.js"></script><script>
-    const adminToken = '${encodeURIComponent(String(req.query.token||''))}';
-    let billingCache = [];
-    let accountCache = [];
-    let repairCache = [];
-
-    function statusClass(status) {
-      const s = String(status || 'none').toLowerCase();
-      if (s === 'active' || s === 'trialing') return 'st-active';
-      if (s === 'past_due') return 'st-past_due';
-      if (s === 'canceled') return 'st-canceled';
-      return 'st-none';
-    }
-
-    function labelStatus(status) {
-      const s = String(status || 'none').toLowerCase();
-      if (s === 'past_due') return 'past due';
-      return s.replace('_', ' ');
-    }
-
-    function toast(msg) {
-      const el = document.getElementById('toast');
-      el.textContent = msg;
-      el.style.display = 'block';
-      clearTimeout(window.__toastT);
-      window.__toastT = setTimeout(() => { el.style.display = 'none'; }, 2200);
-    }
-
-    function normalizeCategory(cat) {
-      const c = String(cat || '').toLowerCase();
-      if (c === 'mechanic_shop') return 'Mechanic Shop';
-      if (c === 'individual_mechanic') return 'Individual Mechanic';
-      return 'Owner';
-    }
-
-    function renderAccountRows(rows) {
-      const rowsEl = document.getElementById('accountRows');
-      if (!rows.length) {
-        rowsEl.innerHTML = DOMPurify.sanitize('<tr><td colspan="7">No matching accounts.</td></tr>');
-        return;
-      }
-      rowsEl.innerHTML = DOMPurify.sanitize(rows.map(x => {
-        const email = String(x.email || '');
-        const category = String(x.category || '');
-        const action = x.banned
-          ? '<button class="btn activate" data-act="unban" data-email="' + encodeURIComponent(email) + '">Unban</button>'
-          : '<button class="btn cancel" data-act="ban" data-email="' + encodeURIComponent(email) + '" data-category="' + encodeURIComponent(category) + '">Ban</button>';
-        return '<tr>' +
-          '<td>' + (x.name || '-') + '</td>' +
-          '<td>' + email + '</td>' +
-          '<td>' + normalizeCategory(category) + '</td>' +
-          '<td>' + (x.borough || '-') + '</td>' +
-          '<td><span class="badge ' + (x.banned ? 'st-canceled' : 'st-active') + '">' + (x.banned ? 'banned' : 'active') + '</span></td>' +
-          '<td>' + (x.banned ? (x.ban_reason || '-') : '-') + '</td>' +
-          '<td class="actions-cell">' + action + '</td>' +
-        '</tr>';
-      }).join(''));
-    }
-
-    function applyAccountFilters() {
-      const q = String(document.getElementById('accountSearch').value || '').trim().toLowerCase();
-      const cat = String(document.getElementById('accountCategory').value || 'all');
-      let rows = accountCache.slice();
-      if (cat !== 'all') rows = rows.filter(x => String(x.category || '') === cat);
-      if (q) rows = rows.filter(x => [x.name, x.email, x.category, x.borough].map(v => String(v || '').toLowerCase()).join(' ').includes(q));
-      renderAccountRows(rows);
-    }
-
-    async function loadAccounts() {
-      try {
-        const r = await fetch('/api/admin/accounts?token=' + adminToken);
-        const d = await r.json();
-        if (!r.ok) throw new Error(d.error || 'Could not load accounts');
-        accountCache = d.accounts || [];
-        applyAccountFilters();
-      } catch (e) {
-        document.getElementById('accountRows').innerHTML = DOMPurify.sanitize('<tr><td colspan="7">' + (e.message || 'Could not load accounts') + '</td></tr>');
-      }
-    }
-
-    async function banAccount(email, category) {
-      if (!confirm('Ban ' + email + '? They will lose access immediately.')) return;
-      const reason = prompt('Reason for ban (optional):', 'Admin action') || 'Admin action';
-      try {
-        const r = await fetch('/api/admin/accounts/' + encodeURIComponent(email) + '/ban?token=' + adminToken, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ reason, category })
-        });
-        const d = await r.json();
-        if (!r.ok) throw new Error(d.error || 'Could not ban account');
-        toast('Account banned.');
-        await loadAccounts();
-      } catch (e) { toast(e.message || 'Failed to ban account'); }
-    }
-
-    async function unbanAccount(email) {
-      if (!confirm('Unban ' + email + '? This restores account access.')) return;
-      try {
-        const r = await fetch('/api/admin/accounts/' + encodeURIComponent(email) + '/unban?token=' + adminToken, { method: 'POST' });
-        const d = await r.json();
-        if (!r.ok) throw new Error(d.error || 'Could not unban account');
-        toast('Account unbanned.');
-        await loadAccounts();
-      } catch (e) { toast(e.message || 'Failed to unban account'); }
-    }
-
-    function renderRepairRows(rows) {
-      const rowsEl = document.getElementById('repairRows');
-      if (!rows.length) {
-        rowsEl.innerHTML = DOMPurify.sanitize('<tr><td colspan="5">No matching open repairs.</td></tr>');
-        return;
-      }
-      rowsEl.innerHTML = DOMPurify.sanitize(rows.map(r => {
-        const rid = Number(r.id || 0);
-        const a = r.admin || {};
-        const assigned = Array.isArray(a.assigned) ? a.assigned.slice(0, 6) : [];
-        const assignedHtml = assigned.length
-          ? assigned.map(x => {
-              const t = x.provider_type === 'shop' ? 'shop' : 'mechanic';
-              const st = String(x.status || 'pending');
-              const when = x.created_at ? new Date(x.created_at).toLocaleString() : '-';
-              const exp = x.expires_at ? new Date(x.expires_at).toLocaleString() : '-';
-              return '<div class="k" style="margin:4px 0"><span class="badge">' + t + '</span> ' + (x.provider_email || '-') + ' · ' + st + '<br><span style="color:#94a3b8">sent: ' + when + ' · expires: ' + exp + '</span></div>';
-            }).join('')
-          : '<span class="k">No assignments yet</span>';
-
-        return '<tr>' +
-          '<td><b>#' + rid + '</b><br><span class="k">' + (r.title || '-') + '</span><br><span class="k">Owner: ' + (r.owner_id || '-') + '</span></td>' +
-          '<td>' + (r.vehicle_year || '') + ' ' + (r.vehicle_make || '') + ' ' + (r.vehicle_model || '') + '<br><span class="k">' + (r.issue_category || '-') + ' · ' + (r.city || '-') + ', ' + (r.state || '-') + '</span></td>' +
-          '<td><span class="badge st-active">invites ' + (a.totalInvites || 0) + '</span> <span class="badge">active ' + (a.activeInvites || 0) + '</span><br><span class="badge">submitted ' + (a.submittedInvites || 0) + '</span> <span class="badge">bids ' + (a.bids || 0) + '</span></td>' +
-          '<td>' + assignedHtml + '</td>' +
-          '<td class="actions-cell"><button class="btn cancel" data-repair-act="cancel" data-repair-id="' + rid + '">Cancel</button><button class="btn cancel" data-repair-act="remove" data-repair-id="' + rid + '">Remove</button></td>' +
-        '</tr>';
-      }).join(''));
-    }
-
-    function applyRepairFilters() {
-      const q = String(document.getElementById('repairSearch').value || '').trim().toLowerCase();
-      const rows = !q ? repairCache : repairCache.filter(r => {
-        const hay = [r.id, r.title, r.city, r.state, r.issue_category, r.owner_id, r.vehicle_make, r.vehicle_model].map(v => String(v || '').toLowerCase()).join(' ');
-        return hay.includes(q);
-      });
-      renderRepairRows(rows);
-    }
-
-    async function loadRepairs() {
-      try {
-        const r = await fetch('/api/admin/repairs?status=open&token=' + adminToken);
-        const d = await r.json();
-        if (!r.ok) throw new Error(d.error || 'Could not load repairs');
-        repairCache = d.repairs || [];
-        applyRepairFilters();
-      } catch (e) {
-        document.getElementById('repairRows').innerHTML = DOMPurify.sanitize('<tr><td colspan="5">' + (e.message || 'Could not load repairs') + '</td></tr>');
-      }
-    }
-
-    async function cancelRepair(repairId) {
-      if (!confirm('Cancel repair #' + repairId + '?')) return;
-      try {
-        const r = await fetch('/api/repairs/' + encodeURIComponent(repairId) + '/cancel?token=' + adminToken, { method: 'POST' });
-        const d = await r.json();
-        if (!r.ok) throw new Error(d.error || 'Could not cancel repair');
-        toast('Repair cancelled.');
-        await loadRepairs();
-      } catch (e) { toast(e.message || 'Failed to cancel repair'); }
-    }
-
-    async function removeRepair(repairId) {
-      if (!confirm('Remove repair #' + repairId + ' permanently? This also removes bids/invites.')) return;
-      try {
-        const r = await fetch('/api/admin/repairs/' + encodeURIComponent(repairId) + '/remove?token=' + adminToken, { method: 'POST' });
-        const d = await r.json();
-        if (!r.ok) throw new Error(d.error || 'Could not remove repair');
-        toast('Repair removed.');
-        await loadRepairs();
-      } catch (e) { toast(e.message || 'Failed to remove repair'); }
-    }
-
-    function renderBillingRows(rows) {
-      const rowsEl = document.getElementById('billingRows');
-      if (!rows.length) {
-        rowsEl.innerHTML = DOMPurify.sanitize('<tr><td colspan="9">No matching billing accounts.</td></tr>');
-        return;
-      }
-      rowsEl.innerHTML = DOMPurify.sanitize(rows.map(x => {
-        const uid = String(x.user_id || '');
-        const status = String(x.subscription_status || 'none');
-        const canCancel = status === 'active' || status === 'trialing' || status === 'past_due';
-        const canActivate = status !== 'active' || !!x.cancel_at_period_end;
-        const manual = String(x.manual_access_override || 'none');
-        const access = manual === 'disabled' ? 'blocked' : ((manual === 'active' || ['active','trialing','past_due'].includes(status)) ? 'enabled' : 'restricted');
-        const accessClass = access === 'enabled' ? 'st-active' : (access === 'blocked' ? 'st-blocked' : 'st-none');
-        const actionBtns =
-          '<button class="btn cancel" ' + (canCancel ? '' : 'disabled') + ' data-bill-act="cancel" data-user-id="' + encodeURIComponent(uid) + '">Cancel End</button> ' +
-          '<button class="btn activate" ' + (canActivate ? '' : 'disabled') + ' data-bill-act="reactivate" data-user-id="' + encodeURIComponent(uid) + '">Keep Active</button> ' +
-          '<button class="btn activate" data-bill-act="force-active" data-user-id="' + encodeURIComponent(uid) + '">Force Active</button> ' +
-          '<button class="btn cancel" data-bill-act="force-disable" data-user-id="' + encodeURIComponent(uid) + '">Disable Access</button> ' +
-          '<button class="btn" data-bill-act="clear-manual" data-user-id="' + encodeURIComponent(uid) + '">Auto Mode</button>';
-        return '<tr>' +
-          '<td>' + uid + '</td>' +
-          '<td>' + (x.email || '-') + '</td>' +
-          '<td>' + (x.role || '-') + '</td>' +
-          '<td><span class="badge ' + statusClass(status) + '">' + labelStatus(status) + '</span></td>' +
-          '<td><span class="badge ' + accessClass + '">' + labelStatus(access) + '</span></td>' +
-          '<td>' + labelStatus(manual) + '</td>' +
-          '<td>' + (x.current_period_end || '-') + '</td>' +
-          '<td>' + (x.cancel_at_period_end ? 'yes' : 'no') + '</td>' +
-          '<td class="actions-cell">' + actionBtns + '</td>' +
-        '</tr>';
-      }).join(''));
-    }
-
-    function applySearch() {
-      const q = String(document.getElementById('billingSearch').value || '').trim().toLowerCase();
-      if (!q) return renderBillingRows(billingCache);
-      const filtered = billingCache.filter(x => {
-        const row = [x.user_id, x.email, x.role, x.subscription_status].map(v => String(v || '').toLowerCase()).join(' ');
-        return row.includes(q);
-      });
-      renderBillingRows(filtered);
-    }
-
-    async function loadBilling() {
-      const summaryEl = document.getElementById('billingSummary');
-      const modeEl = document.getElementById('billingMode');
-      try {
-        const r = await fetch('/api/admin/billing?token=' + adminToken);
-        const d = await r.json();
-        if (!r.ok) throw new Error(d.error || 'Could not load billing');
-
-        const s = d.summary || {};
-        summaryEl.innerHTML = DOMPurify.sanitize('Total: <b>' + (s.total||0) + '</b> · Active: <b>' + (s.active||0) + '</b> · Past Due: <b>' + (s.pastDue||0) + '</b> · Cancelled: <b>' + (s.cancelled||0) + '</b>');
-        modeEl.textContent = d.stripeConfigured
-          ? 'Stripe Live Mode: button actions call real Stripe subscriptions.'
-          : 'Stripe Setup Mode: button actions update local subscription status so you can test UI before keys are added.';
-
-        billingCache = d.billing || [];
-        applySearch();
-      } catch (e) {
-        summaryEl.textContent = e.message || 'Could not load billing accounts.';
-        document.getElementById('billingRows').innerHTML = DOMPurify.sanitize('<tr><td colspan="9">Could not load billing accounts.</td></tr>');
-      }
-    }
-
-    async function cancelSub(userId) {
-      if (!confirm('Cancel subscription at period end for user ' + userId + '?')) return;
-      try {
-        const r = await fetch('/api/admin/billing/' + encodeURIComponent(userId) + '/cancel?token=' + adminToken, { method: 'POST' });
-        const d = await r.json();
-        if (!r.ok) throw new Error(d.error || 'Could not cancel subscription');
-        toast(d.mockMode ? 'Updated in setup mode (no Stripe keys yet).' : 'Subscription set to cancel.');
-        await loadBilling();
-      } catch (e) { toast(e.message || 'Failed to cancel'); }
-    }
-
-    async function reactivateSub(userId) {
-      if (!confirm('Keep subscription active for user ' + userId + '?')) return;
-      try {
-        const r = await fetch('/api/admin/billing/' + encodeURIComponent(userId) + '/reactivate?token=' + adminToken, { method: 'POST' });
-        const d = await r.json();
-        if (!r.ok) throw new Error(d.error || 'Could not reactivate subscription');
-        toast(d.mockMode ? 'Updated in setup mode (no Stripe keys yet).' : 'Subscription kept active.');
-        await loadBilling();
-      } catch (e) { toast(e.message || 'Failed to reactivate'); }
-    }
-
-    async function setManualAccess(userId, mode) {
-      const msg = mode === 'active' ? 'Force ACTIVE access for user ' + userId + '?' : (mode === 'disabled' ? 'Disable access for user ' + userId + '?' : 'Clear manual override for user ' + userId + '?');
-      if (!confirm(msg)) return;
-      const reason = prompt('Manual override note (optional):', 'Admin manual override') || 'Admin manual override';
-      try {
-        const r = await fetch('/api/admin/billing/' + encodeURIComponent(userId) + '/manual-access?token=' + adminToken, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ mode, reason })
-        });
-        const d = await r.json();
-        if (!r.ok) throw new Error(d.error || 'Could not set manual access');
-        toast(mode === 'clear' ? 'Manual override cleared.' : 'Manual override updated.');
-        await loadBilling();
-      } catch (e) { toast(e.message || 'Failed to set manual access'); }
-    }
-
-    document.getElementById('billingSearch').addEventListener('input', applySearch);
-    document.getElementById('repairSearch').addEventListener('input', applyRepairFilters);
-    document.getElementById('accountSearch').addEventListener('input', applyAccountFilters);
-    document.getElementById('accountCategory').addEventListener('change', applyAccountFilters);
-    document.getElementById('accountRows').addEventListener('click', (ev) => {
-      const btn = ev.target.closest('button[data-act]');
-      if (!btn) return;
-      const act = btn.getAttribute('data-act');
-      const email = decodeURIComponent(String(btn.getAttribute('data-email') || ''));
-      const category = decodeURIComponent(String(btn.getAttribute('data-category') || ''));
-      if (!email) return;
-      if (act === 'ban') banAccount(email, category);
-      if (act === 'unban') unbanAccount(email);
-    });
-    document.getElementById('billingRows').addEventListener('click', (ev) => {
-      const btn = ev.target.closest('button[data-bill-act]');
-      if (!btn) return;
-      const act = btn.getAttribute('data-bill-act');
-      const userId = decodeURIComponent(String(btn.getAttribute('data-user-id') || ''));
-      if (!userId) return;
-      if (act === 'cancel') cancelSub(userId);
-      if (act === 'reactivate') reactivateSub(userId);
-      if (act === 'force-active') setManualAccess(userId, 'active');
-      if (act === 'force-disable') setManualAccess(userId, 'disabled');
-      if (act === 'clear-manual') setManualAccess(userId, 'clear');
-    });
-    document.getElementById('repairRows').addEventListener('click', (ev) => {
-      const btn = ev.target.closest('button[data-repair-act]');
-      if (!btn) return;
-      const act = btn.getAttribute('data-repair-act');
-      const repairId = Number(btn.getAttribute('data-repair-id') || 0);
-      if (!repairId) return;
-      if (act === 'cancel') cancelRepair(repairId);
-      if (act === 'remove') removeRepair(repairId);
-    });
-    loadAccounts();
-    loadRepairs();
-    loadBilling();
-  </script>
-  </div></body></html>`);
-});
+registerMessages({ route, requireUser: requireAuthenticatedUser, getBid: getBidById, getRepair: getRepairById,
+  store: messageStore({ database: USE_SUPABASE, request: supabaseRequest, directory: path.join(__dirname, '.local-data') }) });
 
 registerOperations({ route, store: ops, requireUser: requireAuthenticatedUser, guardAdmin: guardAdminApi, billingFor: getBillingByUserIdAsync, stripe, request: supabaseRequest });
 
 app.use((error, req, res, next) => {
+  if (error.type === 'entity.too.large') return res.status(413).json({ error: 'Request body too large.' });
+  if (error.type === 'entity.parse.failed') return res.status(400).json({ error: 'Invalid JSON request.' });
   console.error('Request failed:', req.method, req.path, error.name);
   if (res.headersSent) return next(error);
   res.status(503).json({ error: 'Service temporarily unavailable. Please try again shortly.' });
 });
 
 if (process.env.NODE_ENV !== 'test') {
+const billingWorkerConfig = reconciliationConfig(process.env);
+if (BILLING_ENABLED && billingWorkerConfig.enabled) {
+  if (!USE_SUPABASE || !stripe || !STRIPE_PRICE_SHOP_MONTHLY) throw new Error('Billing reconciliation requires Supabase and configured Stripe shop price');
+  const workerStripe = new Stripe(STRIPE_SECRET_KEY, { timeout: 10000, maxNetworkRetries: 0 });
+  const runBillingReconciliation = createBillingReconciler({
+    config: billingWorkerConfig, priceId: STRIPE_PRICE_SHOP_MONTHLY,
+    listDue: (limit, cutoff) => {
+      const query = new URLSearchParams({ select: 'user_id,stripe_subscription_id,stripe_customer_id,updated_at',
+        stripe_subscription_id: 'not.is.null', or: '(shop_plan_checked_at.is.null,shop_plan_checked_at.lt.' + cutoff + ')',
+        and: '(or(subscription_status.is.null,subscription_status.not.in.(canceled,incomplete_expired)),or(billing_reconcile_after.is.null,billing_reconcile_after.lte.' + new Date().toISOString() + '))',
+        order: 'billing_reconcile_after.asc.nullsfirst,shop_plan_checked_at.asc.nullsfirst,user_id.asc', limit: String(limit) });
+      return supabaseRequest('billing_accounts?' + query);
+    },
+    retrieve: id => workerStripe.subscriptions.retrieve(id),
+    save: (row, patch) => {
+      // Compare-and-set prevents a delayed refresh overwriting a webhook or replaced subscription.
+      const query = new URLSearchParams({ user_id: 'eq.' + row.user_id,
+        stripe_subscription_id: 'eq.' + row.stripe_subscription_id, updated_at: 'eq.' + row.updated_at });
+      return supabaseRequest('billing_accounts?' + query, { method: 'PATCH',
+        body: { ...patch, updated_at: new Date().toISOString() }, prefer: 'return=minimal' });
+    }
+  });
+  const tick = () => runBillingReconciliation().then(result => {
+    if (!result.skipped) console.info('Billing reconciliation:', JSON.stringify(result));
+  }).catch(error => console.error('Billing reconciliation unavailable:', error.name));
+  const billingTimer = setInterval(tick, billingWorkerConfig.intervalMs);
+  billingTimer.unref();
+  void tick();
+}
 let dispatchRunning = false;
 const dispatchTimer = setInterval(async () => {
-  if (dispatchRunning || !USE_SUPABASE) return;
+  if (!BILLING_ENABLED || dispatchRunning || !USE_SUPABASE) return;
   dispatchRunning = true;
   try {
     const repairs = await supabaseRequest('repair_requests?select=*&status=eq.open');
@@ -2940,9 +2424,7 @@ const dispatchTimer = setInterval(async () => {
 }, 60000);
 dispatchTimer.unref();
 app.listen(PORT, () => {
-  if (!isAdminConfigValid()) {
-    console.warn('Admin routes disabled: set ADMIN_TOKEN to a strong non-default value.');
-  }
+
   console.log(`Live: http://localhost:${PORT}`);
 });
 }

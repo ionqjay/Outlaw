@@ -1,0 +1,85 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import { PGlite } from '@electric-sql/pglite';
+const sql=name=>fs.readFileSync(new URL('../supabase/migrations/'+name,import.meta.url),'utf8');
+test('embedded PostgreSQL executes migrations, RPC cap, eligibility and role isolation', async()=>{
+ const db=new PGlite();
+ try {
+  await db.exec("create role anon; create role authenticated; create role service_role bypassrls; create schema auth; create table auth.users(id uuid primary key,email text); create function auth.jwt() returns jsonb language sql as $$ select '{}'::jsonb $$;");
+  // pgcrypto extension packaging is unavailable in this embedded engine; no tested RPC uses it.
+  await db.exec(sql('20260923002347_launch_security_and_operations.sql').replace('create extension if not exists pgcrypto;',''));
+  await db.exec(sql('20261020170000_registered_shops_only.sql'));
+  await db.exec(sql('20261021010000_shop_plan_attestation.sql'));
+  await db.exec(sql('20261021020000_reconciliation_and_quote_cents.sql'));
+  await db.exec('alter default privileges in schema public grant all on tables to service_role; alter default privileges in schema public grant all on sequences to anon,authenticated;');
+  await db.exec(sql('20261021030000_participant_messages.sql'));
+  await db.exec(sql('20261021040000_private_repair_photos.sql'));
+  await db.exec(sql('20261021050000_repair_workflow.sql'));
+  await db.exec(sql('20261021060000_admin_identity_audit.sql'));
+  await db.exec("grant usage on schema public,auth to service_role; grant select on auth.users to service_role;");
+  await db.exec("insert into repair_requests(id,owner_id,title,issue_category,issue_details,vehicle_year,vehicle_make,vehicle_model,city,state,zip) overriding system value values(1,'owner','Brakes','brakes','Noise','2020','Test','Car','Yonkers','NY','10701'),(2,'owner','Other','brakes','Noise','2020','Test','Car','Yonkers','NY','10701');");
+  for(let i=1;i<=4;i++){
+   const id='00000000-0000-0000-0000-'+String(i).padStart(12,'0');
+   await db.query('insert into auth.users values ($1,$2)',[id,'shop'+i+'@example.test']);
+   await db.query("insert into provider_verifications(user_id,status,business_type,business_name,license_reference,insurance_reference) values($1,'approved','registered_shop','Garage','test','test')",[id]);
+   await db.query("insert into billing_accounts(user_id,subscription_status,stripe_subscription_id,current_period_end,shop_plan_valid,shop_plan_price_id,shop_plan_checked_at) values($1,'active','sub_test',now()+interval '1 day',true,'price_test',now())",[id]);
+   await db.query("insert into request_invites(repair_id,provider_email,provider_type,expires_at) values(1,$1,'shop',now()+interval '1 hour')",['shop'+i+'@example.test']);
+  }
+  await db.exec('set role service_role');
+  await assert.rejects(db.query("insert into admin_memberships(user_id,active) values('00000000-0000-0000-0000-000000000001',true)"),/permission denied/);
+  await db.query("insert into admin_audit_events(actor_id,action,target_hash,correlation_id,outcome) values('test-admin','TEST',repeat('a',64),'00000000-0000-0000-0000-000000000001','attempt')");
+  await assert.rejects(db.query("delete from admin_audit_events"),/permission denied/);
+  await assert.rejects(db.query("select * from reserve_repair_photo(1,'other','10000000-0000-0000-0000-000000000001')"),/Not authorized/);
+  for(let i=1;i<=5;i++)await db.query('select * from reserve_repair_photo(1,$1,$2)', ['owner','10000000-0000-0000-0000-'+String(i).padStart(12,'0')]);
+  await assert.rejects(db.query("select * from reserve_repair_photo(1,'owner','10000000-0000-0000-0000-000000000006')"),/Photo limit/);
+  const bid=i=>({request_id:1,mechanic_id:'00000000-0000-0000-0000-'+String(i).padStart(12,'0'),amount:200,eta_hours:24,notes:'No trusted metadata needed'});
+  await assert.rejects(db.query('select * from create_shop_bid($1::jsonb)',[JSON.stringify({...bid(1),amount:0.001})]),/Invalid estimate/);
+  const results=await Promise.allSettled([1,2,3,4].map(i=>db.query('select * from create_shop_bid($1::jsonb)',[JSON.stringify(bid(i))])));
+  assert.equal(results.filter(r=>r.status==='fulfilled').length,3);
+  assert.equal((await db.query('select count(*)::int as count from bids')).rows[0].count,3);
+  await assert.rejects(db.query('select * from create_marketplace_bid($1::jsonb)',[JSON.stringify(bid(4))]),/permission denied/);
+  await assert.rejects(db.query('select * from create_shop_bid($1::jsonb)',[JSON.stringify({...bid(4),request_id:2})]),/invitation required/);
+  await db.exec('reset role');
+  const snapshot=(await db.query('select user_id,stripe_subscription_id,updated_at from billing_accounts limit 1')).rows[0];
+  await db.query("update billing_accounts set updated_at=updated_at+interval '1 second',subscription_status='canceled' where user_id=$1",[snapshot.user_id]);
+  const stale=await db.query("update billing_accounts set subscription_status='active' where user_id=$1 and stripe_subscription_id=$2 and updated_at=$3 returning user_id",[snapshot.user_id,snapshot.stripe_subscription_id,snapshot.updated_at]);
+  assert.equal(stale.rows.length,0,'stale reconciliation must not overwrite newer webhook');
+  await db.exec("update billing_accounts set shop_plan_valid=false");
+  await db.exec('set role service_role');
+  await assert.rejects(db.query('select * from create_shop_bid($1::jsonb)',[JSON.stringify(bid(4))]),/not eligible/);
+  await db.query("select accept_marketplace_bid(1,'owner',false)");
+  const provider='00000000-0000-0000-0000-000000000001';
+  await assert.rejects(db.query("select transition_repair(1,'stranger','start-work',false)"),/Unauthorized/);
+  await db.query("select transition_repair(1,$1,'start-work',false,0)",[provider]);
+  await db.query("select transition_repair(1,$1,'request-completion',false,1)",[provider]);
+  await assert.rejects(db.query("select transition_repair(1,$1,'request-completion',false,1)",[provider]),/Stale workflow revision/);
+  assert.equal((await db.query('select count(*)::int as n from repair_transition_events')).rows[0].n,3);
+  await assert.rejects(db.query("select transition_repair(1,$1,'complete',false)",[provider]),/Unauthorized/);
+  await assert.rejects(db.query("select transition_repair(1,'owner','cancel',false)"),/Invalid transition/);
+  await db.query("select transition_repair(1,'owner','complete',false)");
+  await db.query("select transition_repair(2,'owner','cancel',false)");
+  await db.query("insert into repair_requests(id,owner_id,title,issue_category,issue_details,vehicle_year,vehicle_make,vehicle_model,city,state,zip) overriding system value select 99,owner_id,title,issue_category,issue_details,vehicle_year,vehicle_make,vehicle_model,city,state,zip from repair_requests where id=1");
+  const adminBid=(await db.query("insert into bids(request_id,mechanic_id,mechanic_name,amount,eta_hours) values(99,'provider','Garage',100,24) returning id")).rows[0].id;
+  await db.query("select accept_marketplace_bid($1,'verified-admin-uuid',true)",[adminBid]);
+  assert.equal((await db.query("select actor_id from repair_transition_events where repair_id=99")).rows[0].actor_id,'verified-admin-uuid');
+  await assert.rejects(db.query("select transition_repair(1,null,'complete',false)"),/Unauthorized/);
+
+  await db.query("insert into repair_messages(bid_id,sender_id,sender_role,body,client_message_id) values(1,'owner','owner','Hello repair shop','message_token_0001')");
+  assert.equal((await db.query('select count(*)::int as count from repair_messages')).rows[0].count,1);
+  await assert.rejects(db.query("update repair_messages set body='changed'"),/permission denied/);
+  await db.exec('reset role; set role authenticated');
+  await assert.rejects(db.query('select * from repair_messages'),/permission denied/);
+  await assert.rejects(db.query('select * from bids'),/permission denied/);
+  await assert.rejects(db.query('select * from repair_photos'),/permission denied/);
+  await assert.rejects(db.query('select * from repair_transition_events'),/permission denied/);
+  await assert.rejects(db.query('select * from admin_memberships'),/permission denied/);
+  await assert.rejects(db.query('select * from admin_audit_events'),/permission denied/);
+  await assert.rejects(db.query("select transition_repair(1,'owner','complete',false)"),/permission denied/);
+  await assert.rejects(db.query('select * from create_shop_bid($1::jsonb)',[JSON.stringify(bid(4))]),/permission denied/);
+  await db.exec('reset role; set role anon');
+  await assert.rejects(db.query('select * from billing_accounts'),/permission denied/);
+  await assert.rejects(db.query('select * from repair_messages'),/permission denied/);
+  await assert.rejects(db.query("select nextval('repair_messages_id_seq')"),/permission denied/);
+ } finally { await db.close(); }
+});

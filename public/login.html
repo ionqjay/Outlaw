@@ -21,16 +21,16 @@
       <span class="badge">Account Access</span>
       <p class="eyebrow" style="margin-top:18px">Owner and provider portal</p>
       <h1>Manage repairs, estimates, and provider profiles.</h1>
-      <p>Owners can post repairs and compare estimate details. Mechanics and shops can manage profiles, matched requests, and submitted estimates.</p>
+      <p>Owners can post repairs and compare estimate details. Registered repair shops can manage profiles, matched requests, and submitted estimates.</p>
     </section>
 
     <form class="auth-card" id="authForm">
-      <label for="role">Account type</label><select id="role"><option value="owner">Car Owner</option><option value="mechanic">Individual Mechanic</option><option value="shop">Mechanic Shop</option></select>
+      <label for="role">Account type</label><select id="role"><option value="owner">Car Owner</option><option value="shop">Registered Repair Shop</option></select>
       <label for="name">Full name (new accounts)</label><input id="name" placeholder="Full name (for sign up)" autocomplete="name" />
       <label for="email">Email</label><input id="email" type="email" placeholder="Email" autocomplete="email" />
       <label for="password">Password</label><input id="password" type="password" placeholder="Password" autocomplete="current-password" />
       <div id="specialtiesWrap" style="display:none">
-        <div class="sub">Required for mechanics and shops: select your specialties.</div>
+        <div class="sub">Required for registered repair shops: select your specialties.</div>
         <div class="svc-grid" style="margin-top:8px">
           <label class="svc-pill"><input type="checkbox" value="brakes" data-signup-service /> Brakes</label>
           <label class="svc-pill"><input type="checkbox" value="engine" data-signup-service /> Engine</label>
