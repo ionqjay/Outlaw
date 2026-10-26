@@ -18,11 +18,17 @@
       banner.remove(); controls.forEach(el => { el.removeAttribute('aria-disabled'); if (el.tagName === 'BUTTON') el.disabled = originallyDisabled.get(el); });
       return;
     }
-    banner.textContent = data.message;
-    controls.forEach(el => { if (el.id !== 'manageBillingBtn') el.textContent = 'New quotes & subscriptions coming soon'; });
+    const providerPage = /\/pricing(?:\.html)?\/?$/.test(window.location.pathname);
+    banner.textContent = providerPage
+      ? 'Repair-shop subscriptions are coming soon. Checkout is currently closed; existing accounts and job history remain available.'
+      : 'Repair requests and quotes are coming soon. Platform use is free for vehicle owners; repair work is priced separately. Existing accounts and job history remain available.';
+    controls.forEach(el => {
+      if (el.id === 'startSubscriptionBtn') el.textContent = 'Shop subscriptions coming soon';
+      else if (el.id !== 'manageBillingBtn') el.textContent = 'Repair quotes coming soon';
+    });
     const headline = document.getElementById('heroHeadline');
     if (headline) headline.textContent = 'Repair quotes are coming soon.';
   } catch {
-    banner.textContent = 'New repair quotes and subscriptions are currently unavailable. Free accounts and existing history remain available.';
+    banner.textContent = 'We cannot confirm availability right now. New requests and checkout remain closed. Existing accounts and job history remain available.';
   }
 })();
