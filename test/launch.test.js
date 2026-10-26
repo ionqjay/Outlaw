@@ -151,11 +151,12 @@ test('HTML sanitizer removes stored executable markup and preserves quote contro
   assert.match(html,/data-bid="3"/);dom.window.close();
 });
 
-test('homepage quote CTA enters the actual owner flow and mobile menu opens with ARIA state', () => {
+test('homepage free account CTA enters owner registration and mobile menu opens with ARIA state', () => {
   const dom=new JSDOM(fs.readFileSync(new URL('../public/index.html',import.meta.url),'utf8'),{url:'https://www.shopmyrepair.com',runScripts:'outside-only'});
   const {document}=dom.window;
-  const links=[...document.querySelectorAll('a')].filter(a=>a.textContent==='Get Repair Quotes');
-  assert.ok(links.length>=2);assert.ok(links.every(a=>a.href.includes('next=%2Fowner-app.html%3Fview%3Dquote')));
+  const links=[...document.querySelectorAll('a')].filter(a=>a.textContent==='Create Free Account');
+  assert.ok(links.length>=2);assert.ok(links.every(a=>a.getAttribute('href')==='/login.html?role=owner'));
+  assert.equal([...document.querySelectorAll('a')].some(a=>a.textContent==='Get Repair Quotes'||a.href.includes('view%3Dquote')),false);
   assert.equal(document.querySelector('#modal'),null);
   dom.window.eval(fs.readFileSync(new URL('../public/navigation.js',import.meta.url),'utf8'));
   const toggle=document.querySelector('.menu-toggle');toggle.click();
