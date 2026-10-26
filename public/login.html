@@ -3,28 +3,31 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Sign In - ShopMyRepair</title>
+  <title>Sign In or Create Account - ShopMyRepair</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="/styles.css" />
 </head>
-<body>
+<body class="registration-page">
   <nav class="nav">
     <a class="logo" href="/"><span>ShopMy</span><span>Repair</span></a>
     <button class="menu-toggle" type="button" aria-label="Open navigation" aria-expanded="false" aria-controls="mainNavigation">Menu</button>
-    <div class="nav-links" id="mainNavigation"><a href="/">Home</a><a href="/pricing.html">Pricing</a></div>
+    <div class="nav-links" id="mainNavigation"><a href="/">Home</a><a href="/pricing.html">For Repair Shops</a></div>
   </nav>
 
   <main class="auth-wrap">
     <section class="auth-intro">
       <span class="badge">Account Access</span>
-      <p class="eyebrow" style="margin-top:18px">Owner and provider portal</p>
-      <h1>Manage repairs, estimates, and provider profiles.</h1>
-      <p>Owners can post repairs and compare estimate details. Registered repair shops can manage profiles, matched requests, and submitted estimates.</p>
+      <p class="page-kicker">Vehicle owners and registered repair shops</p>
+      <h1>Your next step starts here.</h1>
+      <p>Create a free account ahead of launch, or sign in to access your existing history and profile.</p>
+      <p class="prelaunch-note"><strong>Repair quotes are coming soon.</strong> New requests and subscription checkout are closed. The platform is free for vehicle owners; repair work is paid separately to your chosen shop.</p>
     </section>
 
     <form class="auth-card" id="authForm">
+      <h2>Sign in or create an account</h2>
+      <p class="account-help">Choose your account type below. Creating an account does not start a shop subscription.</p>
       <label for="role">Account type</label><select id="role"><option value="owner">Car Owner</option><option value="shop">Registered Repair Shop</option></select>
       <label for="name">Full name (new accounts)</label><input id="name" placeholder="Full name (for sign up)" autocomplete="name" />
       <label for="email">Email</label><input id="email" type="email" placeholder="Email" autocomplete="email" />

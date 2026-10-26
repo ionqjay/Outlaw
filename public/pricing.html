@@ -3,26 +3,27 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Pricing - ShopMyRepair</title>
+  <title>Repair Shop Pricing - ShopMyRepair</title>
   <meta name="description" content="ShopMyRepair provider pricing for registered repair shops in early market areas." />
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="/styles.css" />
 </head>
-<body>
+<body class="provider-page">
   <nav class="nav">
     <a class="logo" href="/"><span>ShopMy</span><span>Repair</span></a>
     <button class="menu-toggle" type="button" aria-label="Open navigation" aria-expanded="false" aria-controls="mainNavigation">Menu</button>
-    <div class="nav-links" id="mainNavigation"><a href="/">Home</a><a href="/login.html">Sign In</a><a class="btn btn-primary" href="/login.html">Start Provider Onboarding</a></div>
+    <div class="nav-links" id="mainNavigation"><a href="/">Home</a><a href="/login.html">Sign In</a><a class="btn btn-primary" href="/login.html?role=shop">Create Free Shop Account</a></div>
   </nav>
 
   <main class="page-wrap">
     <section class="pricing-hero">
-      <span class="badge">Early Market Pricing</span>
-      <p class="eyebrow" style="margin-top:18px">Provider pricing</p>
-      <h1>Provider access for early market areas.</h1>
-      <p>ShopMyRepair charges providers for access to matched repair quote opportunities. Car owners can post requests and compare estimate details for free.</p>
+      <span class="badge">For registered repair shops</span>
+      <p class="page-kicker">Planned provider pricing</p>
+      <h1>Your shop. Local requests. Clear estimates.</h1>
+      <p>This subscription is for repair shops, not vehicle owners. The platform is free for vehicle owners; repair work is paid separately to the chosen shop.</p>
+      <p class="prelaunch-note"><strong>Provider subscriptions are coming soon.</strong> Subscription checkout and new repair requests are closed. You can create a free shop account ahead of launch.</p>
       <div class="trust-points pricing-points" aria-label="Provider value signals">
         <span>Matched by area and service fit</span>
         <span>Quote before owner chooses</span>
@@ -32,7 +33,7 @@
 
     <section class="pricing-grid">
       <article class="policy-card">
-        <p class="eyebrow">Marketplace Access</p>
+        <p class="eyebrow">Planned repair shop subscription</p>
         <div class="price">$99 <small>/ month</small></div>
         <p>For approved registered repair shops that want to quote repair requests in supported areas.</p>
         <ul class="plain-list">
@@ -50,7 +51,7 @@
           <div><strong>Refund applies when</strong><p>No eligible matched quote opportunities were available for your area and services during that billing month.</p></div>
           <div><strong>Refund does not apply when</strong><p>Opportunities existed, quote windows were missed, or estimates were submitted but not selected.</p></div>
         </div>
-        <div class="policy-actions"><a class="btn btn-primary" href="/login.html">Start Onboarding</a><a class="btn btn-secondary" href="/">Back Home</a></div>
+        <div class="policy-actions"><a class="btn btn-primary" href="/login.html?role=shop">Create Free Shop Account</a><a class="btn btn-secondary" href="/">Back Home</a></div>
       </article>
     </section>
   </main>

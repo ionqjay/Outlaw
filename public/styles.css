@@ -829,3 +829,47 @@ a.btn{text-align:center;text-decoration:none;display:inline-flex;align-items:cen
   .home-page .final-cta .btn{width:100%}
   .home-page .mobile-cta{padding-bottom:calc(8px + env(safe-area-inset-bottom))}
 }
+
+/* Provider pricing and registration: scoped to these public pages only. */
+.home-page .shop-intro-card h3{font-size:24px;line-height:1.2;margin:12px 0}
+.home-page .quote-row b{font-size:14px;color:var(--accent-ink);white-space:nowrap}
+.provider-page::before,.registration-page::before{display:none}
+.provider-page h1,.registration-page h1{font-size:clamp(36px,4.6vw,52px);line-height:1.08;letter-spacing:-.035em;text-wrap:balance}
+.provider-page h2,.registration-page h2{letter-spacing:-.025em;text-wrap:balance}
+.provider-page .nav-links .btn-primary:hover{color:#fff}
+.provider-page .pricing-hero{max-width:760px;padding:20px 0 36px}
+.provider-page .pricing-hero>p,.registration-page .auth-intro>p{line-height:1.65}
+.provider-page .page-kicker,.registration-page .page-kicker{font-size:13px;font-weight:600;margin:2px 0 14px}
+.provider-page .prelaunch-note,.registration-page .prelaunch-note{padding:16px;border-left:3px solid var(--accent);border-radius:0 9px 9px 0;background:var(--accent-soft);color:var(--accent-ink);font-size:14px}
+.provider-page .prelaunch-note strong,.registration-page .prelaunch-note strong{display:block;margin-bottom:4px}
+.provider-page .pricing-points{display:flex;flex-wrap:wrap;gap:12px 20px;max-width:100%}
+.provider-page .pricing-points span{font-size:13px;font-weight:500}
+.provider-page .pricing-grid{grid-template-columns:minmax(0,.9fr) minmax(0,1.1fr);gap:24px;padding:36px 0 0}
+.provider-page .policy-card{padding:28px}
+.provider-page .policy-card h2{font-size:28px;line-height:1.2}
+.provider-page .policy-card p,.provider-page .plain-list{font-size:15px;line-height:1.65}
+.provider-page .plain-list li+li{margin-top:12px}
+.provider-page .rule-grid{grid-template-columns:1fr}
+.provider-page .rule-grid p{margin:6px 0 0;font-size:14px}
+.registration-page .auth-wrap{gap:clamp(28px,5vw,64px);padding-top:56px}
+.registration-page .auth-card{padding:28px;min-width:0}
+.registration-page .auth-card h2{font-size:26px;line-height:1.2;margin-bottom:10px}
+.registration-page .account-help{font-size:14px;line-height:1.6;margin-bottom:24px}
+.registration-page .auth-card>label{display:block;margin:18px 0 7px;font-size:14px;font-weight:600}
+.registration-page #specialtiesWrap{margin-top:20px}
+.registration-page .svc-pill{font-size:13px;line-height:1.4}
+.registration-page .auth-actions{margin-top:24px;gap:12px}
+.registration-page #forgotPasswordBtn{margin-top:12px;width:100%}
+.registration-page #authStatus{margin:14px 0 0}
+@media(max-width:900px){
+  .provider-page .pricing-grid{grid-template-columns:1fr}
+  .registration-page .auth-wrap{padding-top:36px}
+  .registration-page .auth-intro{max-width:640px}
+}
+@media(max-width:560px){
+  .provider-page .pricing-hero{padding-top:0}
+  .provider-page .policy-card,.registration-page .auth-card{padding:20px}
+  .provider-page .badge,.provider-page .eyebrow,.registration-page .badge{max-width:100%;width:auto}
+  .provider-page .policy-card h2{font-size:25px}
+  .provider-page .policy-actions .btn{width:100%}
+}
