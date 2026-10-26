@@ -10,8 +10,12 @@
   function lock() { controls.forEach(el => { el.setAttribute('aria-disabled', 'true'); if (el.tagName === 'BUTTON') el.disabled = true; }); }
   lock();
   controls.forEach(el => el.addEventListener('click', event => { if (el.getAttribute('aria-disabled') === 'true') { event.preventDefault(); event.stopImmediatePropagation(); } }, true));
+  let timer;
   try {
-    const response = await fetch((window.APP_CONFIG?.API_BASE || '') + '/api/availability', { cache: 'no-store' });
+    const controller = new AbortController();
+    // Bound both the request and response body read, including backend wake-up.
+    timer = setTimeout(() => controller.abort(), 8000);
+    const response = await fetch((window.APP_CONFIG?.API_BASE || '') + '/api/availability', { cache: 'no-store', signal: controller.signal });
     if (!response.ok) throw new Error('Unavailable');
     const data = await response.json();
     if (data.billingMode === 'enabled') {
@@ -29,6 +33,8 @@
     const headline = document.getElementById('heroHeadline');
     if (headline) headline.textContent = 'Repair quotes are coming soon.';
   } catch {
-    banner.textContent = 'We cannot confirm availability right now. New requests and checkout remain closed. Existing accounts and job history remain available.';
+    banner.textContent = 'We cannot confirm availability right now. Please try again later. New requests and checkout remain closed. Existing accounts and job history remain available.';
+  } finally {
+    clearTimeout(timer);
   }
 })();
