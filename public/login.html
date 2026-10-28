@@ -22,15 +22,14 @@
     <section class="auth-intro">
       <span class="badge">Account Access</span>
       <p class="page-kicker">Vehicle owners and registered repair shops</p>
-      <h1>Your repair history.<br>All in one place.</h1>
+      <h1>Your next repair starts here.</h1>
       <p>Create a free account ahead of launch, or sign in to access your existing history and profile.</p>
       <p class="prelaunch-note"><strong>Repair quotes are coming soon.</strong> New requests and subscription checkout are closed. The platform is free for vehicle owners; repair work is paid separately to your chosen shop.</p>
-      <div class="access-summary"><strong>One account. A clear place to start.</strong><p>Vehicle owners can keep their profile and existing repair history together. Repair shops can prepare their account before subscriptions open.</p></div>
     </section>
 
     <form class="auth-card" id="authForm">
       <h2>Sign in or create an account</h2>
-      <p class="account-help">Choose your account type below. Creating an account does not start a shop subscription.</p>
+      <p class="account-help">Returning? Enter your email and password. New here? Choose an account type and complete the details below.</p>
       <label for="role">Account type</label><select id="role"><option value="owner">Car Owner</option><option value="shop">Registered Repair Shop</option></select>
       <label for="name">Full name (new accounts)</label><input id="name" placeholder="Full name (for sign up)" autocomplete="name" />
       <label for="email">Email</label><input id="email" type="email" placeholder="Email" autocomplete="email" inputmode="email" autocapitalize="none" spellcheck="false" />
@@ -51,7 +50,7 @@
           <label class="svc-pill"><input type="checkbox" value="other" data-signup-service /> Other</label>
         </div>
       </div>
-      <div class="auth-actions"><button class="btn btn-secondary" id="signInBtn" type="button">Sign In</button><button class="btn btn-primary" id="signUpBtn" type="button">Create Account</button></div>
+      <div class="auth-actions"><button class="btn btn-secondary" id="signInBtn" type="button">Sign In</button><button class="btn btn-primary" id="signUpBtn" type="button">Create Free Account</button></div>
       <button class="btn btn-secondary" id="forgotPasswordBtn" type="button">Forgot password?</button><p id="authStatus" class="sub" role="status" aria-live="polite"></p>
     </form>
   </main>

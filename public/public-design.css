@@ -120,3 +120,48 @@
 }
 @media(prefers-reduced-motion:reduce){html{scroll-behavior:auto}
 .public-page *{animation:none!important;transition:none!important}}
+
+/* Release refinement: readable type, compact mobile rhythm, consistent controls. */
+.public-page .menu-toggle{min-width:64px;min-height:44px}
+.public-page .nav-links a:not(.btn),.site-footer nav a{display:inline-flex;align-items:center;min-height:44px}
+.public-page .hero .reassurance,.public-page .field-hint,.site-footer{font-size:14px;line-height:1.65}
+.public-page .hero-copy .launch-note,.public-page .prelaunch-note{font-size:14px}
+.public-page .step-grid p,.public-page .trust-grid span{font-size:15px}
+.public-page .auth-card input,.public-page .auth-card select{font-size:16px}
+.public-page .svc-pill{color:var(--ink);cursor:pointer;overflow-wrap:anywhere}
+.public-page .svc-pill:has(input:checked){background:var(--accent-soft);border-color:var(--accent)}
+.public-page #authStatus:not(:empty),.public-page #resetStatus:not(:empty){padding:12px 14px;background:var(--accent-soft);border-radius:8px;font-size:14px;line-height:1.6;overflow-wrap:anywhere}
+.public-page #resetBtn{width:100%;margin-top:24px}
+.public-page #resetStatus{margin:16px 0 0}
+.public-page .auth-intro h1{max-width:16ch}
+.public-page .auth-intro .access-summary{display:none}
+.public-page .plan-card .plain-list li{border-color:#ffffff30}
+.public-page .plan-card .eyebrow::before{background:#aec4ff}
+.public-page .nav>a:last-child:not(.logo){min-height:44px;display:inline-flex;align-items:center}
+@media(max-width:900px){
+.public-page .nav .nav-links.is-open a{display:flex;align-items:center;min-height:48px}
+.public-page .auth-wrap{gap:32px}
+}
+@media(max-width:560px){
+.public-page h1{font-size:clamp(34px,9.5vw,42px);line-height:1.1}
+.public-page #availabilityNotice{font-size:12px;line-height:1.5}
+.public-page .hero{padding:28px 0 36px}
+.public-page .process,.public-page .split-section,.public-page .mechanic-section{padding:36px 0}
+.public-page .section-head{margin-bottom:24px}
+.public-page .step-grid article{padding:22px}
+.public-page .step-grid article>span{margin-bottom:14px}
+.public-page .hero .trust-points{gap:10px;margin-bottom:0}
+.public-page .auth-wrap{padding-top:28px;gap:24px}
+.public-page .auth-intro>p{font-size:15px}
+.public-page .auth-intro .page-kicker{font-size:12px}
+.public-page .auth-card,.public-page .policy-card{padding:22px}
+.public-page .auth-card h2{font-size:24px}
+.public-page .auth-card>label{font-size:14px}
+.public-page .svc-grid{grid-template-columns:repeat(2,minmax(0,1fr))}
+.public-page .svc-pill{font-size:12px;gap:7px;padding:9px;min-height:52px}
+.public-page .pricing-hero{padding:0 0 24px}
+.public-page .pricing-points{gap:12px}
+.public-page .plan-card .price{font-size:56px}
+.public-page .final-cta{margin-top:12px}
+.site-footer nav{gap:4px 20px}
+}

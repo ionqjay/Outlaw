@@ -40,3 +40,11 @@ Used the installed Camofox plugin's documented localhost REST routes, without co
 ## Tooling caveat
 
 Memory search was unavailable: index built for fts-only, configured model text-embedding-3-small. No index rebuild or provider spend performed. Used repository docs and supplied task constraints instead. Composio CLI 0.5.0 was present and signed in; no external write performed.
+
+## Authorized release refinement — 2026-10-28
+
+User subsequently authorized refinement, mobile confirmation and upload. Supersedes the initial hold on publication, not the marketplace launch gates above. Refined mobile spacing and readable helper/footer text; 16px input text; two-column shop specialties with 52px targets; clearer account instructions; consistent free-account CTA; recovery font, spacing, full-width action and status treatment. No auth handlers or backend contracts changed.
+
+Inspected 15 rendered final previews: home/pricing/login/shop registration/recovery at 1440, 375 and 430px. All scrollWidth == clientWidth. Safe local interactions verified 48px mobile menu links, Escape focus return, link closure, shop checkbox selection, owner-role specialty hiding, and empty sign-in/signup/recovery feedback without account submission. Screenshots and logs: workspace/artifacts/smr-final-*.png, smr-final-measurements.log, smr-final-interactions.log. Preview availability/auth warnings are expected without a local backend and are not production failures. Six targeted tests pass; required repository CI remains intact.
+
+Composio 0.5.0 authenticated; no GitHub connection exposed, so used managed gh fallback. Vercel read access through Composio verified project outlaw links main to public/ production. GitHub main reports no branch protection and no active rulesets; no protections were removed or bypassed. PR checks will still be awaited before the authorized merge.
