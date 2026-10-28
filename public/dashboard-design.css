@@ -1,0 +1,32 @@
+/* Authenticated companion to public-design.css; existing application IDs stay intact. */
+.app-body{--bg:#f5f6f8;--muted:#526574;--ink:#142635;--dashboard-ink:#142635;--dashboard-muted:#526574;--dashboard-border:#dbe3e9;background:#f5f6f8;color:var(--dashboard-ink)}
+.app-body .dash{max-width:1176px;margin:24px auto 64px}
+.app-body .nav{max-width:1176px;border-bottom:1px solid var(--dashboard-border)}
+.app-body .hero{background:#142e40;border:0;border-radius:20px;padding:32px}
+.app-body .hero h1{color:#fff;letter-spacing:-.045em}
+.app-body .hero p{color:#d6e1eb;line-height:1.65}
+.app-body .quick-metrics .chip{background:#ffffff12;color:#e1eaff;border-color:#ffffff30}
+.app-body .panel{border:1px solid var(--dashboard-border);box-shadow:none;border-radius:16px;padding:24px}
+.app-body .list-card{box-shadow:none;border-color:var(--dashboard-border)}
+.app-body .subtle,.app-body .small{font-size:14px;line-height:1.6;color:var(--dashboard-muted)}
+.app-body :is(input,select,textarea){font-size:16px;min-height:48px;max-width:100%}
+.app-body :is(button,.btn,summary){min-height:48px}
+.app-body :is(a,button,input,select,textarea,summary):focus-visible{outline:3px solid #234ed8;outline-offset:3px}
+.app-body .tabs{gap:8px}
+.app-body .tab-btn.active{background:#eaf0ff;color:#193ca8;border-color:#234ed8}
+.app-body .application-panel{border-top:4px solid #234ed8}
+#verificationForm{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px}
+#verificationForm label{display:grid;gap:6px;font-size:14px;font-weight:600}
+#verificationForm button,#verificationStatus{grid-column:1/-1}
+#applicationStatus{padding:12px 16px;background:#eaf0ff;border-radius:8px}
+#applicationStatus[data-state="rejected"]{background:#fff0ed}
+#applicationStatus[data-state="approved"]{background:#e5f5ed}
+.app-body .skip-link{position:absolute;top:-100px;left:16px;z-index:200;background:#fff;padding:12px}
+.app-body .skip-link:focus{top:12px}
+.app-body :is(.panel,.list-card,p){overflow-wrap:anywhere}
+@media(max-width:600px){.app-body .dash{padding:0 16px;margin-top:16px}.app-body .hero,.app-body .panel{padding:20px}.app-body .hero h1{font-size:32px}.app-body .tabs{display:grid;grid-template-columns:1fr 1fr}.app-body .tab-btn{width:100%;padding:10px}.app-body .quick-metrics{grid-template-columns:1fr}.app-body .row2,#verificationForm{grid-template-columns:1fr}.app-body .nav{padding:16px}.app-body .hero p{font-size:15px}}
+@media(prefers-reduced-motion:reduce){.app-body *{scroll-behavior:auto!important;transition:none!important}}
+
+body.app-body{background:#f5f6f8}.app-body::before{display:none}.app-body .nav{background:#f5f6f8}.app-body .mobile-cta{display:none}.app-body .dash{padding-bottom:0}.app-body #availabilityNotice{color:#342800}
+
+@media(max-width:600px){.app-body .tabs{overflow:visible;grid-template-columns:repeat(2,minmax(0,1fr))}.app-body .tabs .tab-btn{min-width:0;white-space:normal;line-height:1.4}.app-body .nav .btn{min-width:0;width:auto}}

@@ -1,0 +1,29 @@
+# Core workflows + authenticated dashboard — batch 1, 2026-10-28
+
+## Baseline and scope
+- Verified PR #7 MERGED through managed gh (Composio 0.5.0 authenticated, no GitHub connection exposed). Fetched origin/main at 6f7b50d17e7e22b61a627f31fbe113f2589b3426. Clean starting tree; branch fix/shop-application-dashboard.
+- Retained existing static UI, CSS design tokens, Supabase auth, provider_verifications backend model, Node tests/JSDOM/PGlite and installed Camofox. No new dependency, schema, role grant, payment change, deployment or production write.
+
+## Implemented
+- Public shop pricing links explicitly invite applications. Registration explains account creation followed by business-detail submission; no false claim that creating an auth account alone submits a reviewed application.
+- Promoted existing application form from hidden profile details to a visible dashboard section. Real POST /api/provider/verification persists business name, address and registration/license/insurance references. GET restores fields after reload. No new table required.
+- Explicit not-submitted/pending/rejected/approved states, editable resubmission, reviewed details read-only, load-failure feedback. Approval never claims payment or marketplace is enabled. No email or review-time promise.
+- Fixed production UI accepting a forged local development session when Supabase is unavailable (backend already rejects dev headers in production).
+- Shared authenticated visual layer matching public navy/light cards, legible contrast, 16px inputs, 48px controls, skip links, responsive navigation. Actual screenshots exposed legacy dark token overrides, fixed mobile toolbars covering application inputs, and clipped owner tabs; corrected these.
+
+## Local evidence
+- New integration test runs actual Express server in an isolated temporary directory, with production Supabase/Stripe credentials removed and billing disabled. Proves application file persistence, reload, account isolation, owner/anonymous rejection, forged approval/user ID ignored, rejected resubmission, approved-edit conflict, admin denial, marketplace closed.
+- Existing integration/security tests cover repair request authorization and validation, paid invited shop responses, estimate acceptance/completion, history isolation, messages, photos, malicious admin metadata, expired entitlement, and disabled-billing restrictions. Full npm run check is the batch gate; see final report for count.
+- Real Camofox browser on localhost:3417: synthetic shop signup → application submission → pending → reload → logout; synthetic owner signup → empty dashboard/history navigation with new-request button disabled; shop sign-in restores pending application. Local file /tmp/smr-dashboard-fixture/.local-data/provider_verifications.json confirms storage (synthetic TEST ONLY references). Browser dev auth is NOT proof of hosted Supabase signup or email delivery.
+- Initial local POST was rejected by fixture CORS before writing. Verified no saved row, corrected only fixture environment origin, then submitted successfully. No uncertain production write replay.
+- Screenshots inspected at requested 1440, 375, 430 widths; content widths 1428, 363, 418 (scrollbar excluded), scrollWidth equal to clientWidth. Artifacts: workspace/artifacts/smr-dashboard-{shop,owner}-{desktop,375,430}.png. Browser measurement logs and final test log copied alongside artifacts.
+
+## Contract trace and remaining work (items 1 & 2 stay OPEN)
+1. Auth: auth.js calls Supabase signUp with login redirect and role/name/services metadata; unconfirmed signup waits for email before dashboard; signInWithPassword establishes session. app-auth.js gets session and sends bearer token; server verifies user and trusted role; approved-shop entitlement is independent of editable role metadata. reset-password.js handles recovery session, minimum length/confirmation, updateUser and signOut. Hosted email confirmation, redirects, expired token/refresh, recovery link and sign-out behavior still need dedicated authorized staging auth accounts/inbox. No email was sent in this batch. Local browser dev passwords are test-only and must never be confused with production auth.
+2. Workflows: local tests exercise owner/provider repairs, status transitions, messages and private-photo isolation. Still need a controlled complete browser job lifecycle with seeded matched/approved fixtures (including upload, response, acceptance, completion and message retry UI); current real browser pass covers onboarding/application and empty/closed dashboard, not every populated panel.
+3. Dashboard: pending application and owner empty state inspected at all widths; rejected/approved views tested in JSDOM, not yet pixel-checked. Populated history/cards, compare UI, profile validation, loading/error recovery across all panels remain for next batch. Public mobile menu is unchanged and its existing tests pass.
+4. Manual review: existing admin review endpoint/model reused; no administrator provisioned. Operator must identify authorized reviewer and business evidence/rejection policy before launch. Existing required license/insurance fields retained; do not invent exemptions without policy decision.
+5. Staging/production: no hosted migration or storage grants assessed/applied. Need dedicated staging target/credentials and authorized test inbox for hosted auth proof; actual production persistence and email are not established by local JSON tests. Review existing migration-history mismatch before any hosted schema work. Billing remains closed and separate.
+
+## Continuation
+Parent owns next bounded batch; this is substantive local progress, not full production readiness or authorization to deploy. Review and commit this batch locally, then continue safe populated workflow/browser checks. Do not request live customer accounts or grant new admin membership just to test.

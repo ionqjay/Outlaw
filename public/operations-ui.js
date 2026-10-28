@@ -29,8 +29,28 @@
     if (!status) return;
     try {
       const { verification } = await api('/api/provider/verification');
-      status.textContent = verification ? `Review: ${verification.status}. ${verification.review_note || ''}` : 'Submit your business details for a manual review. Approval is not a guarantee of repair quality.';
-    } catch (error) { status.textContent = error.message; }
+      const state = verification?.status || 'not_submitted';
+      const messages = {
+        not_submitted: 'Not submitted. Complete your business details below to send your application.',
+        pending: 'Application received — pending manual review. Repair-request access is not enabled.',
+        rejected: 'Application not approved. Review the reason below, update your details, and resubmit.',
+        approved: 'Business approved. Marketplace access also requires an active subscription when checkout opens. Approval is not a guarantee of repair quality.'
+      };
+      const message = messages[state] || 'Application status unavailable. Access is not confirmed.';
+      status.textContent = message + (verification?.review_note ? ' Review note: ' + verification.review_note : '');
+      const summary = document.getElementById('applicationStatus');
+      if (summary) { summary.textContent = message; summary.dataset.state = state; }
+      const form = document.getElementById('verificationForm');
+      if (form) {
+        for (const input of form.querySelectorAll('input[name]')) {
+          if (verification) input.value = verification[input.name] || '';
+          input.disabled = state === 'approved';
+        }
+        const submit = form.querySelector('button');
+        submit.disabled = state === 'approved';
+        submit.textContent = state === 'approved' ? 'Application approved' : state === 'pending' ? 'Update application' : state === 'rejected' ? 'Resubmit application' : 'Submit application';
+      }
+    } catch (error) { status.textContent = error.message; const summary = document.getElementById('applicationStatus'); if (summary) summary.textContent = 'Could not load application status. Reload to try again; access is not confirmed.'; }
   }
   async function loadRefundInvoices() {
     const select = document.getElementById('refundInvoiceSelect');
@@ -71,7 +91,7 @@
       await api('/api/provider/verification', Object.fromEntries(new FormData(event.target)));
       await verificationStatus();
     } catch (error) { status.textContent = error.message; }
-    finally { button.disabled = false; }
+    finally { button.disabled = document.getElementById('applicationStatus')?.dataset.state === 'approved'; }
   });
   document.getElementById('refundForm')?.addEventListener('submit', async event => {
     event.preventDefault();

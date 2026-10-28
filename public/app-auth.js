@@ -13,8 +13,8 @@ async function getActiveSession() {
     const services = s.user.user_metadata?.services || '';
     return { ...s.user.user_metadata, id: s.user.id, email: s.user.email || '', contactEmail, role, name, phone, city, state, zip, services };
   }
-  const local = JSON.parse(localStorage.getItem('smr_session') || 'null');
-  return local;
+  if (!['localhost', '127.0.0.1'].includes(location.hostname)) return null;
+  try { return JSON.parse(localStorage.getItem('smr_session') || 'null'); } catch { return null; }
 }
 
 async function getAuthHeaders() {
