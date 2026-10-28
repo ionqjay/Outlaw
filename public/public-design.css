@@ -1,0 +1,122 @@
+/* Public-site layer. Dashboard styling and application contracts stay unchanged. */
+.public-page{--bg:#f5f6f8;--ink:#142635;--muted:#526574;--accent:#234ed8;--accent-ink:#193ca8;--accent-soft:#eaf0ff;--border:#dbe3e9;background:var(--bg)}
+.public-page::before{display:none}
+.public-page main{max-width:1240px}
+.public-page .nav{max-width:1240px;padding:22px 32px;background:transparent;border-bottom:1px solid var(--border)}
+.public-page .logo{font-size:23px;letter-spacing:-1px}
+.public-page .nav-links{gap:24px;font-size:13px}
+.public-page .nav-links .btn-primary:hover{color:white}
+.public-page .btn{border-radius:8px;min-height:48px}
+.public-page :is(a,button,input,select,textarea):focus-visible{outline:3px solid #234ed8;outline-offset:4px}
+.skip-link{position:absolute;left:16px;top:-100px;z-index:200;background:#fff;padding:12px 20px;border:2px solid var(--accent);border-radius:8px}
+.skip-link:focus{top:12px}
+.public-page #availabilityNotice{font-size:12px;line-height:1.6;padding:10px 24px!important;background:#fff5df!important;border-bottom:1px solid #ead9ad}
+.public-page h1{font-size:clamp(38px,4.6vw,64px);line-height:1.04;letter-spacing:-.045em;text-wrap:balance}
+.public-page h2{letter-spacing:-.035em;line-height:1.15}
+.public-page .badge,.public-page .eyebrow{font-size:11px;letter-spacing:.065em;text-transform:uppercase;padding:7px 11px}
+.public-page .hero{grid-template-columns:1.05fr 1fr;gap:64px;padding:64px 0 72px}
+.public-page .hero-copy .hero-kicker{font-size:12px;letter-spacing:.06em;text-transform:uppercase;margin:4px 0 18px;color:var(--muted)}
+.public-page .hero h1{max-width:14ch}
+.public-page #heroSubtext{font-size:17px;max-width:48ch;line-height:1.75}
+.public-page .hero-copy .launch-note{font-size:13px;line-height:1.65;background:transparent;border-left:2px solid #a3b5d0;padding:0 0 0 16px;border-radius:0}
+.public-page .hero-media{position:relative}
+.public-page .hero-photo{width:100%;height:auto;aspect-ratio:4/4.15;object-fit:cover;border-radius:20px;box-shadow:none}
+.public-page .estimate-float{margin:-90px 20px 0;padding:22px;border-radius:14px;box-shadow:0 18px 55px #14263518;position:relative}
+.public-page .estimate-float-top{font-size:11px}
+.public-page .trust-points span::before{content:'✓';background:transparent;border:0;box-shadow:none;color:var(--accent);font-size:14px;width:auto;height:auto}
+.public-page .trust-points{gap:10px 20px}
+.public-page .hero .reassurance{font-size:12px}
+.public-page .reassurance a{text-decoration:underline;text-underline-offset:3px}
+.public-page .process{border:0;padding:56px 0 64px}
+.public-page .section-head{text-align:left;max-width:620px;margin:0 0 32px}
+.public-page .step-grid{gap:18px}
+.public-page .step-grid::before{display:none}
+.public-page .step-grid article{background:#fff;border:1px solid var(--border);border-radius:14px;padding:28px}
+.public-page .step-grid article>span{width:40px;height:40px;background:var(--accent-soft);color:var(--accent);border:0;font-size:15px;margin:0 0 32px;box-shadow:none}
+.public-page .step-grid h3{font-size:20px}
+.public-page .step-grid p{font-size:14px}
+.public-page .split-section{gap:80px}
+.public-page .trust-band{background:#142e40;border-radius:20px;padding:44px;color:#fff;margin:16px 0}
+.public-page .trust-band h2,.public-page .trust-band strong{color:#fff}
+.public-page .trust-band .eyebrow{background:#ffffff15;color:#d1e0ff}
+.public-page .trust-band .eyebrow::before{background:#9ab6ff}
+.public-page .trust-grid{gap:28px}
+.public-page .trust-grid span{color:#cedbe5;font-size:14px;line-height:1.75}
+.public-page .final-cta{background:#e7edfa;border:0;padding:40px;margin-top:24px}
+.public-page .shop-intro-card{background:#fff;border:1px solid var(--border);box-shadow:none}
+.site-footer{max-width:1176px;margin:0 auto;padding:30px 0 38px;border-top:1px solid var(--border);display:flex;justify-content:space-between;gap:24px;font-size:12px;color:var(--muted)}
+.site-footer p{margin:8px 0 0;max-width:50ch}
+.site-footer nav{display:flex;align-items:flex-start;gap:24px;flex-wrap:wrap}
+.site-footer a:hover{text-decoration:underline}
+.public-page .pricing-hero{max-width:800px;padding:28px 0 30px}
+.public-page .pricing-hero h1{max-width:17ch}
+.public-page .pricing-points{margin-top:24px}
+.public-page .pricing-grid{border:0;padding-top:12px;gap:24px}
+.public-page .policy-card{border-radius:16px;padding:36px;box-shadow:none}
+.public-page .plan-card{background:#142e40;color:#fff;border-color:#142e40}
+.public-page .plan-card :is(p,li,small){color:#cedbe5}
+.public-page .plan-card .price{color:#fff;font-size:64px;letter-spacing:-3px;margin:18px 0}
+.public-page .plan-card .price small{font-size:16px;letter-spacing:0}
+.public-page .plan-card .eyebrow{background:#ffffff15;color:#d1e0ff}
+.public-page .plan-card .btn{width:100%;margin-top:20px;background:white;color:#193ca8}
+.plan-footnote{font-size:12px!important;margin:12px 0 0}
+.public-page .auth-wrap{grid-template-columns:1fr 1fr;gap:80px;padding-top:64px;align-items:start}
+.public-page .auth-intro{padding-top:22px}
+.public-page .auth-intro h1{max-width:12ch}
+.public-page .auth-card{background:white;padding:32px;border:1px solid var(--border);border-radius:16px;box-shadow:0 16px 50px #14263506}
+.public-page .auth-card h2{font-size:26px}
+.public-page .auth-card input,.public-page .auth-card select{border-color:#b8c6d1;min-height:48px}
+.public-page .auth-card input[type=checkbox]{min-height:18px;width:18px;height:18px;flex-shrink:0;accent-color:var(--accent)}
+.public-page .svc-grid{grid-template-columns:1fr 1fr}
+.public-page .svc-pill{align-items:center;min-height:48px}
+.field-hint{font-size:12px;margin:7px 0;color:var(--muted)}
+.public-page .prelaunch-note{background:#eaf0ff;font-size:13px;border-left:2px solid #94a9db}
+.access-summary{border-top:1px solid var(--border);margin-top:32px;padding-top:24px;font-size:14px;line-height:1.7}
+.access-summary strong{display:block;margin-bottom:5px}
+.public-page .auth-card>label{display:block;margin:18px 0 7px;font-size:13px;font-weight:600}
+.public-page #forgotPasswordBtn{border:0;background:transparent;min-height:44px;text-decoration:underline;text-underline-offset:3px}
+.public-page .mobile-cta{display:none!important}
+@media(max-width:1000px){
+.public-page .nav-links{gap:14px}
+.public-page .hero{gap:32px}
+.site-footer{margin:0 22px}
+.public-page .auth-wrap{gap:40px}
+}
+@media(max-width:900px){
+.public-page .nav{padding:18px 22px}
+.public-page .hero,.public-page .auth-wrap{grid-template-columns:1fr}
+.public-page .hero{padding-top:40px}
+.public-page .hero-copy{max-width:680px}
+.public-page .hero-media{max-width:640px}
+.public-page .hero-photo{aspect-ratio:4/3}
+.public-page .auth-intro h1{max-width:19ch}
+.public-page .auth-intro{padding:0}
+.public-page .auth-wrap{padding-top:40px}
+.public-page .split-section{gap:28px}
+.public-page .pricing-grid{grid-template-columns:1fr}
+.public-page .nav .nav-links.is-open{border:1px solid var(--border)}
+}
+@media(max-width:560px){
+.public-page .nav{padding:16px}
+.public-page .logo{font-size:21px}
+.public-page #availabilityNotice{font-size:11px;padding:10px 16px!important;text-align:left!important}
+.public-page h1{font-size:42px}
+.public-page .hero{padding-top:32px}
+.public-page .hero-copy .hero-kicker{font-size:11px}
+.public-page .hero-copy .launch-note{font-size:13px}
+.public-page .hero-photo{border-radius:14px}
+.public-page .estimate-float{margin:-48px 12px 0;padding:18px}
+.public-page .step-grid article{padding:24px}
+.public-page .step-grid article>span{margin-bottom:20px}
+.public-page .trust-band{margin:0;padding:28px 24px;border-radius:14px}
+.public-page .final-cta{padding:28px}
+.public-page .auth-card,.public-page .policy-card{padding:24px}
+.public-page .auth-wrap{gap:28px}
+.public-page .svc-grid{grid-template-columns:1fr}
+.site-footer{margin:0 16px;flex-direction:column;padding:28px 0}
+.site-footer nav{gap:20px}
+.public-page main{padding-bottom:48px}
+.access-summary{margin-top:22px;padding-top:20px}
+}
+@media(prefers-reduced-motion:reduce){html{scroll-behavior:auto}
+.public-page *{animation:none!important;transition:none!important}}

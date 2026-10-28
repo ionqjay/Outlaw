@@ -18,22 +18,23 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="/styles.css" />
+<link rel="stylesheet" href="/public-design.css" />
 </head>
-<body class="home-page">
-  <nav class="nav">
+<body class="public-page home-page">
+<a class="skip-link" href="#main-content">Skip to content</a>
+  <nav class="nav" aria-label="Main navigation">
     <a class="logo" href="/" aria-label="ShopMyRepair home"><span>ShopMy</span><span>Repair</span></a>
     <button class="menu-toggle" type="button" aria-label="Open navigation" aria-expanded="false" aria-controls="mainNavigation">Menu</button>
     <div class="nav-links" id="mainNavigation">
       <a href="#how">How It Works</a>
       <a href="#owners">For Owners</a>
-      <a href="#providers">For Providers</a>
       <a href="/pricing.html">For Repair Shops</a>
       <a href="/login.html">Sign In</a>
       <a class="btn btn-primary " href="/login.html?role=owner">Create Free Account</a>
     </div>
   </nav>
 
-  <main>
+  <main id="main-content" tabindex="-1">
     <section class="hero reveal">
       <div class="hero-copy">
         <span class="badge">Coming soon · Westchester, NY</span>
@@ -45,7 +46,7 @@
           <a class="btn btn-primary btn-lg " href="/login.html?role=owner">Create Free Account</a>
           <a class="btn btn-secondary btn-lg" href="#how">See How It Will Work</a>
         </div>
-        <p class="reassurance">Already have an account? Sign in to view your existing history.</p>
+        <p class="reassurance">Already have an account? <a href="/login.html">Sign in to your history.</a></p>
         <div class="trust-points" aria-label="Planned comparison features">
           <span>One repair description</span>
           <span>Comparable estimate details</span>
@@ -54,7 +55,7 @@
       </div>
 
       <div class="hero-media" aria-label="Auto repair estimate comparison preview">
-        <img class="hero-photo" src="/assets/repair-shop-hero.png" alt="Mechanic inspecting a car while a customer reviews repair estimate options" />
+        <img class="hero-photo" src="/assets/repair-shop-hero.png" width="1784" height="882" fetchpriority="high" alt="Mechanic inspecting a car while a customer reviews repair estimate options" />
         <div class="estimate-float">
           <div class="estimate-float-top"><span>Illustrative preview</span><span>Not live quotes</span></div>
           <div class="quote-row"><strong>Brake replacement</strong><b>Example A</b><span>Example timing</span></div>
@@ -70,7 +71,7 @@
       </div>
       <div class="step-grid">
         <article><span>1</span><h3>Describe the repair</h3><p>Add your vehicle, symptoms, location, and timing.</p></article>
-        <article><span>2</span><h3>We prepare the request</h3><p>We structure the details so providers can understand the job quickly.</p></article>
+        <article><span>2</span><h3>Put the details in one place</h3><p>Your vehicle details and repair notes give shops a consistent starting point.</p></article>
         <article><span>3</span><h3>Compare responses</h3><p>Review estimates from providers whose specialties and service areas match your request. Quotes depend on provider availability and are not guaranteed.</p></article>
       </div>
     </section>
@@ -115,8 +116,8 @@
       <a class="btn btn-primary btn-lg " href="/login.html?role=owner">Create Free Account</a>
     </section>
   </main>
+<footer class="site-footer"><div><a class="logo" href="/" aria-label="ShopMyRepair home"><span>ShopMy</span><span>Repair</span></a><p>Preparing to launch in Westchester, NY.<br>Free for vehicle owners. Repair work is paid separately.</p></div><nav aria-label="Footer"><a href="/#how">How it will work</a><a href="/pricing.html">Repair shop pricing</a><a href="/login.html">Account access</a></nav></footer>
 
-  <div class="mobile-cta"><a class="btn btn-primary " href="/login.html?role=owner">Create Free Account</a></div>
 
 
 <script src="/navigation.js"></script>
