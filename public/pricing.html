@@ -9,15 +9,17 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="/styles.css" />
+<link rel="stylesheet" href="/public-design.css" />
 </head>
-<body class="provider-page">
-  <nav class="nav">
+<body class="public-page provider-page">
+<a class="skip-link" href="#main-content">Skip to content</a>
+  <nav class="nav" aria-label="Main navigation">
     <a class="logo" href="/"><span>ShopMy</span><span>Repair</span></a>
     <button class="menu-toggle" type="button" aria-label="Open navigation" aria-expanded="false" aria-controls="mainNavigation">Menu</button>
     <div class="nav-links" id="mainNavigation"><a href="/">Home</a><a href="/login.html">Sign In</a><a class="btn btn-primary" href="/login.html?role=shop">Create Free Shop Account</a></div>
   </nav>
 
-  <main class="page-wrap">
+  <main id="main-content" tabindex="-1" class="page-wrap">
     <section class="pricing-hero">
       <span class="badge">For registered repair shops</span>
       <p class="page-kicker">Planned provider pricing</p>
@@ -32,7 +34,7 @@
     </section>
 
     <section class="pricing-grid">
-      <article class="policy-card">
+      <article class="policy-card plan-card">
         <p class="eyebrow">Planned repair shop subscription</p>
         <div class="price">$99 <small>/ month</small></div>
         <p>For approved registered repair shops that want to quote repair requests in supported areas.</p>
@@ -41,10 +43,12 @@
           <li>Submit structured estimates with price, ETA, and notes.</li>
           <li>Build trust through profile details and owner feedback after completed jobs.</li>
         </ul>
+        <a class="btn btn-secondary" href="/login.html?role=shop">Create Free Shop Account</a>
+        <p class="plan-footnote">Planned price · Checkout closed · No subscription starts today</p>
       </article>
 
       <article class="policy-card">
-        <p class="eyebrow">Opportunity Guarantee</p>
+        <p class="eyebrow">Planned opportunity guarantee</p>
         <h2>Refundable when no eligible opportunities arrive.</h2>
         <p>If your subscribed account receives zero eligible quote opportunities during a billing month, that month is refundable.</p>
         <div class="rule-grid">
@@ -55,6 +59,7 @@
       </article>
     </section>
   </main>
+<footer class="site-footer"><div><a class="logo" href="/" aria-label="ShopMyRepair home"><span>ShopMy</span><span>Repair</span></a><p>Preparing to launch in Westchester, NY.<br>Free for vehicle owners. Repair work is paid separately.</p></div><nav aria-label="Footer"><a href="/#how">How it will work</a><a href="/pricing.html">Repair shop pricing</a><a href="/login.html">Account access</a></nav></footer>
 <script src="/navigation.js"></script>
 <script src="/config.js"></script>
 <script src="/availability.js"></script>
