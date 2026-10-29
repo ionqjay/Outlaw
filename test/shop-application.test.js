@@ -60,3 +60,13 @@ test('dashboard forms keep unique IDs, visible navigation and no fixed mobile ob
  assert.ok(dom.window.document.querySelector('#dashboardMain'));assert.equal(dom.window.document.querySelector('.mobile-cta'),null);dom.window.close();
  }
 });
+
+test('application timeout does not claim saved success or replay uncertain write',async()=>{
+ const dom=new JSDOM(fs.readFileSync(new URL('../public/mechanic.html',import.meta.url),'utf8'),{url:'http://localhost',runScripts:'outside-only'}),w=dom.window;let writes=0;
+ w.smrAuth={getActiveSession:async()=>({id:'fixture'}),getAuthHeaders:async()=>({})};
+ w.fetch=async(_url,options)=>{if(options.method==='POST'){writes++;throw new w.DOMException('timed out','AbortError');}return {ok:false,json:async()=>({error:'Synthetic outage'})};};
+ w.eval(fs.readFileSync(new URL('../public/operations-ui.js',import.meta.url),'utf8'));await new Promise(r=>setTimeout(r,0));
+ assert.match(w.document.getElementById('applicationStatus').textContent,/Could not load/);
+ w.document.getElementById('verificationForm').dispatchEvent(new w.Event('submit',{cancelable:true}));await new Promise(r=>setTimeout(r,0));
+ assert.equal(writes,1);assert.match(w.document.getElementById('verificationStatus').textContent,/Reload to check saved status/);assert.equal(w.document.querySelector('#verificationForm button').disabled,false);dom.window.close();
+});

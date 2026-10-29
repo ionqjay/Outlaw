@@ -614,6 +614,9 @@ async function boot() {
       wonWrap.innerHTML = DOMPurify.sanitize(msg);
       activeWrap.innerHTML = DOMPurify.sanitize(msg);
       otherWrap.innerHTML = DOMPurify.sanitize(msg);
+      document.getElementById('mechanicChecklist').textContent = 'Dashboard data could not be loaded. Reload to try again.';
+      document.getElementById('homeActivity').textContent = 'Activity unavailable. Reload to try again.';
+      for (const id of ['homeOpenCount','homeActiveCount','homeWonCount','homeSubmittedCount','homeMissedCount','homeAcceptedRate','homeAvgEstimate']) document.getElementById(id).textContent = '—';
     }
   }
 

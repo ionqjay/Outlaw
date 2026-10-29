@@ -28,10 +28,20 @@ test('stale completion-cycle actions cannot overwrite newer owner decisions',()=
 import fs from 'node:fs';import {JSDOM} from 'jsdom';
 test('workflow UI normalizes base, sends authenticated revision and refreshes without navigation',async()=>{
  const dom=new JSDOM('',{url:'http://localhost',runScripts:'outside-only'}),w=dom.window;let request,updated,fail=false;
- w.APP_CONFIG={API_BASE:' https://api.example.test/ '};w.smrAuth={getAuthHeaders:async()=>({Authorization:'test-authorization'})};w.confirm=()=>true;w.alert=()=>{};w.AbortSignal={timeout:()=>undefined};
+ w.APP_CONFIG={API_BASE:' https://api.example.test/ '};w.smrAuth={getAuthHeaders:async()=>({Authorization:'test-authorization'})};w.HTMLDialogElement.prototype.showModal=function(){this.open=true;};w.HTMLDialogElement.prototype.close=function(){this.open=false;};w.alert=()=>{};w.AbortSignal={timeout:()=>undefined};
  w.fetch=async(url,options)=>{request={url,options};return{ok:!fail,json:async()=>fail?{error:'Stale revision'}:{ok:true}}};
  w.addEventListener('smr-workflow-updated',event=>{updated=event.detail.repairId});
- w.eval(fs.readFileSync(new URL('../public/workflow-ui.js',import.meta.url),'utf8'));w.document.body.insertAdjacentHTML('beforeend',w.smrWorkflow.button(9,'complete',3));const button=w.document.querySelector('button');button.click();await new Promise(resolve=>setTimeout(resolve,10));
+ w.eval(fs.readFileSync(new URL('../public/workflow-ui.js',import.meta.url),'utf8'));w.document.body.insertAdjacentHTML('beforeend',w.smrWorkflow.button(9,'complete',3));const button=w.document.querySelector('button');button.click();w.document.querySelector('.workflow-confirm button:last-child').click();await new Promise(resolve=>setTimeout(resolve,10));
  assert.equal(request.url,'https://api.example.test/api/repairs/9/complete');assert.equal(JSON.parse(request.options.body).expectedRevision,3);assert.equal(request.options.headers.Authorization,'test-authorization');assert.equal(updated,9);assert.equal(w.location.href,'http://localhost/');
- fail=true;button.disabled=false;button.click();await new Promise(resolve=>setTimeout(resolve,10));assert.equal(button.disabled,false);dom.window.close();
+ fail=true;button.disabled=false;button.click();w.document.querySelector('.workflow-confirm button:last-child').click();await new Promise(resolve=>setTimeout(resolve,10));assert.equal(button.disabled,false);dom.window.close();
+});
+
+test('workflow confirmation cancellation leaves status untouched and restores action',async()=>{
+ const dom=new JSDOM('',{url:'http://localhost',runScripts:'outside-only'}),w=dom.window;let calls=0;
+ w.HTMLDialogElement.prototype.showModal=function(){this.open=true;};w.HTMLDialogElement.prototype.close=function(){this.open=false;};
+ w.fetch=async()=>{calls++;};w.eval(fs.readFileSync(new URL('../public/workflow-ui.js',import.meta.url),'utf8'));
+ w.document.body.innerHTML=w.smrWorkflow.button(1,'start-work',0);const button=w.document.querySelector('button');button.click();
+ assert.equal(button.disabled,true);assert.equal(w.document.querySelectorAll('.workflow-confirm').length,1);
+ w.document.querySelector('.workflow-confirm button').click();await new Promise(r=>setTimeout(r,0));
+ assert.equal(calls,0);assert.equal(button.disabled,false);assert.equal(w.document.querySelector('.workflow-confirm'),null);dom.window.close();
 });

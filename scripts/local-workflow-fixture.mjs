@@ -1,0 +1,20 @@
+// Synthetic local only. No hosted credentials or Stripe client; never start the production server.
+import fs from 'node:fs';import os from 'node:os';import path from 'node:path';import {pathToFileURL} from 'node:url';
+const root=path.resolve(new URL('..',import.meta.url).pathname);
+const directory=fs.mkdtempSync(path.join(os.tmpdir(),'smr-workflow-'));
+fs.copyFileSync(path.join(root,'server.js'),path.join(directory,'server.mjs'));
+fs.cpSync(path.join(root,'lib'),path.join(directory,'lib'),{recursive:true});
+fs.symlinkSync(path.join(root,'node_modules'),path.join(directory,'node_modules'),'dir');fs.symlinkSync(path.join(root,'public'),path.join(directory,'public'),'dir');
+fs.mkdirSync(path.join(directory,'.local-data'));
+const save=(name,rows)=>fs.writeFileSync(path.join(directory,name),JSON.stringify(rows,null,2));
+const now=new Date().toISOString();
+const fields={business_name:'Synthetic Approved Garage',business_address:'123 Test Street',registration_reference:'TEST registration',license_reference:'TEST license',insurance_reference:'TEST insurance'};
+save('.local-data/provider_verifications.json',[{user_id:'shop',...fields,status:'approved',business_type:'registered_shop'},...['pending','rejected'].map(status=>({user_id:status,...fields,business_name:'Synthetic '+status+' Garage',status,review_note:status==='rejected'?'Fixture: registration reference needs correction.':null,business_type:null}))]);
+save('billing_accounts.json',[{user_id:'shop',email:'shop@example.invalid',role:'shop',zip:'10701',serviceRadiusMiles:25,services:'brakes',stripe_customer_id:'cus_fixture',stripe_subscription_id:'sub_fixture',subscription_status:'active',current_period_end:'2030-01-01',shop_plan_valid:true,shop_plan_price_id:'price_fixture',shop_plan_checked_at:now}]);
+save('repair_requests.json',[{id:301,owner_id:'owner',title:'Synthetic front brake repair',issue_category:'brakes',issue_details:'Fixture worn brake pads; no real vehicle or customer.',vehicle_year:'2020',vehicle_make:'Toyota',vehicle_model:'Camry',city:'Yonkers',state:'NY',zip:'10701',urgency:'Standard',status:'open',created_at:now}]);
+save('bids.json',[]);save('request_invites.json',[{repair_id:301,provider_email:'shop@example.invalid',provider_type:'shop',status:'pending',created_at:now,expires_at:'2030-01-01'}]);
+for(const key of Object.keys(process.env))if(/^(SUPABASE|STRIPE|TWILIO|MAILCHIMP|TURNSTILE)_/.test(key))delete process.env[key];
+Object.assign(process.env,{NODE_ENV:'test',ALLOW_DEV_AUTH:'true',BILLING_MODE:'enabled',BILLING_RECONCILIATION_ENABLED:'false',CORS_ORIGINS:'http://localhost:3418',APP_URL:'http://localhost:3418'});
+const {app}=await import(pathToFileURL(path.join(directory,'server.mjs')));
+const server=app.listen(3418,'127.0.0.1',()=>console.log(JSON.stringify({url:'http://localhost:3418',directory,synthetic:true,stripe:false})));
+for(const signal of ['SIGINT','SIGTERM'])process.on(signal,()=>server.close(()=>process.exit(0)));

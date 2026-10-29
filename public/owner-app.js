@@ -291,7 +291,7 @@ function renderRequests() {
       </div>
       <div class='muted-xs'>${x.vehicle_year || ''} ${x.vehicle_make || ''} ${x.vehicle_model || ''} - ${x.city || ''}, ${x.state || ''}</div>
       ${timeline}
-      <div class='muted-xs'>${hasBids ? 'Quotes are arriving. Compare price, provider details, and availability before you choose.' : 'We are matching your request with eligible local providers.'}</div>
+      <div class='muted-xs'>${status === 'completed' ? 'Repair completed. Your quote, conversation and photos remain available here.' : status === 'cancelled' ? 'Request cancelled. No new estimates can be submitted.' : ['accepted','in_progress'].includes(status) ? 'A shop has been selected. Use your conversation and repair status to coordinate the work.' : hasBids ? 'Compare price, provider details, and availability before you choose.' : 'Waiting for eligible registered repair shops to respond.'}</div>
       <div style='display:flex;gap:8px;flex-wrap:wrap;margin-top:8px'>
         <button class='btn btn-secondary' data-view-request='${x.id}' style='padding:8px 12px'>${isSelected ? 'Viewing Quotes' : 'View Quotes'}</button>
         ${status === 'open' ? `<button class='btn btn-danger' data-cancel-request='${x.id}' style='padding:8px 12px'>Cancel Request</button>` : ''}
@@ -365,9 +365,9 @@ function renderBids() {
       <div class='skeleton' style='min-height:18px;margin-top:10px'></div>
       <div class='skeleton' style='min-height:18px;margin-top:8px'></div>
       <div class='skeleton' style='min-height:18px;margin-top:8px'></div>
-      <div class='muted-xs' style='margin-top:10px'>Status: matching your repair with eligible mechanics and auto shops.</div>
+      <div class='muted-xs' style='margin-top:10px'>Status: waiting for eligible registered repair shops to respond.</div>
       <div class='muted-xs'>You will get notified here as soon as estimates start coming in.</div>
-      <div class='muted-xs'>Most requests receive quotes within 24 hours.</div>
+      <div class='muted-xs'>Response availability varies. No quote or response time is guaranteed.</div>
       <button class='btn btn-secondary' data-view='quote' style='margin-top:10px'>Update Request Details</button>
     </div>`);
     document.querySelectorAll('#ownerBids [data-view]').forEach(btn => btn.addEventListener('click', () => setView(btn.dataset.view)));
@@ -400,8 +400,8 @@ function renderBids() {
     const r = getMechanicRating(b.mechanic_id);
     const rating = r.avg ? `${r.avg}/5` : 'New';
     const reviewCount = `${r.count} review${r.count === 1 ? '' : 's'}`;
-    const providerType = String(meta.providerType || '').toLowerCase() === 'shop' ? 'shop' : 'mechanic';
-    const providerTypeLabel = meta.providerTypeLabel || (providerType === 'shop' ? 'Mechanic Shop' : 'Individual Mechanic');
+    const providerType = String(meta.type || meta.providerType || '').toLowerCase() === 'shop' ? 'shop' : 'mechanic';
+    const providerTypeLabel = (providerType === 'shop' ? 'Registered Repair Shop' : 'Individual Mechanic');
     const tags = [];
     if (status === 'open' && cheapestOpen !== null && Number(b.amount || 0) === cheapestOpen) tags.push("<span class='tag best'>Lowest estimate</span>");
     if (status === 'open' && fastestOpen !== null && Number(b.eta_hours || 999999) === fastestOpen) tags.push("<span class='tag fast'>Soonest availability</span>");
@@ -435,7 +435,7 @@ function renderBids() {
         <span class='contact-pill'>Rating: ${rating} (${reviewCount})</span>
       </div>
       <div class='muted-xs'>Notes: ${parsed.notes ? parsed.notes : 'No additional notes provided.'}</div>
-      <div class='muted-xs'><a href='/provider/${encodeURIComponent(b.mechanic_id)}' target='_blank' style='color:#9fc1ff'>View Provider Public Profile opens in new tab</a></div>
+      <div class='muted-xs'><a href='/provider/${encodeURIComponent(b.mechanic_id)}' target='_blank' style='color:#193ca8;text-decoration:underline'>View Provider Public Profile opens in new tab</a></div>
       <div style='display:flex;gap:8px;flex-wrap:wrap;margin-top:10px'>
         ${status === 'open' ? `<button class='btn btn-green' data-accept='${b.id}'>Choose This Provider</button>` : ''}
         ${status === 'open' ? `<button class='btn btn-secondary' data-pin='${b.id}'>${comparePinned.includes(Number(b.id)) ? 'Pinned' : 'Pin to Compare'}</button>` : ''}
@@ -447,8 +447,8 @@ function renderBids() {
   const acceptedMeta = { ...(accepted?.provider || {}), ...(acceptedParsed?.meta || {}) };
   const acceptedRating = accepted ? getMechanicRating(accepted.mechanic_id) : { avg: null, count: 0 };
   const existingFeedback = accepted ? getFeedbackForRequest(selected.id) : null;
-  const acceptedProviderType = String(acceptedMeta.providerType || '').toLowerCase() === 'shop' ? 'shop' : 'mechanic';
-  const acceptedProviderTypeLabel = acceptedMeta.providerTypeLabel || (acceptedProviderType === 'shop' ? 'Mechanic Shop' : 'Individual Mechanic');
+  const acceptedProviderType = String(acceptedMeta.type || acceptedMeta.providerType || '').toLowerCase() === 'shop' ? 'shop' : 'mechanic';
+  const acceptedProviderTypeLabel = acceptedProviderType === 'shop' ? 'Registered Repair Shop' : 'Individual Mechanic';
   const canComplete = String(selected.status || '').toLowerCase() === 'accepted' || String(selected.status || '').toLowerCase() === 'in_progress';
   const isCompleted = String(selected.status || '').toLowerCase() === 'completed';
   const acceptedAmount = accepted ? Number(accepted.amount || 0) : 0;
@@ -496,7 +496,7 @@ function renderBids() {
       <span class='contact-pill'>Rating: ${acceptedRating.avg ? `${acceptedRating.avg}/5` : 'New'} (${acceptedRating.count} review${acceptedRating.count === 1 ? '' : 's'})</span>
     </div>
     <div class='muted-xs'>Scope: ${acceptedParsed?.notes ? acceptedParsed.notes : 'No additional scope notes provided.'}</div>
-    <div class='muted-xs'><a href='/provider/${encodeURIComponent(accepted.mechanic_id)}' target='_blank' style='color:#9fc1ff'>View Provider Public Profile opens in new tab</a></div>
+    <div class='muted-xs'><a href='/provider/${encodeURIComponent(accepted.mechanic_id)}' target='_blank' style='color:#193ca8;text-decoration:underline'>View Provider Public Profile opens in new tab</a></div>
     ${existingFeedback ? `<div class='muted-xs'>Your review was submitted: <b>${existingFeedback.rating}/5</b>${existingFeedback.text ? ` - ${existingFeedback.text}` : ''}</div>` : ''}
 
     <div class='winner-actions'>
@@ -647,9 +647,9 @@ function renderHomeSummary() {
       .slice(0, 2)
       .map(b => {
         const parsed = parseBidNotes(b.notes);
-        const meta = parsed.meta || {};
+        const meta = { ...(parsed.meta || {}), ...(b.provider || {}) };
         const r = getMechanicRating(b.mechanic_id);
-        const providerTypeLabel = meta.providerTypeLabel || (String(meta.providerType || '').toLowerCase() === 'shop' ? 'Mechanic Shop' : 'Individual Mechanic');
+        const providerTypeLabel = meta.providerTypeLabel || (String(meta.type || meta.providerType || '').toLowerCase() === 'shop' ? 'Mechanic Shop' : 'Individual Mechanic');
         return `<div class='muted-xs'>${meta.businessName || b.mechanic_name} (${providerTypeLabel}): <b>$${b.amount}</b> - ${r.avg ? `${r.avg}/5` : 'No rating yet'} (${r.count})</div>`;
       });
     topEl.innerHTML = DOMPurify.sanitize(top.length ? top.join('') : 'No estimates to review yet.');
@@ -736,7 +736,9 @@ async function boot() {
       renderBids();
     } catch (err) {
       reqWrap.innerHTML = DOMPurify.sanitize(`<p style='color:#ff9a9a'>${err.message || 'Could not load dashboard.'}</p>`);
-      bidWrap.innerHTML = DOMPurify.sanitize('<p>-</p>');
+      bidWrap.innerHTML = DOMPurify.sanitize('<p>Quotes unavailable. Reload to try again.</p>');
+      for (const id of ['homeOpenRequests','homeNewEstimates','homeAcceptedJobs','homeAvgEstimate']) document.getElementById(id).textContent = '—';
+      for (const id of ['ownerChecklist','homeStatus','homeTopEstimates','homeRecentActivity']) document.getElementById(id).textContent = 'Dashboard data unavailable. Reload to try again.';
     }
   }
 

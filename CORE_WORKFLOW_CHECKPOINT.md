@@ -27,3 +27,46 @@
 
 ## Continuation
 Parent owns next bounded batch; this is substantive local progress, not full production readiness or authorization to deploy. Review and commit this batch locally, then continue safe populated workflow/browser checks. Do not request live customer accounts or grant new admin membership just to test.
+
+
+# Batch 2 — controlled populated workflows, 2026-10-29
+
+## Recovered state and boundary
+Continued from clean 5bd92f5, preserved interrupted changes and the saved fixture instead of replaying uncertain writes. All writes stayed in synthetic localhost fixtures; no production DB/account/email/admin/Stripe/config changes, push or deployment. Fixture script scripts/local-workflow-fixture.mjs copies server/lib into a new temporary directory, strips provider credentials, binds 127.0.0.1:3418 and seeds existing model shapes. Local BILLING_MODE=enabled exercises the normal entitlement contract using a synthetic cached subscription; it does NOT enable billing anywhere hosted or construct a Stripe client. Fixture reviewers are pre-seeded reviewed rows, not new admin grants. No dependency added.
+
+## Actual browser and persisted evidence
+- Local Camofox: approved synthetic shop saw invited repair #301 and submitted $375/24h estimate via actual form. JSON saved bid #1 with canonical shop identity.
+- Owner opened populated quote comparison, uploaded a 320x200 synthetic PNG using the real file input/upload button; backend re-encoded it as private JPEG. Browser rendered naturalWidth=320. Owner sent a message, accepted bid; shop could view photo but upload control was hidden and replied to the conversation.
+- Shop start-work → request owner completion → owner confirm completion executed using actual dashboard controls. Stored transition_history contains accept/start-work/request-completion/complete and revision=3/status=completed. Both conversation messages persisted.
+- Initial native confirm attempts were auto-dismissed by the browser, with no persisted transition. This was not an authorization/server failure. Replaced with an accessible labelled dialog offering Keep current status/Confirm update, cancel focus and Escape cancellation; only explicit confirmation sends revision-bound request. JSDOM tests verify cancellation/no mutation, success refresh and stale-error re-enable.
+- Isolation HTTP assertions against completed fixture: stranger/pending/rejected shops cannot read conversation/photo (404) or change completion (403); another owner cannot view quote (403) or photo (404). These assertions passed before rejected fixture resubmission. Existing full-suite security/photography/message tests independently exercise unauthorized content access and mutation cases.
+- Rejected fixture displayed stored review reason; actual resubmit persisted corrected registration and reset to pending with cleared review note. Approved fixture fields/button were read-only; pending/rejected editable. Existing integration suite proves forged approval ignored and approved edits rejected. No live reviewer was used.
+- Browser screenshots at 1440/375/430: approved populated shop pipeline, completed owner comparison, rejected application, resubmitted pending application and HTTP503 failure dashboard. Measured scrollWidth=clientWidth (1428/363/418 excluding scrollbar). Relevant screenshots inspected. Empty states also covered in batch1 and rejected/pending dashboards.
+- Fault fixture at localhost:3419 served repository static files and synthetic 503 responses, with no external backend. Failure view now shows explicit unavailable/reload guidance and dashes instead of false zero counts/stuck checklist. Final mobile failure screenshot inspected after correction.
+
+## Actual defects fixed / tests
+- Owner cards consumed legacy providerType but server supplies provider.type: reviewed shop was incorrectly labelled Individual Mechanic. Corrected quote, selected and home-summary type mapping; added actual JSDOM card-rendering regression.
+- Completed request still announced quotes arriving; corrected status-specific copy. Removed unsupported 24-hour quote promise; darkened public-profile links for light cards. Earlier populated screenshots predate these final copy/contrast changes; card regression proves final completed text, and syntax/full-suite gate covers final files.
+- Application/notification calls now have a 15s abort deadline with uncertain-write wording; no automatic resubmission. Added failure/uncertain-write regression.
+- Password recovery previously left disabled UI/unhandled rejection on network failure. Added session-check failure, password-update failure, and separate saved-password/sign-out-failure states. Controlled SDK adapter tests cover expired session, network errors, success and signup-without-session waiting for confirmation using correct redirect. These are NOT hosted email/auth proofs.
+- Final gate: npm run check passed 111/111 tests (0 failures). Changed JS syntax and git diff --check also checked. No build step exists beyond repository check command.
+
+## Artifacts
+Under /home/openclaw/.openclaw/workspace/artifacts/:
+- smr-dashboard-workflow-shop-{desktop,375,430}.png
+- smr-dashboard-workflow-owner-{desktop,375,430}.png
+- smr-dashboard-rejected-{desktop,375,430}.png
+- smr-dashboard-resubmitted-{desktop,375,430}.png
+- smr-dashboard-error-{desktop,375,430}.png
+- smr-workflow-final-tests.log and smr-{workflow-shop,workflow-owner,rejected,resubmitted,error}.log
+Synthetic persisted evidence copied to smr-workflow-persistence.json (repair/bid/application/photo metadata only). No real customer content or credentials.
+
+## Hosted prerequisite discovery (read only, completed this batch)
+Composio executable exists, version 0.5.0 and whoami authenticated; connection metadata showed active Supabase/Render/Vercel. Used SUPABASE_LIST_ALL_PROJECTS and paginated RENDER_LIST_SERVICES, not credential export or DB reads. Supabase: only Shopmyrepair is ACTIVE_HEALTHY (ntlsefkfbdnriknukjzl); other returned projects were inactive and not identified as dedicated staging. Render: Outlaw on main at outlaw-ba9s.onrender.com has previews disabled; other services are different repositories. Next page empty. Repository render.yaml defines production NODE_ENV, free service, and sync:false secret placeholders; no dedicated staging env template or documented isolated project found. Thus existing connected access is present, but a safe dedicated hosted target is NOT identified. Do not ask generically for credentials or test against this active project by default.
+
+## Remaining boundary / smallest operator decisions
+Items 1&2 are locally advanced, not certified production-ready. Hosted proof still requires:
+1. Designate an existing NON-production Supabase project + isolated app origin (or explicitly authorize a free isolated staging setup after plan verification). Confirm it is disposable and contains no live customer data. Current active Shopmyrepair project is not presumed disposable; inactive unrelated projects cannot be repurposed without approval.
+2. Designate one controlled test inbox with distinct owner/shop aliases and authorize confirmation/reset emails to those aliases. This enables real confirmation redirect, token refresh/expiry, recovery and sign-out proof without contacting customers. SDK mocks do not establish deliverability.
+3. Identify an already-authorized staging reviewer and policy for acceptable registration/license/insurance references and rejection/resubmission; no new privileged account/membership granted for testing. Review hosted migration-history mismatch and private photo bucket/role policies before writes.
+Local coverage is not exhaustive: new repair creation/validation and photo deletion/message retry/revision conflicts are exercised by automated tests, not all by this browser pass; photo upload and two-way messages/start/completion were real browser actions. Slow loading states were not exhaustively pixel-captured, nor every profile/feedback panel. These are remaining QA depth, not evidence of a known production-safe release. Parent owns review of this cohesive local batch; no push/deploy.

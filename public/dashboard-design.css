@@ -30,3 +30,5 @@
 body.app-body{background:#f5f6f8}.app-body::before{display:none}.app-body .nav{background:#f5f6f8}.app-body .mobile-cta{display:none}.app-body .dash{padding-bottom:0}.app-body #availabilityNotice{color:#342800}
 
 @media(max-width:600px){.app-body .tabs{overflow:visible;grid-template-columns:repeat(2,minmax(0,1fr))}.app-body .tabs .tab-btn{min-width:0;white-space:normal;line-height:1.4}.app-body .nav .btn{min-width:0;width:auto}}
+
+.app-body dialog{border:1px solid #dbe3e9;border-radius:16px;padding:24px;color:#142635;background:#fff}.app-body dialog::backdrop{background:#14263599}.app-body dialog button{margin:6px;padding:10px 16px;border:1px solid #b4c3dc;border-radius:8px;background:#eaf0ff;color:#193ca8}.app-body dialog{max-width:600px;width:90%}

@@ -1,10 +1,17 @@
 (() => {
   const base = (window.APP_CONFIG?.API_BASE || location.origin).replace(/\/$/, '');
   async function api(url, body) {
-    const response = await fetch(base + url, { method: body ? 'POST' : 'GET', headers: { 'Content-Type': 'application/json', ...await window.smrAuth.getAuthHeaders() }, body: body ? JSON.stringify(body) : undefined });
-    const data = await response.json();
-    if (!response.ok) throw new Error(data.error || 'Request failed.');
-    return data;
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 15000);
+    try {
+      const response = await fetch(base + url, { signal: controller.signal, method: body ? 'POST' : 'GET', headers: { 'Content-Type': 'application/json', ...await window.smrAuth.getAuthHeaders() }, body: body ? JSON.stringify(body) : undefined });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || 'Request failed.');
+      return data;
+    } catch (error) {
+      if (error.name === 'AbortError') throw new Error(body ? 'The result could not be confirmed. Reload to check saved status before submitting again.' : 'The request timed out. Reload to try again.');
+      throw error;
+    } finally { clearTimeout(timer); }
   }
   async function notifications() {
     const panel = document.getElementById('notificationsList');
