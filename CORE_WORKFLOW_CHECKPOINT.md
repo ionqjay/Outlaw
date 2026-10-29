@@ -70,3 +70,28 @@ Items 1&2 are locally advanced, not certified production-ready. Hosted proof sti
 2. Designate one controlled test inbox with distinct owner/shop aliases and authorize confirmation/reset emails to those aliases. This enables real confirmation redirect, token refresh/expiry, recovery and sign-out proof without contacting customers. SDK mocks do not establish deliverability.
 3. Identify an already-authorized staging reviewer and policy for acceptable registration/license/insurance references and rejection/resubmission; no new privileged account/membership granted for testing. Review hosted migration-history mismatch and private photo bucket/role policies before writes.
 Local coverage is not exhaustive: new repair creation/validation and photo deletion/message retry/revision conflicts are exercised by automated tests, not all by this browser pass; photo upload and two-way messages/start/completion were real browser actions. Slow loading states were not exhaustively pixel-captured, nor every profile/feedback panel. These are remaining QA depth, not evidence of a known production-safe release. Parent owns review of this cohesive local batch; no push/deploy.
+
+
+# Batch 3 — bounded local gap closure, 2026-10-29
+Recovered clean 7f23c0b and preserved prior synthetic records. Restarted only the copied temporary localhost server with provider env variables stripped. A local-only wrapper injected one-shot 503 failures BEFORE any write and a 12-second GET delay; this was not a production config change. No billing/refund/subscription controls were clicked. No external APIs or emails used in this batch.
+
+| Previously identified local gap | Actual browser/persistence result | Evidence |
+| --- | --- | --- |
+| New request creation | Empty form rejected with Title is required; completed real form submitted once, created repair302, one eligible invite, success view. Persisted count for unique synthetic title =1. | closure-request-form screenshots; smr-closure-persistence.json |
+| Message retry | One-shot prewrite503 retained draft and re-enabled composer. Explicit retry saved exactly one message and cleared draft. | closure-message-retry screenshots; persisted/API count1 |
+| Photo delete/retry | First delete503 left image intact; explicit retry removed image and old authenticated content URL returned404. | recorded tool output; persistence deletedContentStatus404 |
+| Photo upload/retry | One-shot prewrite503 retained selected file; explicit retry produced one ready JPEG rendered at naturalWidth320, cleared file input. | closure-photo-retry screenshots; replacement metadata |
+| Owner profile validation | Observed malformed contact email/ZIP being saved as success. Fixed pre-save validation (optional fields allowed; email/ZIP/state/length checks); browser then rejected malformed email and saved corrected profile with NY normalization. | closure-profile screenshots; new profile-validation.test.js |
+| Shop profile validation | Invalid ZIP rejected by existing contract; corrected ZIP/radius/address saved successfully. No billing operation. | closure-shop-profile screenshots; ZIP/radius regression |
+| Feedback | Empty rating submit did not close modal/create review; selected5 and submitted synthetic review, persisted one row. Reload retained5/5; Update Review restored saved stars/text. Reopening only, no duplicate review write. | closure-feedback and closure-feedback-final screenshots; persisted feedback |
+| Loading state | Real photos GET delayed12sec; visible Loading photos… captured, then real response rendered existing image. No DOM-faked loading state. | closure-loading screenshots |
+
+Screenshots above use prefix artifacts/smr-dashboard- and suffix -{desktop,375,430}.png; all sets measured matching clientWidth/scrollWidth. Actual desktop/mobile variants inspected. Dialog screenshots are full-document images: backdrop covers viewport, not the offscreen portion of full-page capture; scrollable conversation dialog keeps composer accessible via dialog scroll. No horizontal overflow observed.
+
+## Small fixes and verification
+- Added owner profile pre-save checks in app-auth.js; two regression tests verify invalid profile never overwrites saved data, state normalization/optional fields, and existing shop ZIP/radius rejection.
+- Actual screenshots exposed low-contrast status text and selected stars indistinguishable from other buttons. Darkened success/error text and selected-star background. Final selected feedback state was captured again and inspected on desktop/375; computed selected colors white on rgb(40,75,214). Shop success status inspected after stylesheet correction.
+- Targeted profile/messages/photos/dashboard tests: 14/14 passed. Repository final gate: npm run check 113/113 passed. app-auth.js syntax and git diff --check passed.
+- Evidence files: artifacts/smr-closure-tests.log, smr-closure-full-tests.log, smr-closure-persistence.json, and smr-closure-*.log measurement files. Persistence contains synthetic repair302, one five-star review, replacement photo metadata and old-content404 proof. Existing batch2 evidence retained separately.
+
+The explicitly requested remaining LOCAL gaps from batch2 are now exercised. This is bounded workflow QA, not an exhaustive browser/device/security certification. Hosted confirmation/deliverability/token refresh/recovery and real DB/storage enforcement still require the same operator decisions: designate isolated nonproduction app/Supabase target, authorize owner/shop aliases on one controlled inbox, identify an existing authorized staging reviewer and evidence policy. Connected credentials already exist; do not request generic credentials or silently use active production. Parent reviews local commits; no push/deploy.

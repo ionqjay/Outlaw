@@ -61,6 +61,11 @@ async function saveOwnerProfile(profile = {}) {
     state: String(profile.state || '').trim(),
     zip: String(profile.zip || '').trim()
   };
+  if (clean.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(clean.email)) throw new Error('Enter a valid contact email.');
+  if (clean.zip && !/^\d{5}(-\d{4})?$/.test(clean.zip)) throw new Error('Enter a valid US ZIP code.');
+  if (clean.state && !/^[A-Za-z]{2}$/.test(clean.state)) throw new Error('Use a two-letter state code.');
+  if (clean.name.length > 120 || clean.city.length > 120 || clean.phone.length > 40 || clean.email.length > 254) throw new Error('Profile field is too long.');
+  clean.state = clean.state.toUpperCase();
 
   if (window.smrSupabaseReady && window.smrSupabase) {
     const { error } = await window.smrSupabase.auth.updateUser({ data: clean });
