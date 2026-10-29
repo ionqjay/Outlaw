@@ -6,6 +6,7 @@ import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { JSDOM } from 'jsdom';
 import vm from 'node:vm';
+import { singleFlightProbe } from '../lib/health-probe.js';
 import { billingMode, missingReleaseConfig, BILLING_UNAVAILABLE } from '../lib/billing-mode.js';
 
 test('only explicit disabled waives Stripe; storage and security remain required', () => {
@@ -19,11 +20,11 @@ test('only explicit disabled waives Stripe; storage and security remain required
 
 test('disabled production health still probes database and private storage', async () => {
   const source = fs.readFileSync(new URL('../server.js', import.meta.url), 'utf8');
-  const start = source.indexOf("route('get', '/api/health'");
+  const start = source.indexOf("const checkDatabaseReadiness = singleFlightProbe");
   const end = source.indexOf("route('post', '/api/send-otp'", start);
   let handler, storageBroken = false;
   const env = { BILLING_MODE: 'disabled', SUPABASE_URL: 'local', SUPABASE_SERVICE_ROLE_KEY: 'test', APP_URL: 'local', CORS_ORIGINS: 'local', REPAIR_PHOTO_BUCKET: 'private' };
-  const context = vm.createContext({ route: (_method,_path,h) => { handler=h; }, missingProductionConfig: () => missingReleaseConfig(env), USE_SUPABASE:true, BILLING_ENABLED:false, stripe:null, billingConfigReady:()=>false, process:{env:{NODE_ENV:'production'},uptime:()=>0}, supabaseRequest:async()=>[], privatePhotoObjects:{ready:async()=>{if(storageBroken)throw Error('private bucket unavailable');}} });
+  const context = vm.createContext({ singleFlightProbe: probe => singleFlightProbe(probe, { ttlMs: 0 }), route: (_method,_path,h) => { handler=h; }, missingProductionConfig: () => missingReleaseConfig(env), USE_SUPABASE:true, BILLING_ENABLED:false, stripe:null, billingConfigReady:()=>false, process:{env:{NODE_ENV:'production'},uptime:()=>0}, supabaseRequest:async()=>[], privatePhotoObjects:{ready:async()=>{if(storageBroken)throw Error('private bucket unavailable');}} });
   vm.runInContext(source.slice(start,end),context);
   const res = { status(n){this.code=n;return this;},json(body){this.body=body;} };
   await handler({},res); assert.equal(res.code,200); assert.equal(res.body.billingMode,'disabled');
@@ -51,6 +52,17 @@ test('disabled server blocks cached paid access and Stripe routes but preserves 
   const server=await new Promise(resolve=>{const s=app.listen(0,'127.0.0.1',()=>resolve(s));});
   const call=(url,method='GET',role='shop')=>fetch('http://127.0.0.1:'+server.address().port+url,{method,headers:{'x-dev-user-id':role,'x-dev-user-email':role+'@example.com','x-dev-user-role':role,'Content-Type':'application/json'},...(method==='POST'?{body:'{}'}:{})});
   try {
+    for (const url of ['/API/Health', '/API/Availability', '/API/Provider/Verification']) {
+      const response = await call(url);
+      assert.equal(response.headers.get('cache-control'), 'no-store', url);
+    }
+    // Rate-limit rejection must not skip security/cache headers.
+    let limited;
+    for (let i = 0; i < 21; i++) limited = await call('/API/Signup', 'POST');
+    assert.equal(limited.status, 429);
+    assert.equal(limited.headers.get('cache-control'), 'no-store');
+    assert.equal(limited.headers.get('x-content-type-options'), 'nosniff');
+    assert.ok(limited.headers.get('retry-after'));
     const health=await (await call('/api/health')).json();assert.equal(health.ok,true);assert.equal(health.billingMode,'disabled');assert.equal(health.stripeConfigured,false);
     const status=await (await call('/api/billing/status')).json();assert.equal(status.status,'active');assert.equal(status.canSubmitEstimates,false);
     for(const url of ['/api/billing/create-checkout-session','/api/billing/create-portal-session','/api/billing/refund-requests','/api/stripe/webhook','/api/bids','/api/repairs','/api/owner-request']) assert.equal((await call(url,'POST')).status,503,url);

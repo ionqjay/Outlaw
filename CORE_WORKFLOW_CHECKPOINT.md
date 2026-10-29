@@ -1,5 +1,7 @@
 # Core workflows + authenticated dashboard — batch 1, 2026-10-28
 
+> Current auth direction (2026-10-29): phone-number/SMS, not email-onboarding proof. Earlier email-test-inbox blockers below are historical and superseded by PRODUCTION_OPERATIONS.md and batch 4. Existing login retained; SMS not implemented/proven.
+
 ## Baseline and scope
 - Verified PR #7 MERGED through managed gh (Composio 0.5.0 authenticated, no GitHub connection exposed). Fetched origin/main at 6f7b50d17e7e22b61a627f31fbe113f2589b3426. Clean starting tree; branch fix/shop-application-dashboard.
 - Retained existing static UI, CSS design tokens, Supabase auth, provider_verifications backend model, Node tests/JSDOM/PGlite and installed Camofox. No new dependency, schema, role grant, payment change, deployment or production write.
@@ -95,3 +97,21 @@ Screenshots above use prefix artifacts/smr-dashboard- and suffix -{desktop,375,4
 - Evidence files: artifacts/smr-closure-tests.log, smr-closure-full-tests.log, smr-closure-persistence.json, and smr-closure-*.log measurement files. Persistence contains synthetic repair302, one five-star review, replacement photo metadata and old-content404 proof. Existing batch2 evidence retained separately.
 
 The explicitly requested remaining LOCAL gaps from batch2 are now exercised. This is bounded workflow QA, not an exhaustive browser/device/security certification. Hosted confirmation/deliverability/token refresh/recovery and real DB/storage enforcement still require the same operator decisions: designate isolated nonproduction app/Supabase target, authorize owner/shop aliases on one controlled inbox, identify an existing authorized staging reviewer and evidence policy. Connected credentials already exist; do not request generic credentials or silently use active production. Parent reviews local commits; no push/deploy.
+
+# Batch 4 — bounded security/operations closure, 2026-10-29
+
+Recovered clean 65a43be, then preserved interrupted modifications and collected saved test output after the old process handle expired. No external-app operation was needed: no connector calls, auth/setup, production reads/writes, deployments, SMS, email, Stripe changes, admin grants, backup exports or scheduler/config edits.
+
+## Evidenced defects fixed
+- Express routes accept mixed casing, but privacy-header matching was case-sensitive. API/admin paths now receive no-store regardless of casing; privacy/security headers run before the limiter so HTTP429 receives them too. Actual isolated-server regression covers mixed-case health/availability/application routes and exhausted signup budget.
+- Every anonymous health request previously fanned out to 15 database reads plus bucket lookup. New per-process single-flight + five-second result cache bounds repeated probe work. Both success and failure expire; thrown failures become false. Existing per-I/O 10s deadlines remain; sequential health groups may take about30s. Configuration is still checked per response. This is dependency/schema/config readiness, NOT SMS/Stripe/delivery/restore proof; no sensitive error is returned.
+- Global error logging previously included caller-supplied path (including identifiers) and arbitrary error.name. It now records application route template, allowlisted method and error category, never request bodies/headers/path/message/stack. Existing other/native provider logs still require review before forwarding.
+
+## Verification and scope
+- Targeted health/billing-disabled/request-security gate passed11/11 before final log-redaction addition. Final npm run check passed116/116, zero failures/skips; saved output /tmp/smr-readiness-check.log. Final focused gate/check output recorded in final commit report. git diff --check passed.
+- New unit tests cover concurrent shared probe, exact5s expiration, false cache, synchronous throw and recovery, and log-summary redaction. Existing production-health VM test still verifies private-storage failure503 and missing-config503; integration test uses only isolated synthetic files with Supabase disabled.
+- No UI changed; new screenshots would not verify these server-only changes. Existing browser artifacts remain prior-batch evidence, not proof of hosted SMS. No schema/dependency changes.
+- PRODUCTION_OPERATIONS.md provides deployment/rollback gates, database+private-object+Auth backup inventory and isolated restore verification, native/free monitoring readiness and clearly UNAPPROVED support/reviewer/privacy checklists. These are procedures/proposals, NOT completed hosted backup/restore/monitoring work. Historical migration doc now prominently warns against replaying superseded RLS setup; older launch handoff is labelled dated.
+
+## Remaining operator boundary
+Phone/SMS provider/config/test-number/send authorization and isolated staging designation; approval for hosted changes and protected backup/restore destination plus recovery objectives; real support/incident owner and existing authorized reviewer/evidence/privacy decisions; combined-change risk review and explicit release authorization. Email inbox proof no longer requested. No guessed SMS provider or auth rewrite; no push/deploy. Parent owns continued work/release review.
