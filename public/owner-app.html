@@ -304,14 +304,16 @@
     }
   </style>
 <script src="/vendor/purify.min.js"></script>
+<link rel="stylesheet" href="/dashboard-design.css" />
 </head>
 <body class="app-body">
+<a class="skip-link" href="#dashboardMain">Skip to dashboard</a>
   <nav class="nav">
     <div class="logo"><span>ShopMy</span><span class="orange">Repair</span></div>
     <button class="btn btn-secondary" id="logoutBtn">Logout</button>
   </nav>
 
-  <main class="dash">
+  <main class="dash" id="dashboardMain">
     <section class="hero">
       <h1>Your repairs</h1>
       <p>Post a repair once, track incoming quotes, and choose the provider that fits your repair.</p>
@@ -471,10 +473,7 @@
     </div>
   </div>
 
-  <div class="mobile-cta">
-    <button class="btn btn-primary" data-view="quote">Post Request</button>
-    <button class="btn btn-secondary" data-view="dashboard">My Estimates</button>
-  </div>
+
 
   <script src="/vendor/supabase.js"></script>
   <script src="/config.js"></script>

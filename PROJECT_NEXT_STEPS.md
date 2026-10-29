@@ -1,5 +1,7 @@
 # ShopMyRepair launch handoff
 
+> Historical snapshot (2026-09-26), not current execution instructions. Read PRODUCTION_OPERATIONS.md and the latest CORE_WORKFLOW_CHECKPOINT.md batches first. User now intends phone/SMS auth; email-onboarding proof is no longer the target. Connector/deployment/PR/test-count claims below are dated, and no migration/push/deployment is implicitly authorized.
+
 Updated: 2026-09-26
 
 ## Verified state

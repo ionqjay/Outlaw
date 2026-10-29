@@ -108,6 +108,9 @@ const roleEl = document.getElementById('role');
 const specialtiesWrap = document.getElementById('specialtiesWrap');
 function syncSpecialtiesVisibility() {
   const role = String(roleEl?.value || '').toLowerCase();
+  signUpBtn.textContent = role === 'shop' ? 'Create Shop Account' : 'Create Free Account';
+  const hint = document.getElementById('shopApplicationHint');
+  if (hint) hint.hidden = role !== 'shop';
   if (!specialtiesWrap) return;
   specialtiesWrap.style.display = (role === 'mechanic' || role === 'shop') ? 'block' : 'none';
 }

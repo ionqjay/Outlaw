@@ -1,4 +1,6 @@
-# Supabase Migration (Render app)
+# Supabase Migration (Render app) — historical instructions
+
+> STOP: The setup sequence below predates backend-only access and is not a current deployment procedure. Do NOT replay schema.sql or 002_enable_rls.sql against hosted data. Reconcile hosted migration history first; see PRODUCTION_OPERATIONS.md and PROJECT_NEXT_STEPS.md. Production requires Supabase and never falls back to JSON. No hosted migration is authorized by this document.
 
 ## 1) Create tables
 Run `supabase/schema.sql` in Supabase SQL Editor.

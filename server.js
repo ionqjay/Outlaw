@@ -1,4 +1,6 @@
 import express from 'express';
+import { singleFlightProbe } from './lib/health-probe.js';
+import { requestFailureSummary } from './lib/error-log.js';
 import { adminStore, prepareAdminAccess } from './lib/admin-access.js';
 import { repairTransition } from './lib/repair-workflow.js';
 import { photoMetadata, photoObjects, registerPhotos } from './lib/photos.js';
@@ -26,7 +28,7 @@ const __dirname = path.dirname(__filename);
 const app = express();
 app.disable('x-powered-by');
 app.set('trust proxy', trustedProxyPolicy(process.env.TRUSTED_PROXY_CIDRS || ''));
-app.use(createRateLimiter());
+
 // Express 4 does not forward rejected async handlers automatically.
 function route(method, path, ...handlers) {
   // Release gate includes admin fallbacks: disabled must never simulate billing changes.
@@ -49,9 +51,12 @@ app.use((req, res, next) => {
   res.setHeader('X-Content-Type-Options', 'nosniff');
   res.setHeader('Referrer-Policy', 'no-referrer');
   res.setHeader('X-Frame-Options', 'DENY');
-  if (req.path.startsWith('/api/') || req.path.startsWith('/admin')) res.setHeader('Cache-Control', 'no-store');
+  // Express routes are case-insensitive; privacy headers must be too.
+  if (/^\/(?:api(?:\/|$)|admin)/i.test(req.path)) res.setHeader('Cache-Control', 'no-store');
   next();
 });
+// Rejected/limited responses need the same privacy headers as successful ones.
+app.use(createRateLimiter());
 const PORT = process.env.PORT || 3000;
 function isAuthorizedAdminRequest(req) { return !!req.adminUser; }
 function guardAdminApi(req,res) {
@@ -1401,8 +1406,8 @@ route('get', '/api/stats', async (req, res) => {
 
 route('get', '/api/availability', (req, res) => res.json({ billingMode: BILLING_ENABLED ? 'enabled' : 'disabled', newQuotesAvailable: BILLING_ENABLED, message: BILLING_ENABLED ? null : BILLING_UNAVAILABLE }));
 
-route('get', '/api/health', async (req, res) => {
-  const missingConfig = missingProductionConfig();
+// One bounded dependency check per process, shared by concurrent health requests.
+const checkDatabaseReadiness = singleFlightProbe(async () => {
   let databaseReady = !USE_SUPABASE && process.env.NODE_ENV !== 'production';
   if (USE_SUPABASE) {
     try {
@@ -1421,6 +1426,11 @@ route('get', '/api/health', async (req, res) => {
       databaseReady = true;
     } catch { databaseReady = false; }
   }
+  return databaseReady;
+});
+route('get', '/api/health', async (req, res) => {
+  const missingConfig = missingProductionConfig();
+  const databaseReady = await checkDatabaseReadiness();
   const ok = missingConfig.length === 0 && databaseReady;
   res.status(ok ? 200 : 503).json({ ok, databaseReady, billingMode: BILLING_ENABLED ? 'enabled' : 'disabled', stripeConfigured: !!stripe,
     stripeBillingReady: billingConfigReady(), supabaseConfigured: USE_SUPABASE,
@@ -2377,7 +2387,7 @@ registerOperations({ route, store: ops, requireUser: requireAuthenticatedUser, g
 app.use((error, req, res, next) => {
   if (error.type === 'entity.too.large') return res.status(413).json({ error: 'Request body too large.' });
   if (error.type === 'entity.parse.failed') return res.status(400).json({ error: 'Invalid JSON request.' });
-  console.error('Request failed:', req.method, req.path, error.name);
+  console.error('Request failed:', JSON.stringify(requestFailureSummary(req, error)));
   if (res.headersSent) return next(error);
   res.status(503).json({ error: 'Service temporarily unavailable. Please try again shortly.' });
 });
