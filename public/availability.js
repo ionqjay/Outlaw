@@ -1,10 +1,11 @@
 // The server decides availability; failure never advertises new quote access.
 (async () => {
-  const banner = document.createElement('p');
+  const existingNotice = document.getElementById('availabilityNotice');
+  const banner = existingNotice || document.createElement('p');
   banner.id = 'availabilityNotice'; banner.setAttribute('role', 'status');
-  banner.style.cssText = 'padding:16px;margin:0;background:#fff3cd;color:#342800;text-align:center';
-  banner.textContent = 'Checking new repair quote availability. Free accounts and existing history remain available.';
-  document.body.prepend(banner);
+  if (!existingNotice) banner.style.cssText = 'padding:16px;margin:0;background:#fff3cd;color:#342800;text-align:center';
+  if (!existingNotice) banner.textContent = 'Checking new repair quote availability. Free accounts and existing history remain available.';
+  if (!existingNotice) document.body.prepend(banner);
   const controls = [...document.querySelectorAll('[data-view="quote"], a[href*="view%3Dquote"], #startSubscriptionBtn, #manageBillingBtn, #submitRepairBtn, #view-quote button[type="submit"], #ownerRequestForm button[type="submit"]')];
   const originallyDisabled = new Map(controls.map(el => [el, el.disabled]));
   function lock() { controls.forEach(el => { el.setAttribute('aria-disabled', 'true'); if (el.tagName === 'BUTTON') el.disabled = true; }); }
@@ -23,7 +24,7 @@
       return;
     }
     const providerPage = /\/pricing(?:\.html)?\/?$/.test(window.location.pathname);
-    banner.textContent = providerPage
+    banner.textContent = existingNotice ? 'New repair requests are not open yet. You can create an account or sign in to your existing history.' : providerPage
       ? 'Repair-shop subscriptions are coming soon. Checkout is currently closed; existing accounts and job history remain available.'
       : 'Repair requests and quotes are coming soon. Platform use is free for vehicle owners; repair work is priced separately. Existing accounts and job history remain available.';
     controls.forEach(el => {
