@@ -42,9 +42,9 @@ test('navigation closes accessibly without stealing unrelated Escape focus', () 
   assert.equal(button.getAttribute('aria-label'), 'Open navigation');
 });
 test('prelaunch pricing and account boundaries remain explicit', () => {
-  assert.ok(publicFile('pricing.html').includes('$99'));
+  assert.ok(publicFile('pricing.html').includes('$29.99'));
   assert.match(publicFile('pricing.html'), /Checkout closed/);
-  assert.match(publicFile('index.html'), /repair work is paid separately/);
+  assert.match(publicFile('index.html'), /repair work is paid separately/i);
   const doc = new JSDOM(publicFile('login.html')).window.document;
   for (const id of ['authForm', 'role', 'name', 'email', 'password', 'signInBtn', 'signUpBtn', 'forgotPasswordBtn', 'authStatus', 'specialtiesWrap']) assert.ok(doc.getElementById(id));
 });

@@ -165,3 +165,69 @@
 .public-page .final-cta{margin-top:12px}
 .site-footer nav{gap:4px 20px}
 }
+
+/* Simplified launch journey: one explanation, one next step. */
+.public-page [hidden]{display:none!important}
+.home-page .hero{padding:64px 0;gap:64px;align-items:center}
+.home-page .hero h1{font-size:clamp(42px,5.2vw,72px);margin:24px 0;max-width:13ch}
+.home-page .hero-media{margin:0}
+.home-page .hero-photo{aspect-ratio:1.15;object-position:center;border-radius:18px}
+.home-page figcaption{font-size:13px;color:var(--muted);margin-top:14px}
+.home-page .hero-caption{font-size:13px;margin:16px 0 22px}
+.home-page #availabilityNotice{padding:0 0 0 14px!important;background:transparent!important;border:0;border-left:2px solid #9aaec0;text-align:left;font-size:13px;color:var(--muted);max-width:48ch;line-height:1.65}
+.home-page .process{border-top:1px solid var(--border);padding:48px 0}
+.simple-steps{display:grid;grid-template-columns:repeat(3,1fr);gap:40px;list-style:none;margin:0;padding:0}
+.simple-steps li{border-top:2px solid #cbd6e4;padding-top:20px}
+.simple-steps li>span{font-size:14px;font-weight:600;color:var(--accent)}
+.simple-steps h3{font-size:21px;margin:18px 0 10px}
+.simple-steps p,.owner-simple p,.shop-simple p{color:var(--muted);font-size:15px;line-height:1.75}
+.owner-simple{display:grid;grid-template-columns:1fr 1fr;gap:80px;border-radius:18px;background:#eaf0f8;padding:48px;margin:16px 0 48px}
+.owner-simple h2{font-size:38px;margin:16px 0}
+.owner-simple .btn{margin-top:16px}
+.owner-answers>div+div{border-top:1px solid #cbd6e4;padding-top:20px;margin-top:20px}
+.owner-answers h3{font-size:17px;margin:0 0 8px}
+.owner-answers p{margin:0}
+.shop-simple{display:flex;align-items:center;justify-content:space-between;gap:32px;padding:0 0 48px}
+.shop-simple h2{font-size:28px;margin:12px 0}
+.shop-simple .btn{flex-shrink:0}
+.registration-page .auth-wrap{display:block;max-width:520px;padding:48px 0 64px}
+.registration-page .auth-card{padding:36px}
+.registration-page .auth-card h1{font-size:34px;margin:0 0 12px;letter-spacing:-.035em}
+.registration-page .auth-card label{display:block;margin:18px 0 7px;font-size:13px;font-weight:600}
+.registration-page .auth-card .svc-pill{display:flex;margin:0;font-weight:400}
+.auth-switch{font-size:14px;margin:8px 0 24px}
+#authModeBtn{border:0;background:transparent;padding:8px 3px;min-height:44px;font:inherit;font-weight:600;color:var(--accent-ink);text-decoration:underline;text-underline-offset:3px;cursor:pointer}
+.registration-page .auth-actions{display:block;margin-top:24px}
+.registration-page .auth-actions .btn{width:100%}
+.registration-page #forgotPasswordBtn{display:block;margin:8px auto 0;font-size:13px}
+.auth-launch-note{border-top:1px solid var(--border);padding-top:18px;margin:20px 0 0;font-size:12px;color:var(--muted);line-height:1.6}
+.registration-page #authStatus:empty{display:none}
+.registration-page #authStatus{color:#8a231c;font-size:14px;line-height:1.6}
+.registration-page #shopApplicationHint{font-size:13px;line-height:1.65;color:var(--muted);border-left:2px solid #9aaec0;padding-left:12px}
+@media(max-width:900px){
+.home-page .hero{gap:28px;padding:36px 0}
+.home-page .hero-media{max-width:none}
+.home-page .hero-photo{aspect-ratio:1.7}
+.owner-simple{gap:36px;padding:32px}
+.simple-steps{gap:24px}
+}
+@media(max-width:560px){
+.home-page .hero h1{font-size:44px;margin:20px 0}
+.home-page #heroSubtext{font-size:16px}
+.home-page .hero-media{margin-top:4px}
+.home-page .process{padding:32px 0}
+.simple-steps{grid-template-columns:1fr;gap:24px}
+.simple-steps li{position:relative;padding:18px 0 0 42px}
+.simple-steps li>span{position:absolute;left:0;top:20px}
+.simple-steps h3{margin:0 0 8px;font-size:20px}
+.simple-steps p{margin:0}
+.owner-simple{grid-template-columns:1fr;gap:28px;padding:24px;margin:8px 0 32px}
+.owner-simple h2{font-size:32px}
+.shop-simple{display:block;padding-bottom:32px}
+.shop-simple .btn{margin-top:12px;width:100%}
+.registration-page .auth-wrap{padding:28px 16px 40px}
+.registration-page .auth-card{padding:24px 20px}
+.registration-page .auth-card h1{font-size:30px}
+.registration-page .svc-grid{grid-template-columns:1fr}
+.public-page .site-footer nav a{display:inline-flex;align-items:center;min-height:44px}
+}
