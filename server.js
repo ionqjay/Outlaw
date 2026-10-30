@@ -384,7 +384,7 @@ function stripePriceConfigError(price) {
   return '';
 }
 
-async function supabaseRequest(pathname, { method = 'GET', body, prefer } = {}) {
+async function supabaseRequest(pathname, { method = 'GET', body, prefer, signal } = {}) {
   if (!USE_SUPABASE) throw new Error('Supabase not configured');
   const url = `${SUPABASE_URL}/rest/v1/${pathname}`;
   const res = await fetch(url, {
@@ -396,7 +396,7 @@ async function supabaseRequest(pathname, { method = 'GET', body, prefer } = {}) 
       Prefer: prefer || (method === 'POST' ? 'return=representation' : 'count=exact')
     },
     body: body ? JSON.stringify(body) : undefined,
-    signal: AbortSignal.timeout(10000)
+    signal: signal ? AbortSignal.any([signal, AbortSignal.timeout(10000)]) : AbortSignal.timeout(10000)
   });
   if (!res.ok) {
     const txt = await res.text();
@@ -1407,30 +1407,35 @@ route('get', '/api/stats', async (req, res) => {
 route('get', '/api/availability', (req, res) => res.json({ billingMode: BILLING_ENABLED ? 'enabled' : 'disabled', newQuotesAvailable: BILLING_ENABLED, message: BILLING_ENABLED ? null : BILLING_UNAVAILABLE }));
 
 // One bounded dependency check per process, shared by concurrent health requests.
-const checkDatabaseReadiness = singleFlightProbe(async () => {
+const checkDatabaseReadiness = singleFlightProbe(async signal => {
+  const request = pathname => supabaseRequest(pathname, { signal });
   let databaseReady = !USE_SUPABASE && process.env.NODE_ENV !== 'production';
   if (USE_SUPABASE) {
     try {
-      await Promise.all(['repair_requests', 'bids', 'request_invites', 'billing_accounts', 'banned_accounts', 'notifications', 'refund_requests'].map(table => supabaseRequest(`${table}?select=*&limit=0`)));
-      await Promise.all([
-        supabaseRequest('admin_memberships?select=user_id&limit=0'),
-        supabaseRequest('admin_audit_events?select=id&limit=0'),
-        supabaseRequest('repair_requests?select=completion_requested_at,workflow_revision&limit=0'),
-        supabaseRequest('repair_transition_events?select=id&limit=0'),
-        supabaseRequest('repair_photos?select=id,repair_id,state&limit=0'),
-        supabaseRequest('repair_messages?select=id,bid_id,sender_id,body&limit=0'),
-        supabaseRequest('provider_verifications?select=business_type,registration_reference,business_address,reviewed_at&limit=0'),
-        supabaseRequest('billing_accounts?select=shop_plan_valid,shop_plan_price_id,shop_plan_checked_at,billing_reconcile_after&limit=0')
+      const group1 = await Promise.allSettled(['repair_requests', 'bids', 'request_invites', 'billing_accounts', 'banned_accounts', 'notifications', 'refund_requests'].map(table => request(`${table}?select=*&limit=0`)));
+      if (group1.some(r => r.status === "rejected")) throw Error("Readiness unavailable");
+      signal.throwIfAborted();
+      const group2 = await Promise.allSettled([
+        request('admin_memberships?select=user_id&limit=0'),
+        request('admin_audit_events?select=id&limit=0'),
+        request('repair_requests?select=completion_requested_at,workflow_revision&limit=0'),
+        request('repair_transition_events?select=id&limit=0'),
+        request('repair_photos?select=id,repair_id,state&limit=0'),
+        request('repair_messages?select=id,bid_id,sender_id,body&limit=0'),
+        request('provider_verifications?select=business_type,registration_reference,business_address,reviewed_at&limit=0'),
+        request('billing_accounts?select=shop_plan_valid,shop_plan_price_id,shop_plan_checked_at,billing_reconcile_after&limit=0')
       ]);
-      await privatePhotoObjects.ready();
+      if (group2.some(r => r.status === "rejected")) throw Error("Readiness unavailable");
+      signal.throwIfAborted();
+      await privatePhotoObjects.ready({ signal });
       databaseReady = true;
     } catch { databaseReady = false; }
   }
   return databaseReady;
 });
 route('get', '/api/health', async (req, res) => {
-  const missingConfig = missingProductionConfig();
   const databaseReady = await checkDatabaseReadiness();
+  const missingConfig = missingProductionConfig();
   const ok = missingConfig.length === 0 && databaseReady;
   res.status(ok ? 200 : 503).json({ ok, databaseReady, billingMode: BILLING_ENABLED ? 'enabled' : 'disabled', stripeConfigured: !!stripe,
     stripeBillingReady: billingConfigReady(), supabaseConfigured: USE_SUPABASE,
