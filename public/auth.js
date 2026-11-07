@@ -20,6 +20,7 @@ function allowLocalDevAuth() {
 const statusEl = document.getElementById('authStatus');
 const signInBtn = document.getElementById('signInBtn');
 const signUpBtn = document.getElementById('signUpBtn');
+let signupMode = ['owner', 'shop'].includes(new URLSearchParams(location.search).get('role'));
 
 function selectedSignupServices() {
   return Array.from(document.querySelectorAll('[data-signup-service]:checked')).map(x => String(x.value || '').trim()).filter(Boolean);
@@ -63,6 +64,7 @@ async function signInSupabase({ email, password }) {
 signUpBtn.addEventListener('click', async () => {
   const { name, email, password, role, services } = values();
   if (!name || !email || !password) return statusEl.textContent = 'Name, email, and password are required.';
+  if (!document.getElementById('email').checkValidity()) return statusEl.textContent = 'Enter a valid email address.';
   if (!['owner', 'shop'].includes(role)) return statusEl.textContent = 'New accounts are for vehicle owners and registered repair shops only.';
   if (password.length < 12) return statusEl.textContent = 'Use at least 12 characters for your password.';
   if ((role === 'mechanic' || role === 'shop') && (!services || !services.length)) {
@@ -110,9 +112,9 @@ function syncSpecialtiesVisibility() {
   const role = String(roleEl?.value || '').toLowerCase();
   signUpBtn.textContent = role === 'shop' ? 'Create Shop Account' : 'Create Free Account';
   const hint = document.getElementById('shopApplicationHint');
-  if (hint) hint.hidden = role !== 'shop';
+  if (hint) hint.hidden = !signupMode || role !== 'shop';
   if (!specialtiesWrap) return;
-  specialtiesWrap.style.display = (role === 'mechanic' || role === 'shop') ? 'block' : 'none';
+  specialtiesWrap.style.display = signupMode && (role === 'mechanic' || role === 'shop') ? 'block' : 'none';
 }
 roleEl?.addEventListener('change', syncSpecialtiesVisibility);
 syncSpecialtiesVisibility();
@@ -125,7 +127,7 @@ if (allowLocalDevAuth()) {
 
 const requestedRole = new URLSearchParams(location.search).get('role');
 if (['owner','shop'].includes(requestedRole)) { roleEl.value = requestedRole; syncSpecialtiesVisibility(); }
-document.getElementById('authForm').addEventListener('submit', event => { event.preventDefault(); signInBtn.click(); });
+document.getElementById('authForm').addEventListener('submit', event => { event.preventDefault(); (signupMode ? signUpBtn : signInBtn).click(); });
 document.getElementById('forgotPasswordBtn').addEventListener('click', async () => {
   const email = values().email;
   if (!email || !document.getElementById('email').checkValidity()) { statusEl.textContent = 'Enter your email above first.'; return; }
@@ -138,3 +140,26 @@ document.getElementById('forgotPasswordBtn').addEventListener('click', async () 
   } catch (error) { statusEl.textContent = error.message || 'Could not request a recovery email.'; }
   finally { button.disabled = false; }
 });
+
+function syncAuthMode() {
+  document.getElementById('signupFields').hidden = !signupMode;
+  document.getElementById('passwordHint').hidden = !signupMode;
+  document.getElementById('forgotPasswordBtn').hidden = signupMode;
+  signInBtn.hidden = signupMode;
+  signUpBtn.hidden = !signupMode;
+  document.getElementById('password').autocomplete = signupMode ? 'new-password' : 'current-password';
+  document.getElementById('authHeading').textContent = signupMode ? 'Create your account.' : 'Welcome back.';
+  document.getElementById('authHelp').textContent = signupMode ? 'Free for vehicle owners. Shops can apply for access.' : 'Sign in to your account and repair history.';
+  document.getElementById('authSwitchPrompt').textContent = signupMode ? 'Already have an account?' : 'New here?';
+  document.getElementById('authModeBtn').textContent = signupMode ? 'Sign in' : 'Create an account';
+  document.title = (signupMode ? 'Create Account' : 'Sign In') + ' - ShopMyRepair';
+  syncSpecialtiesVisibility();
+}
+document.getElementById('authModeBtn').addEventListener('click', () => {
+  signupMode = !signupMode;
+  document.getElementById('password').value = '';
+  statusEl.textContent = '';
+  syncAuthMode();
+  document.getElementById(signupMode ? 'name' : 'email').focus();
+});
+syncAuthMode();

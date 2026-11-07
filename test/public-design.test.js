@@ -42,9 +42,31 @@ test('navigation closes accessibly without stealing unrelated Escape focus', () 
   assert.equal(button.getAttribute('aria-label'), 'Open navigation');
 });
 test('prelaunch pricing and account boundaries remain explicit', () => {
-  assert.ok(publicFile('pricing.html').includes('$99'));
+  assert.ok(publicFile('pricing.html').includes('$29.99'));
   assert.match(publicFile('pricing.html'), /Checkout closed/);
-  assert.match(publicFile('index.html'), /repair work is paid separately/);
+  assert.match(publicFile('index.html'), /repair work is paid separately/i);
   const doc = new JSDOM(publicFile('login.html')).window.document;
   for (const id of ['authForm', 'role', 'name', 'email', 'password', 'signInBtn', 'signUpBtn', 'forgotPasswordBtn', 'authStatus', 'specialtiesWrap']) assert.ok(doc.getElementById(id));
+});
+test('refined journey retains accessible anchors and explanatory visual structure', () => {
+  const doc = new JSDOM(publicFile('index.html')).window.document;
+  for (const id of ['how', 'owners']) {
+    const section = doc.getElementById(id);
+    assert.ok(section);
+    assert.ok(doc.getElementById(section.getAttribute('aria-labelledby')));
+    assert.ok(doc.querySelector('nav a[href="#' + id + '"]'));
+  }
+  assert.equal(doc.querySelectorAll('#how ol > li').length, 3);
+  assert.equal(doc.querySelectorAll('#how .step-art[aria-hidden="true"]').length, 3);
+  assert.match(doc.querySelector('#owners').textContent, /Repair work is paid separately/);
+  assert.match(doc.querySelector('#owners').textContent, /new requests will open at launch/);
+});
+test('account editorial panel leaves the existing form and manual application intact', () => {
+  const doc = new JSDOM(publicFile('login.html')).window.document;
+  assert.ok(doc.querySelector('aside[aria-labelledby="account-story-heading"]'));
+  assert.ok(doc.querySelector('.account-story img[alt]'));
+  assert.equal(doc.querySelectorAll('form').length, 1);
+  assert.ok(doc.querySelector('#authForm #authModeBtn[type="button"]'));
+  assert.equal(doc.querySelectorAll('[data-signup-service]').length, 11);
+  assert.match(doc.getElementById('shopApplicationHint').textContent, /Manual approval is required/);
 });

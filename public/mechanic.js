@@ -265,7 +265,7 @@ async function boot() {
           el.classList.add('err');
           setBillingNotice('Payment returned successfully, but Stripe has not confirmed the subscription yet. Refresh in a moment; if this stays locked, check the Stripe webhook delivery.', 'err');
         } else {
-          el.textContent = 'No active subscription yet. Start the $99/month package to unlock estimate submissions.';
+          el.textContent = 'No active subscription yet. Start the $29.99/month package to unlock estimate submissions.';
           el.classList.remove('ok');
           el.classList.add('err');
         }
@@ -295,7 +295,7 @@ async function boot() {
       setBillingNotice(err.message || 'Could not start Stripe checkout.', 'err');
       setStatus(err.message || 'Could not start Stripe checkout.', 'err');
     } finally {
-      if (btn) { btn.disabled = false; btn.textContent = 'Start $99 Subscription'; }
+      if (btn) { btn.disabled = false; btn.textContent = 'Start $29.99 Subscription'; }
     }
   }
 
@@ -409,7 +409,7 @@ async function boot() {
         };
 
         if (!billingState.canSubmitEstimates) {
-          fail('Active $99/month subscription required before submitting estimates.', true);
+          fail('Active $29.99/month subscription required before submitting estimates.', true);
           return;
         }
 
