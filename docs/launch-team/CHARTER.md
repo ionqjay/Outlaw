@@ -1,0 +1,57 @@
+# ShopMyRepair launch-team charter
+
+Status: **Local release candidate PASS; operational marketplace launch NO-GO**. Planning baseline: 2026-11-10. Accepted application candidate: **62b14ef71d6d3325dd9ee5dc7c3caa6ece7b5cfe**; a later documentation-only HEAD does not change this application identity.
+
+## Mission and scope
+Deliver an evidence-backed release, not a collection of agents or a readiness claim. The CEO/launch lead owns priorities, dependency resolution and acceptance synthesis; the parent coordinates specialists and retains operator decisions. No nested delegation or agent-to-agent messaging is needed.
+
+Two distinct milestones prevent scope confusion:
+1. **Recovery / honest prelaunch:** healthy hosted dependencies, matching reviewed frontend/backend, accurate free-account/shop-application/manual-review copy, planned $29.99/month clearly not a current subscription, billing and new work closed. Existing-history access requires hosted authorization proof. This is NOT an operational repair marketplace.
+2. **Operational marketplace:** authenticated owner/shop workflow, hosted persistence/isolation, review/support/recovery readiness, and explicit authorization to open new work. Current code couples new requests/quotes to billing enablement. With Stripe deferred, this milestone is blocked unless the operator separately approves a reviewed alternative gating/product design. Do not silently decouple or enable billing. SMS-first identity is also deferred; current email interfaces are not SMS proof.
+
+## Grounded baseline and evidence discipline
+- Initially inspected HEAD: f083f87f2c4ec2f70b6fcac9f1f705475fdcc987, PR #10 merge; initial working tree clean. No repository-local AGENTS.md found outside dependencies. Repository USER.md identifies ionqjay/Outlaw.
+- Read PROJECT_NEXT_STEPS.md (explicitly historical), CORE_WORKFLOW_CHECKPOINT.md, PRODUCTION_OPERATIONS.md, DESIGN_REFINEMENT_CHECKPOINT.md, PUBLIC_LAUNCH_SIMPLIFICATION.md, BILLING_DISABLED_RELEASE.md and implementation/test entry points.
+- Source confirms lib/billing-mode.js defaults missing BILLING_MODE to enabled; explicit disabled preserves required DB/storage/security configuration. server.js couples new-work availability to billing. public/pricing.html displays planned $29.99; lib/stripe-entitlement.js still requires 9900 cents. That mismatch is deliberate deferred work, NOT permission to reopen checkout.
+- Initial task handoff reported frontend/backend f083f87f, Render srv-d6lg6f14tr6s73cosdjg / dep-dbnbt59srm7s73905oi0 LIVE, auto-deploy OFF, empty health path, and Supabase ntlsefkfbdnriknukjzl INACTIVE causing 503. Initial handoff was not a CEO provider verification. Parent relayed Ops findings observed 2026-11-10 (last known, not rechecked for this final gate): Supabase INACTIVE on Free, public health 503, Render LIVE at f083f87f with auto-deploy OFF and empty health path, backups [] and PITR off; accessible recovery proof absent. Earlier repository ACTIVE_HEALTHY / older deployment claims are historical. These dated findings are specialist reports, not independent CEO provider calls.
+- Existing native Node tests, JSDOM, local fixture, release-smoke script and provider surfaces are the first choice; no new framework, paid monitor or service proposed.
+- Every report identifies exact SHA plus dirty diff, UTC time, command/target, result and evidence path. Historical counts/screenshots are not a new pass. Fixtures are not hosted auth, SMS delivery, storage enforcement or recovery proof. Never include credentials/customer contents.
+
+## Role ownership and non-overlapping writers
+| Role | Accountable output | Exclusive write scope when parent assigns work |
+|---|---|---|
+| CEO / launch lead | Priorities, decisions, final gate synthesis | docs/launch-team/CHARTER.md and BOARD.md only |
+| Engineering | Sole implementation writer for the five reported defects and baseline-document corrections; regression proof | All necessary app/test files including public/** and test/**, plus README.md and PRODUCTION_OPERATIONS.md; no migrations/config changes, no docs/launch-team writes |
+| Design | Responsive/accessibility evidence and advisory review | Report/artifact directory assigned by parent only; no app/test writes during this remediation |
+| Independent QA | Reproduce tests/browser journeys and challenge implementation claims | Dedicated QA report/artifact directory assigned by parent; no app code or implementation tests |
+| Ops | Read-only deployment/dependency/recovery inventory and narrow approval plan | Dedicated Ops report directory assigned by parent; no config, scheduler or provider mutation |
+
+Parent assigned Engineering sole app/test and README/PRODUCTION_OPERATIONS writer for the bounded remediation on 2026-11-10; this supersedes the earlier split Design/Engineering writer plan. CEO edits only these two launch-team documents. Parent locks paths per package; any shared-file need pauses for explicit reassignment. One writer per path, no parallel rebases/commits/deploys. Implementation author cannot approve their own release. QA reports failures independently; CEO cannot mark waived tests as passed. Only operator approves external changes and unresolved business choices.
+
+## Release acceptance
+All applicable gates require reproducible evidence; missing evidence = blocked, not pass.
+- **G0 scope/identity:** exact candidate commits/artifacts, authorized milestone and truthful deferred-feature wording; no old-price checkout enabled.
+- **G1 engineering:** fresh isolated npm run check, zero failures/skips justified individually, syntax/diff checks, bounded readiness/concurrency/fail-closed regression proof; no production credentials in tests.
+- **G2 UX:** real browser desktop and 375/430px review of homepage anchors, pricing, sign-in/registration/recovery and relevant dashboards; no horizontal overflow, usable keyboard/focus/errors/loading/retry, accurate application/manual-review/coming-soon states. Screenshots plus interactions, not DOM tests alone.
+- **G3 independent QA:** rerun candidate checks independently; local owner/shop workflows including duplicate/retry/error and unauthorized denial. Test billing-disabled prelaunch separately from synthetic enabled workflow. Hosted isolation/Auth/private-storage results remain separately required; local dev headers cannot satisfy them.
+- **G4 hosted operations:** authorized target, current deployment SHA parity and live health/availability/no-store evidence; reviewed migration history and private bucket permissions; no blind SQL replay. Supabase reactivation is a prerequisite, not sufficient acceptance. Render health-path approval already exists, conditional on healthy service and required proof; do not request it again as an unknown approval. The condition was unmet at the last observation; reverify before any authorized execution. Preserve auto-deploy OFF, demonstrate timing/health and apply only the previously authorized scope through the parent. Empty path means TCP defaults.
+- **G5 sustainable operation:** approved recovery custodian/destination/retention/RPO/RTO and measured isolated restore covering DB/Auth/private objects; named real support/incident owner and existing authorized reviewer; approved review/evidence/rejection/privacy/retention policy. No invented contact, privileges or guarantee.
+- **G6 release:** QA written pass or explicit blocked list on final candidate, CEO synthesis, operator deployment/opening authorization, compatible rollback plan and post-release evidence. Any core authorization/persistence regression, unexpected billing/new-work opening or dependency failure is NO-GO.
+
+No production mutations, new resources, exports, accounts, external messages, config/scheduler changes, spend or pushes are authorized by this charter. Parent separately authorized the final explicit-path commit of CHARTER.md and BOARD.md only; this is not app/deployment authorization. Read-only external-app checks use bundled Composio after actual-environment command -v composio, composio --version (>=0.4.0), composio whoami; missing/outdated/auth failure requires operator decision, not installation/upgrade/sign-in. Never replay uncertain writes.
+
+## Decision log
+- D01 — SMS setup and Stripe setup remain deferred. No SMS implementation/send or Stripe price/entitlement/config change in current packages.
+- D02 — Planned shop price is $29.99/month with application/manual review; no subscription begins now. Historical $99 re-enable instructions are not current authorization.
+- D03 — Supabase reactivation approval remains outstanding. Broad AI-team instruction is not project restore/reactivation, spend or administrative approval.
+- D04 — No dedicated disposable hosted test/restore target or controlled hosted account/send authorization evidenced. Do not reuse production or unrelated inactive projects.
+- D05 — Recovery proof, support/incident/reviewer ownership and approved policy remain unresolved; local tests do not settle them.
+- D06 — Ops identified SUPABASE_RESTORE_PROJECT as the supported paused-project resume operation, with no inherent paid upgrade. Explicit user approval to resume ntlsefkfbdnriknukjzl remains pending. Its tool name does not imply authorization for backup/data restore, imports or destructive replacement. Recheck current state before any approved operation; paid upgrade, new project, export/data restore and admin grants remain outside scope.
+- D07 — Full operational launch remains blocked by deliberate billing/new-work closure and unresolved auth scope. Parent must ask whether the immediate deliverable is restored honest prelaunch (recommended while SMS/Stripe are deferred), or a separately designed operational scope. Do not equate prelaunch recovery with marketplace launch.
+
+## Final bounded team outcome
+- Engineering implemented the five fixes and documentation corrections in 86132f6. Independent QA passed 150 tests but discovered two additional P2 edges: uncertain recovery outcome and explicit null state resurrecting NY. Passing the existing suite did not override these findings.
+- Engineering corrected those edges in 62b14ef71d6d3325dd9ee5dc7c3caa6ece7b5cfe. Independent QA reports PASS, fresh **157/157**, zero failures/skips, with original edge reproductions closed. CEO inspected the saved check and edge logs; no duplicate full test run was needed for this docs-only gate.
+- Evidence: /tmp/smr-corrections-qa-ejhGG3/check.log, independent-edges.log and independent-edges.mjs. Actual desktop/375/430 screenshots under workspace/artifacts/smr-team-* were inspected for the previous patch by the team. Final correction logic is covered by JSDOM/independent edge checks, **not a fresh browser capture**. These boundaries are retained in local acceptance and do not constitute launch certification.
+- Local release-candidate gate: PASS for the bounded fixes and QA feedback loop. Hosted readiness, restore/auth/storage proof and marketplace opening remain blocked; nothing was pushed or deployed by this CEO finalization.
+- Roles are retained session-based working roles coordinated by the parent, not an always-running or configured autonomous company. This batch is complete; no new tasks, fanout or background work is started.
