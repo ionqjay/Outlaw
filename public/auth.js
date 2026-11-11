@@ -27,13 +27,13 @@ function setAuthPending(pending) {
   document.querySelector('.auth-actions').setAttribute('aria-busy', String(pending));
   for (const control of document.querySelectorAll('#authForm input, #authForm select, #authForm button')) control.disabled = pending;
 }
-async function guardedAuth(operation) {
+async function guardedAuth(operation, messages = {}) {
   if (authPending) return;
   setAuthPending(true);
   // A warning is not cancellation: retain ownership until the SDK settles.
-  const timer = setTimeout(() => { statusEl.textContent = 'The result could not be confirmed yet. Do not submit again; wait for this request to finish. For account creation, check for confirmation before trying again.'; }, 15000);
+  const timer = setTimeout(() => { statusEl.textContent = messages.pending || 'The result could not be confirmed yet. Do not submit again; wait for this request to finish. For account creation, check for confirmation before trying again.'; }, 15000);
   try { await operation(); }
-  catch (error) { statusEl.textContent = error?.status ? (error.message || 'Account request failed.') : 'The result could not be confirmed. Check your account or confirmation email before trying again. No automatic retry was made.'; }
+  catch (error) { statusEl.textContent = error?.status ? (error.message || 'Account request failed.') : (messages.uncertain || 'The result could not be confirmed. Check your account or confirmation email before trying again. No automatic retry was made.'); }
   finally { clearTimeout(timer); setAuthPending(false); }
 }
 let signupMode = ['owner', 'shop'].includes(new URLSearchParams(location.search).get('role'));
@@ -147,13 +147,15 @@ document.getElementById('forgotPasswordBtn').addEventListener('click', async () 
   const email = values().email;
   if (!email || !document.getElementById('email').checkValidity()) { statusEl.textContent = 'Enter your email above first.'; return; }
   if (!window.smrSupabaseReady) { statusEl.textContent = 'Password recovery is temporarily unavailable.'; return; }
-  setAuthPending(true);
-  try {
+  statusEl.textContent = 'Requesting a recovery email...';
+  await guardedAuth(async () => {
     const { error } = await window.smrSupabase.auth.resetPasswordForEmail(email, { redirectTo: location.origin + '/reset-password.html' });
     if (error) throw error;
     statusEl.textContent = 'If an account exists for that email, a recovery link is on its way. Check your inbox and spam folder.';
-  } catch (error) { statusEl.textContent = error.message || 'Could not request a recovery email.'; }
-  finally { setAuthPending(false); }
+  }, {
+    pending: 'The recovery request is still pending. Do not submit again; wait for this request to finish. An email may already have been sent. Check your inbox and spam folder.',
+    uncertain: 'The recovery result could not be confirmed. An email may already have been sent. Check your inbox and spam folder before trying again. No automatic retry was made.'
+  });
 });
 
 function syncAuthMode() {

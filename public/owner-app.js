@@ -734,7 +734,7 @@ async function boot() {
     document.getElementById('profileEmail').value = profile.email || '';
     document.getElementById('profilePhone').value = profile.phone || '';
     document.getElementById('profileCity').value = profile.city || '';
-    document.getElementById('profileState').value = profile.state ?? 'NY';
+    document.getElementById('profileState').value = Object.prototype.hasOwnProperty.call(profile, 'state') ? (profile.state ?? '') : 'NY';
     document.getElementById('profileZip').value = profile.zip || '';
 
     if (!document.getElementById('city').value && profile.city) document.getElementById('city').value = profile.city;

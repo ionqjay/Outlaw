@@ -81,3 +81,19 @@ test('feedback blank rating, pending duplicate prevention and cancellation retai
  d.querySelector('[data-star="4"]').click();d.getElementById('feedbackSubmitBtn').click();d.getElementById('feedbackSubmitBtn').click();assert.equal(calls,1);dialog.dispatchEvent(new w.Event('cancel',{cancelable:true}));assert.equal(dialog.open,true);assert.equal(d.getElementById('feedbackSubmitBtn').disabled,true);
  w.testReject(Error('controlled failure'));await tick();assert.equal(d.getElementById('feedbackSubmitBtn').disabled,false);assert.equal(calls,1);dialog.dispatchEvent(new w.Event('cancel',{cancelable:true}));assert.equal(dialog.open,false);dom.window.close();
 });
+
+test('recovery pending warning retains ownership and transport failure warns of possible delivery',async()=>{
+ const dom=new JSDOM(file('login.html'),{url:'https://fixture.invalid/login.html',runScripts:'outside-only'}),w=dom.window,d=w.document;let calls=0,warning,reject;
+ w.setTimeout=fn=>{warning=fn;return 1;};w.clearTimeout=()=>{};
+ w.smrSupabaseReady=true;w.smrSupabase={auth:{resetPasswordForEmail:()=>{calls++;return new Promise((a,b)=>reject=b);}}};w.eval(file('auth.js'));d.getElementById('email').value='synthetic@example.invalid';
+ const button=d.getElementById('forgotPasswordBtn');button.click();assert.match(d.getElementById('authStatus').textContent,/Requesting a recovery email/);button.click();d.getElementById('authModeBtn').click();assert.equal(calls,1);assert.equal(d.getElementById('authModeBtn').disabled,true);
+ warning();assert.match(d.getElementById('authStatus').textContent,/may already have been sent/);assert.equal(button.disabled,true);assert.equal(calls,1);
+ reject(new TypeError('network lost'));await tick();assert.equal(button.disabled,false);assert.match(d.getElementById('authStatus').textContent,/may already have been sent/);assert.match(d.getElementById('authStatus').textContent,/No automatic retry/);assert.equal(calls,1);dom.window.close();
+});
+for(const [page,script,kind] of [['owner-app.html','owner-app.js','Owner'],['mechanic.html','mechanic.js','Mechanic']])for(const stateCase of ['null','empty','absent'])test(kind+' actual state field preserves hosted '+stateCase,async()=>{
+ const dom=new JSDOM(file(page),{url:'https://fixture.invalid',runScripts:'outside-only'}),w=dom.window,d=w.document;
+ const metadata=stateCase==='absent'?{}:{state:stateCase==='null'?null:''};
+ w.smrSupabaseReady=true;w.smrSupabase={auth:{getSession:async()=>({data:{session:{user:{id:'fixture',user_metadata:{state:'OLD'}}}}}),getUser:async()=>({data:{user:{id:'fixture',user_metadata:metadata}}})}};
+ w.localStorage.setItem('smr_'+(kind==='Owner'?'owner':'mechanic')+'_profile_fixture',JSON.stringify({state:'OLD'}));w.eval(file('app-auth.js'));
+ w.profile=await w.smrAuth['get'+kind+'Profile']();const assignment=file(script).split(String.fromCharCode(10)).find(line=>line.includes("getElementById('profileState').value ="));assert.ok(assignment);w.eval(assignment);assert.equal(d.getElementById('profileState').value,stateCase==='absent'?'NY':'');dom.window.close();
+});
