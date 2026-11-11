@@ -20,6 +20,22 @@ function allowLocalDevAuth() {
 const statusEl = document.getElementById('authStatus');
 const signInBtn = document.getElementById('signInBtn');
 const signUpBtn = document.getElementById('signUpBtn');
+let authPending = false;
+function setAuthPending(pending) {
+  authPending = pending;
+  // Keep the live status outside the busy subtree so warnings can be announced.
+  document.querySelector('.auth-actions').setAttribute('aria-busy', String(pending));
+  for (const control of document.querySelectorAll('#authForm input, #authForm select, #authForm button')) control.disabled = pending;
+}
+async function guardedAuth(operation) {
+  if (authPending) return;
+  setAuthPending(true);
+  // A warning is not cancellation: retain ownership until the SDK settles.
+  const timer = setTimeout(() => { statusEl.textContent = 'The result could not be confirmed yet. Do not submit again; wait for this request to finish. For account creation, check for confirmation before trying again.'; }, 15000);
+  try { await operation(); }
+  catch (error) { statusEl.textContent = error?.status ? (error.message || 'Account request failed.') : 'The result could not be confirmed. Check your account or confirmation email before trying again. No automatic retry was made.'; }
+  finally { clearTimeout(timer); setAuthPending(false); }
+}
 let signupMode = ['owner', 'shop'].includes(new URLSearchParams(location.search).get('role'));
 
 function selectedSignupServices() {
@@ -62,6 +78,7 @@ async function signInSupabase({ email, password }) {
 }
 
 signUpBtn.addEventListener('click', async () => {
+  if (authPending) return;
   const { name, email, password, role, services } = values();
   if (!name || !email || !password) return statusEl.textContent = 'Name, email, and password are required.';
   if (!document.getElementById('email').checkValidity()) return statusEl.textContent = 'Enter a valid email address.';
@@ -72,7 +89,7 @@ signUpBtn.addEventListener('click', async () => {
   }
   statusEl.textContent = 'Creating account...';
 
-  try {
+  await guardedAuth(async () => {
     if (window.smrSupabaseReady) return await signUpSupabase({ name, email, password, role, services });
     if (!allowLocalDevAuth()) throw new Error('Supabase Auth is required. Please try again once authentication is configured.');
 
@@ -82,17 +99,16 @@ signUpBtn.addEventListener('click', async () => {
     saveUsers(users);
     setLocalSession({ name, email, role });
     go(role);
-  } catch (e) {
-    statusEl.textContent = e.message || 'Sign up failed.';
-  }
+  });
 });
 
 signInBtn.addEventListener('click', async () => {
+  if (authPending) return;
   const { email, password } = values();
   if (!email || !password) return statusEl.textContent = 'Email and password are required.';
   statusEl.textContent = 'Signing in...';
 
-  try {
+  await guardedAuth(async () => {
     if (window.smrSupabaseReady) return await signInSupabase({ email, password });
     if (!allowLocalDevAuth()) throw new Error('Supabase Auth is required. Please try again once authentication is configured.');
 
@@ -101,9 +117,7 @@ signInBtn.addEventListener('click', async () => {
     if (!user) return statusEl.textContent = 'Invalid email/password.';
     setLocalSession(user);
     go(user.role);
-  } catch (e) {
-    statusEl.textContent = e.message || 'Sign in failed.';
-  }
+  });
 });
 
 const roleEl = document.getElementById('role');
@@ -129,16 +143,17 @@ const requestedRole = new URLSearchParams(location.search).get('role');
 if (['owner','shop'].includes(requestedRole)) { roleEl.value = requestedRole; syncSpecialtiesVisibility(); }
 document.getElementById('authForm').addEventListener('submit', event => { event.preventDefault(); (signupMode ? signUpBtn : signInBtn).click(); });
 document.getElementById('forgotPasswordBtn').addEventListener('click', async () => {
+  if (authPending) return;
   const email = values().email;
   if (!email || !document.getElementById('email').checkValidity()) { statusEl.textContent = 'Enter your email above first.'; return; }
   if (!window.smrSupabaseReady) { statusEl.textContent = 'Password recovery is temporarily unavailable.'; return; }
-  const button = document.getElementById('forgotPasswordBtn'); button.disabled = true;
+  setAuthPending(true);
   try {
     const { error } = await window.smrSupabase.auth.resetPasswordForEmail(email, { redirectTo: location.origin + '/reset-password.html' });
     if (error) throw error;
     statusEl.textContent = 'If an account exists for that email, a recovery link is on its way. Check your inbox and spam folder.';
   } catch (error) { statusEl.textContent = error.message || 'Could not request a recovery email.'; }
-  finally { button.disabled = false; }
+  finally { setAuthPending(false); }
 });
 
 function syncAuthMode() {
@@ -156,6 +171,7 @@ function syncAuthMode() {
   syncSpecialtiesVisibility();
 }
 document.getElementById('authModeBtn').addEventListener('click', () => {
+  if (authPending) return;
   signupMode = !signupMode;
   document.getElementById('password').value = '';
   statusEl.textContent = '';

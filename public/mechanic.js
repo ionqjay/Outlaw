@@ -331,7 +331,7 @@ async function boot() {
     document.getElementById('profileEmail').value = profile.email || '';
     document.getElementById('profilePhone').value = profile.phone || '';
     document.getElementById('profileCity').value = profile.city || '';
-    document.getElementById('profileState').value = profile.state || 'NY';
+    document.getElementById('profileState').value = profile.state ?? 'NY';
     document.getElementById('profileBusinessAddress').value = profile.businessAddress || '';
     document.getElementById('profileZip').value = profile.zip || '';
     document.getElementById('profileServices').value = profile.services || '';

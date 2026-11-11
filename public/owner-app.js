@@ -244,18 +244,30 @@ function getFeedbackForRequest(requestId) {
   return getFeedbacks().find(x => String(x.requestId) === String(requestId)) || null;
 }
 
+let feedbackOpener = null;
+let feedbackSubmitting = false;
+function syncFeedbackRating() {
+  document.querySelectorAll('[data-star]').forEach(button => {
+    button.classList.toggle('active', Number(button.dataset.star) <= pendingFeedbackStars);
+    button.setAttribute('aria-pressed', String(Number(button.dataset.star) === pendingFeedbackStars));
+  });
+}
 function openFeedbackModal(payload) {
+  feedbackOpener = document.activeElement;
   pendingFeedback = payload;
   pendingFeedbackStars = 0;
   document.getElementById('feedbackNote').value = '';
-  document.querySelectorAll('[data-star]').forEach(btn => btn.classList.remove('active'));
-  document.getElementById('feedbackModal').classList.remove('hidden');
+  syncFeedbackRating();
+  document.getElementById('feedbackModal').showModal();
+  document.querySelector('[data-star]').focus();
 }
 
 function closeFeedbackModal() {
+  if (feedbackSubmitting) return;
   pendingFeedback = null;
   pendingFeedbackStars = 0;
-  document.getElementById('feedbackModal').classList.add('hidden');
+  document.getElementById('feedbackModal').close();
+  feedbackOpener?.focus();
 }
 
 function renderRequests() {
@@ -540,7 +552,7 @@ function renderBids() {
     if (existing) {
       pendingFeedbackStars = Number(existing.rating || 0);
       document.getElementById('feedbackNote').value = existing.text || '';
-      document.querySelectorAll('[data-star]').forEach(s => s.classList.toggle('active', Number(s.dataset.star) <= pendingFeedbackStars));
+      syncFeedbackRating();
     }
   }));
 
@@ -675,19 +687,22 @@ async function boot() {
 
   document.getElementById('logoutBtn').addEventListener('click', () => window.smrAuth.logoutToLogin());
 
-  document.getElementById('feedbackOverlay').addEventListener('click', closeFeedbackModal);
+  document.getElementById('feedbackModal').addEventListener('cancel', event => { event.preventDefault(); closeFeedbackModal(); });
   document.getElementById('feedbackCancelBtn').addEventListener('click', closeFeedbackModal);
   document.querySelectorAll('[data-star]').forEach(btn => btn.addEventListener('click', () => {
     pendingFeedbackStars = Number(btn.dataset.star);
-    document.querySelectorAll('[data-star]').forEach(s => s.classList.toggle('active', Number(s.dataset.star) <= pendingFeedbackStars));
+    syncFeedbackRating();
   }));
   document.getElementById('feedbackSubmitBtn').addEventListener('click', async () => {
-    if (!pendingFeedback) return;
+    if (!pendingFeedback || feedbackSubmitting) return;
     if (!Number.isFinite(pendingFeedbackStars) || pendingFeedbackStars < 1 || pendingFeedbackStars > 5) {
       alert('Please select a star rating from 1 to 5.');
       return;
     }
     const text = document.getElementById('feedbackNote').value || '';
+    feedbackSubmitting = true;
+    const controls = document.querySelectorAll('#feedbackModal button, #feedbackModal textarea');
+    controls.forEach(control => { control.disabled = true; });
 
     try {
       await recordFeedback({
@@ -699,12 +714,16 @@ async function boot() {
         text
       });
 
+      feedbackSubmitting = false;
       closeFeedbackModal();
       await loadDashboardData(window.__ownerSession);
       renderBids();
       alert('Review submitted successfully.');
     } catch (err) {
       alert(err.message || 'Could not submit review.');
+    } finally {
+      feedbackSubmitting = false;
+      controls.forEach(control => { control.disabled = false; });
     }
   });
 
@@ -715,7 +734,7 @@ async function boot() {
     document.getElementById('profileEmail').value = profile.email || '';
     document.getElementById('profilePhone').value = profile.phone || '';
     document.getElementById('profileCity').value = profile.city || '';
-    document.getElementById('profileState').value = profile.state || 'NY';
+    document.getElementById('profileState').value = profile.state ?? 'NY';
     document.getElementById('profileZip').value = profile.zip || '';
 
     if (!document.getElementById('city').value && profile.city) document.getElementById('city').value = profile.city;
