@@ -80,6 +80,17 @@ async function getOwnerProfile() {
   const session = await getActiveSession();
   if (!session?.id) return null;
 
+  if (window.smrSupabaseReady && window.smrSupabase) {
+    // Refresh canonical metadata; browser caches must not hide other-device edits.
+    const { data, error } = await window.smrSupabase.auth.getUser();
+    if (error) throw error;
+    if (!data?.user) throw new Error('No active session.');
+    const metadata = data.user.user_metadata || {};
+    return Object.fromEntries(["name","email","phone","city","state","zip"].map(key => [key,
+      Object.prototype.hasOwnProperty.call(metadata, key) ? metadata[key] : key === 'email' ? (data.user.email || '') : key === 'state' ? 'NY' : ''
+    ]));
+  }
+
   const local = JSON.parse(localStorage.getItem(`smr_owner_profile_${session.id}`) || '{}');
   const merged = {
     name: local.name || session.name || '',
@@ -135,6 +146,17 @@ async function saveMechanicProfile(profile = {}) {
 async function getMechanicProfile() {
   const session = await getActiveSession();
   if (!session?.id) return null;
+
+  if (window.smrSupabaseReady && window.smrSupabase) {
+    // Refresh canonical metadata; browser caches must not hide other-device edits.
+    const { data, error } = await window.smrSupabase.auth.getUser();
+    if (error) throw error;
+    if (!data?.user) throw new Error('No active session.');
+    const metadata = data.user.user_metadata || {};
+    return Object.fromEntries(["businessName","businessAddress","name","email","phone","city","state","zip","services","serviceRadiusMiles","certifications"].map(key => [key,
+      Object.prototype.hasOwnProperty.call(metadata, key) ? metadata[key] : key === 'email' ? (data.user.email || '') : key === 'state' ? 'NY' : ''
+    ]));
+  }
 
   const local = JSON.parse(localStorage.getItem(`smr_mechanic_profile_${session.id}`) || '{}');
   return {

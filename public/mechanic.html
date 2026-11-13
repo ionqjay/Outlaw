@@ -339,25 +339,25 @@
       <details class="list-card"><summary>Request an opportunity-guarantee refund</summary><p>After a billing month ends, choose the paid billing month you want reviewed. Missed invitations and unsuccessful estimates do not qualify.</p><form id="refundForm"><label>Billing month<select name="invoiceId" id="refundInvoiceSelect" required><option value="">Loading paid billing months...</option></select></label><button class="btn btn-secondary">Request review</button><p id="refundStatus" role="status"></p></form></details>
 
 <div class="row2" style="margin-top:10px">
-        <input id="profileBusinessName" placeholder="Shop or business name" />
-        <input id="profileName" placeholder="Contact name" />
+        <label class="profile-field" for="profileBusinessName">Shop name<input id="profileBusinessName" placeholder="Shop or business name" autocomplete="organization" aria-describedby="mechanicProfileStatus" /></label>
+        <label class="profile-field" for="profileName">Full name<input id="profileName" placeholder="Contact name" autocomplete="name" aria-describedby="mechanicProfileStatus" /></label>
       </div>
       <div class="row2" style="margin-top:8px">
-        <input id="profileEmail" type="email" placeholder="Email address" />
-        <input id="profilePhone" placeholder="Phone number" />
+        <label class="profile-field" for="profileEmail">Contact email<input id="profileEmail" type="email" placeholder="Email address" autocomplete="email" aria-describedby="mechanicProfileStatus" /></label>
+        <label class="profile-field" for="profilePhone">Phone number<input id="profilePhone" placeholder="Phone number" autocomplete="tel" aria-describedby="mechanicProfileStatus" inputmode="tel" /></label>
       </div>
       <div class="row2" style="margin-top:8px">
-        <input id="profileCity" placeholder="City" />
-        <input id="profileState" placeholder="State" value="NY" />
+        <label class="profile-field" for="profileCity">City<input id="profileCity" placeholder="City" autocomplete="address-level2" aria-describedby="mechanicProfileStatus" /></label>
+        <label class="profile-field" for="profileState">State<input id="profileState" placeholder="State" value="NY" autocomplete="address-level1" aria-describedby="mechanicProfileStatus" /></label>
       </div>
       <div class="row2" style="margin-top:8px">
-        <input id="profileBusinessAddress" placeholder="Business address" />
-        <input id="profileZip" placeholder="ZIP" />
+        <label class="profile-field" for="profileBusinessAddress">Business address<input id="profileBusinessAddress" placeholder="Business address" autocomplete="street-address" aria-describedby="mechanicProfileStatus" /></label>
+        <label class="profile-field" for="profileZip">ZIP code<input id="profileZip" placeholder="ZIP" autocomplete="postal-code" aria-describedby="mechanicProfileStatus" inputmode="numeric" /></label>
       </div>
       <div id="individualOnlyFields" style="display:none">
         <div class="row2" style="margin-top:8px">
-          <input id="profileServiceRadius" placeholder="Service radius (1–100 miles)" />
-          <input id="profileCertifications" placeholder="Certifications (ASE, etc.)" />
+          <label class="profile-field" for="profileServiceRadius">Service radius (miles)<input id="profileServiceRadius" placeholder="Service radius (1–100 miles)" autocomplete="off" aria-describedby="mechanicProfileStatus" /></label>
+          <label class="profile-field" for="profileCertifications">Certifications<input id="profileCertifications" placeholder="Certifications (ASE, etc.)" autocomplete="off" aria-describedby="mechanicProfileStatus" /></label>
         </div>
       </div>
       <p class="subtle" style="margin-top:8px">Choose the repair types you can perform. Matching uses these specialties.</p>
@@ -374,9 +374,9 @@
         <label class="svc-pill"><input type="checkbox" value="battery" data-service-specialty /> Battery/Starter/Alternator</label>
         <label class="svc-pill"><input type="checkbox" value="other" data-service-specialty /> Other</label>
       </div>
-      <textarea id="profileServices" placeholder="Optional: add extra specialties (comma separated)" style="margin-top:8px"></textarea>
+      <label for="profileServices">Additional specialties (optional)</label><textarea aria-describedby="mechanicProfileStatus" id="profileServices" placeholder="Optional: add extra specialties (comma separated)" style="margin-top:8px"></textarea>
       <button class="btn btn-primary" id="saveMechanicProfileBtn" style="margin-top:10px">Save Profile</button>
-      <p id="mechanicProfileStatus" class="status">Profile not updated yet.</p>
+      <p id="mechanicProfileStatus" role="status" aria-live="polite" class="status">Profile not updated yet.</p>
     </section>
   </main>
 
