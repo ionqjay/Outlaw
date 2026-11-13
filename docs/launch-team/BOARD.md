@@ -29,12 +29,12 @@ Initial baseline: 2026-11-10, f083f87f2c4ec2f70b6fcac9f1f705475fdcc987. Final ap
 - Fresh CEO bounded baseline: node --test test/release-smoke.test.js test/health-deadline.test.js test/billing-disabled.test.js — 11/11 passed, zero failed/skipped, exit 0 (2026-11-10). Hung-dependency actual handler test completed in about 3.106s. This supports planning only, not independent release acceptance. Documentation whitespace checks produced no findings (git diff --no-index exits 1 for newly added file differences, not a test failure). At the initial CEO check only docs/ was untracked; no tracked application changes.
 - Initial hosted statuses were handoff only. Fresh Ops and QA reports have now been relayed by the parent and are recorded below; no external-app operations were performed by CEO.
 
-## Exact blocked decisions for parent to relay
+## Historical operator decisions (Nov 13 delegation supersedes resume/reviewed-release approval requests)
 **First / pending:** “May we resume the existing paused Supabase project ntlsefkfbdnriknukjzl using the supported SUPABASE_RESTORE_PROJECT operation? Ops confirms this is paused-project resumption, with no inherent paid upgrade. This does not authorize backup/data restore, import, new resources, exports, accounts/admin grants or SMS/Stripe; stop if the operation presents different or paid implications.” Explicit approval remains outstanding.
 
 **Milestone clarification:** “While SMS and Stripe stay deferred, should we target a healthy, honest prelaunch with applications/manual review and new repairs/quotes/subscriptions closed? Operational marketplace launch needs a separate authorized plan to address its current billing/new-work coupling and intended authentication.” Recommend prelaunch recovery first; do not imply full launch is already possible.
 
-Later separate decisions: designate disposable isolated hosted app/Supabase target and authorized controlled test identities/actions; approve protected backup destination/custodian/retention/recovery objectives, export and isolated restore separately; name real support/incident owner and already-authorized reviewer plus review/privacy policies; approve any new deployment scope after QA evidence. The existing Render health-path approval is already granted conditionally on healthy service; do not request duplicate approval or execute while health is 503. No generic credentials request and no implied spend approval.
+Later separate decisions: designate disposable isolated hosted app/Supabase target and authorized controlled test identities/actions; approve protected backup destination/custodian/retention/recovery objectives, export and isolated restore separately; name real support/incident owner and already-authorized reviewer plus review/privacy policies; CEO may approve reviewed routine releases after QA evidence under Nov 13 delegation; marketplace opening remains separately reserved. The existing Render health-path approval is already granted conditionally on healthy service; do not request duplicate approval or execute while health is 503. No generic credentials request and no implied spend approval.
 
 
 ## Discovery specialist synthesis — 2026-11-10 (historical baseline)
@@ -63,13 +63,13 @@ Order: **FIX-01 and FIX-02 first**, then FIX-03–05, then DOC-01, candidate fre
 2. Parent freezes candidate and hands the same diff to independent QA. QA confirms candidate identity before and after testing; any intervening implementation change invalidates affected acceptance and requires rerun. No test-edit or app-fix authority for QA.
 3. QA independently reproduces FIX-01–05 acceptance, checks DOC-01 accuracy, runs full isolated suite, and verifies disabled billing/new-work/security contracts and responsive/keyboard interaction. Record PASS/FAIL/BLOCKED for each row with exact evidence; unsupported hosted tests remain BLOCKED, not synthetic passes.
 4. CEO gate for **local patch acceptance**: all six rows pass independent review, full suite green with no unexplained skips, no unrelated/auth-provider/billing activation/config change, and frozen identity established. An engineering pass alone is insufficient. Failed row returns one narrowly scoped correction through parent, not parallel overlapping edits.
-5. CEO gate for **hosted/operational launch** remains **NO-GO** even after local acceptance: last observed Nov 10 health 503 (not freshly rechecked); resume approval pending; staging/controlled hosted identity and storage proof, existing reviewer/evidence policy, support/incident ownership, protected backup/export/isolated restore decisions and measured recovery still unresolved. SMS/Stripe remain intentionally deferred, and current billing-disabled behavior closes new requests/quotes. No release or marketplace-opening authorization follows from this board.
+5. CEO gate for **hosted/operational launch** remains **NO-GO** even after local acceptance: last observed Nov 10 health 503 (not freshly rechecked); resume authorized by Nov 13 delegation, recovery proof pending; staging/controlled hosted identity and storage proof, existing reviewer/evidence policy, support/incident ownership, protected backup/export/isolated restore decisions and measured recovery still unresolved. SMS/Stripe remain intentionally deferred, and current billing-disabled behavior closes new requests/quotes. No release or marketplace-opening authorization follows from this board.
 
 ## Current board status
 - Discovery OPS-01 / ENG-01 / DES-01 / QA-01: reports returned via parent; baseline is not patch acceptance.
 - FIX-01–05 / DOC-01: **completed and locally accepted**, implementation 86132f6 plus corrective 62b14ef; independent QA feedback loop below.
 - QA-02: **PASS on application 62b14ef71d6d3325dd9ee5dc7c3caa6ece7b5cfe**, fresh 157/157 and independent edge verification.
-- Supabase resume: **blocked on explicit user approval**.
+- Supabase resume: **executed once Nov 13; accepted log_sxhC0jp1ks22, provider RESTORING at final observation; do not replay**.
 - Render health-path execution: **already conditionally approved, blocked on healthy prerequisite/proof**; auto-deploy remains OFF.
 - Hosted recovery/testing and operational launch: **blocked** as above. CEO bounded local gate is complete, PASS with evidence limitations below; not launch-certified.
 
@@ -87,9 +87,39 @@ Evidence locations: /tmp/smr-corrections-qa-ejhGG3/{check.log,independent-edges.
 
 Browser evidence boundary: workspace/artifacts/smr-team-* screenshots at actual 1440/375/430 were inspected for the prior patch. Final corrective logic was exercised with JSDOM/independent checks, not a new real-browser pass. Do not relabel prior screenshots as final-SHA browser proof. Hosted production Auth/private-storage behavior and recovery remain unproved by these local checks.
 
-### Executive recommendation / next operator approval
+### Historical executive recommendation (resume approval superseded Nov 13)
 Accept this **local candidate** and keep production/new-work activation closed. Ask only the next actionable decision: **“May we resume the existing paused Supabase project ntlsefkfbdnriknukjzl with SUPABASE_RESTORE_PROJECT, without a paid upgrade, new resources, import or backup/data restore?”** Approval is still pending; once granted, parent must recheck current state/operation before executing and stop if implications differ. Last known INACTIVE/Free/503/backups[]/PITR-off evidence is from Nov 10, not a new live check.
 
 Existing Render health-path approval remains conditional on healthy service/proof and does not need to be asked again. Staging/controlled hosted tests, backup destination/custodian/retention/export/isolated restore approval, reviewer/support/incident ownership and policies remain unresolved separate gates. SMS and Stripe remain deferred; planned price $29.99 and legacy backend 9900 attestation must **not** be activated as-is.
 
 Team roles persist as kept sessions under parent coordination, not an always-running/configured autonomous company. No new assignments/fanout/background execution are created by this final gate.
+
+## Active recovery package — 2026-11-13
+Nov 13 user delegation supersedes all earlier pending-resume/per-action routine-release approval wording above. Resume only existing Free Supabase ntlsefkfbdnriknukjzl via supported paused-project operation after state read; record accepted result once, never replay uncertain writes. Verify project and public DB/private-storage readiness before setting only Render srv-d6lg6f14tr6s73cosdjg healthCheckPath=/api/health under existing approval, preserving auto-deploy OFF. No release of pending 62b14ef candidate in this batch. Reserved backup/staging/account/reviewer/support/policy decisions remain unchanged. Parent owns existing nightly automation and completion; no new timers or fanout.
+Recovered clean HEAD145cc5b, application candidate62b14ef unchanged. Actual exec preflight: composio /home/openclaw/.local/bin/composio version0.5.0, whoami authenticated. Cache offers0.6.0; no install/upgrade/sign-in performed.
+
+### Recovery operation checkpoint — 2026-11-13
+- Prewrite project list INACTIVE: log_YKE_IsXXw1o-. Organization plan free reconfirmed: log_-XTsMW_Cfsn9.
+- Executed SUPABASE_RESTORE_PROJECT exactly once with ref ntlsefkfbdnriknukjzl under Nov13 delegation. Accepted successful:true/status_code200, empty response; Composio logId **log_sxhC0jp1ks22**. No provider operation ID supplied. Acceptance is not health completion. **Do not repeat resume**; reconcile project/public health next.
+- Phase: resume accepted, health verification pending; Render configuration not yet changed.
+
+- First post-resume read: COMING_UP (log_rF5D0VXQJbpe). Render prechange inspection log_sxUHh3XRPocH: Free, autoDeploy=no/trigger=off, healthCheckPath empty. Existing deploy dep-dbnbt59srm7s73905oi0 verified live at f083f87f2c4ec2f70b6fcac9f1f705475fdcc987 (log_bDwkVztj2la4). Public smoke still running; no Render write yet.
+
+- Public smoke 2026-11-13T05:32:20.992Z during project startup: health503/21693ms, mixed-case503/107ms, availability200/166ms with billing-disabled/newQuotes=false contract; all no-store. No healthy/readiness claim and no health-path write. One delayed read-only follow-up after45s started; no resume retry.
+
+- Delayed check 05:33:18Z: still COMING_UP (log_g0WVi0CNU4la); health503/388ms, mixed503/302ms; availability200/175ms disabled/newQuotes=false, all no-store. Latest Render deployment listing confirms same dep/f083f87 (log_cSi4-Q-7fTF6). One final read-only observation after90s started; no retries of accepted mutation. If still starting, next continuation must only reconcile; health-path remains blocked.
+
+### Bounded recovery handoff — 2026-11-13T05:34:55.394Z
+Resume progressed INACTIVE → COMING_UP → **RESTORING** (last read log_z60OfbjiFy37). This is the provider status following the authorized paused-project resume, NOT an independently requested backup rollback/import. Final public smoke: health503/730ms, mixed-case503/249ms, availability200/105ms; all no-store, availability disabled/newQuotes=false. DB/private-storage readiness is **not yet verified**. No Render write: healthCheckPath stays inspected empty, auto-deploy OFF; no candidate release/deploy/push.
+
+Stop this bounded recovery batch here rather than poll indefinitely. Next continuation: read project state and public readiness only; reconcile accepted resume log_sxhC0jp1ks22, never repeat while RESTORING/COMING_UP or without resolving prior effect. Once ACTIVE_HEALTHY and DB/private-bucket health proof/timing pass, re-inspect Render and apply only approved /api/health setting preserving autoOFF, then read back and smoke. If project stalls/errors, diagnose read-only and report concrete provider blocker; no backup restore, upgrade or new resource. Missing prerequisite is provider recovery completion, **not renewed user approval**. Parent owns continuation through the existing daily automation.
+
+Local checkpoint HEAD145cc5b; application candidate62b14ef unchanged. Only BOARD.md/CHARTER.md dirty; git diff --check passed. No 157-test rerun needed: no app changes. Installed Composio0.5.0 meets minimum; cache0.6.0 notice for operator only, no upgrade.
+
+## Immediate continuation — 2026-11-13
+User requests keep going now; existing20:00 schedule is fallback, not a reason to stop. Composio preflight repeated:0.5.0/authenticated. No resume replay. Supabase **ACTIVE_HEALTHY**, log_dF_UwXyoY9K4. Public smoke05:36:29.603Z PASS: health200/1026ms, mixed200/122ms, availability200/119ms, all no-store; health contract requires ok/databaseReady and billing disabled, including deployed private-bucket readiness. Not hosted workflow/backup proof.
+Render re-inspected empty health path/autoOFF log_q4SQfOiJFWHA. Executed ONLY serviceDetails.healthCheckPath=/api/health once; successful:true log_J7kuKxm1qSE1 at05:36:41.980Z. Response retains autoDeploy=no/trigger=off, Free plan and other settings. No deploy ID returned; independent config/deploy/health readback pending. Do not replay setting update.
+
+### Recovery and monitoring verified — 2026-11-13T05:37:06.144Z
+Config readback log_kL6VPX6t6_3i confirms /api/health, autoDeploy=no/trigger=off, Free and preserved settings. Latest deploy log_WgZcWex_8uFl remains dep-dbnbt59srm7s73905oi0 LIVE f083f87; no newly triggered deploy observed. Postchange public smoke PASS: health200/556ms, mixed200/272ms, availability200/108ms, all no-store and billing/new-work closed. Supabase recovery and bounded monitoring-setting task complete; no auth/backup/marketplace certification.
+Release reconciliation: no Composio GitHub connection ({}), managed gh authenticated; remote main remains f083f87. Only open PR is unrelated #1 analytics; do not touch. Local candidate62b14ef plus docs145cc5b/current docs has no app-code difference from independently tested candidate. No migration/dependency/gate/price changes. Next bounded phase is publish reviewed branch/PR, verify CI and guarded merge, then exact backend/frontend release under CEO delegation. No remote write for candidate yet.
